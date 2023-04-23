@@ -11,7 +11,9 @@
 
 #ifdef SNES9X_GTK
 #include <epoxy/gl.h>
+#ifdef USE_X11
 #include <epoxy/glx.h>
+#endif
 #endif
 
 #ifdef _WIN32

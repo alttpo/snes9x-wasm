@@ -65,23 +65,29 @@ void S9xParsePortConfig(ConfigFile &conf, int pass)
 Snes9xConfig::Snes9xConfig()
 {
     joystick_threshold = 40;
+#ifdef USE_X11
     xrr_crtc_info = nullptr;
     xrr_screen_resources = nullptr;
+#endif
 }
 
 Snes9xConfig::~Snes9xConfig()
 {
+#ifdef USE_X11
     if (xrr_crtc_info)
         XRRFreeCrtcInfo(xrr_crtc_info);
     if (xrr_screen_resources)
         XRRFreeScreenResources(xrr_screen_resources);
+#endif
 }
 
 int Snes9xConfig::load_defaults()
 {
     full_screen_on_open = false;
     change_display_resolution = false;
+#ifdef USE_X11
     xrr_index = 0;
+#endif
     scale_to_fit = true;
     maintain_aspect_ratio = true;
     aspect_ratio = 2;
@@ -227,7 +233,9 @@ int Snes9xConfig::save_config_file()
     outbool("Multithreading", multithreading, "Apply filters using multiple threads");
     outbool("BilinearFilter", Settings.BilinearFilter, "Smoothes scaled image");
     outbool("ForceInvertedByteOrder", force_inverted_byte_order);
+#ifdef USE_X11
     outint("VideoMode", xrr_index, "Platform-specific video mode number");
+#endif
     outint("AspectRatio", aspect_ratio, "0: uncorrected, 1: uncorrected integer scale, 2: 4:3, 3: 4/3 integer scale, 4: NTSC/PAL, 5: NTSC/PAL integer scale");
     outint("SoftwareScaleFilter", scale_method, "Build-specific number of filter used for software scaling");
     outint("ScanlineFilterIntensity", scanline_filter_intensity, "0: 0%, 1: 12.5%, 2: 25%, 3: 50%, 4: 100%");
@@ -445,7 +453,9 @@ int Snes9xConfig::load_config_file()
     section = "Display";
     inbool("FullscreenOnOpen", full_screen_on_open);
     inbool("ChangeDisplayResolution", change_display_resolution);
+#ifdef USE_X11
     inint("VideoMode", xrr_index);
+#endif
     inbool("ScaleToFit", scale_to_fit);
     inbool("MaintainAspectRatio", maintain_aspect_ratio);
     inint("AspectRatio", aspect_ratio);

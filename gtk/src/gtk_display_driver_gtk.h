@@ -7,6 +7,7 @@
 #ifndef __GTK_DISPLAY_DRIVER_GTK_H
 #define __GTK_DISPLAY_DRIVER_GTK_H
 
+#include <functional>
 #include "gtk_s9x.h"
 #include "gtk_display_driver.h"
 
@@ -43,6 +44,8 @@ class S9xGTKDisplayDriver : public S9xDisplayDriver
 
     int last_known_width;
     int last_known_height;
+
+    std::function<void()> next_draw;
 };
 
 #endif /* __GTK_DISPLAY_DRIVER_GTK_H */

@@ -34,46 +34,52 @@ void S9xGTKDisplayDriver::output(void *src,
                                  int dst_width,
                                  int dst_height)
 {
-    if (last_known_width != dst_width || last_known_height != dst_height)
-    {
-        clear();
+    // drawing may only be performed from signal_draw, so queue up the operation:
+    drawing_area->queue_draw();
 
-        last_known_width = dst_width;
-        last_known_height = dst_height;
-    }
+    next_draw = [=]() {
+        if (last_known_width != dst_width || last_known_height != dst_height)
+        {
+            clear();
 
-    cairo_t *cr = window->get_cairo();
-    cairo_surface_t *surface;
+            last_known_width = dst_width;
+            last_known_height = dst_height;
+        }
 
-    surface = cairo_image_surface_create_for_data((unsigned char *)src, CAIRO_FORMAT_RGB16_565, width, height, src_pitch);
+        cairo_t *cr = window->get_cairo();
+        cairo_surface_t *surface;
 
-    cairo_set_source_surface(cr, surface, 0, 0);
+        surface = cairo_image_surface_create_for_data((unsigned char *)src, CAIRO_FORMAT_RGB16_565, width, height, src_pitch);
 
-    if (width != dst_width || height != dst_height)
-    {
-        cairo_matrix_t matrix;
-        cairo_pattern_t *pattern = cairo_get_source(cr);
-        ;
+        cairo_set_source_surface(cr, surface, 0, 0);
 
-        cairo_matrix_init_identity(&matrix);
-        cairo_matrix_scale(&matrix,
-                           (double)width / (double)dst_width,
-                           (double)height / (double)dst_height);
-        cairo_matrix_translate(&matrix, -x, -y);
-        cairo_pattern_set_matrix(pattern, &matrix);
-        cairo_pattern_set_filter(pattern,
-                                 Settings.BilinearFilter
-                                     ? CAIRO_FILTER_BILINEAR
-                                     : CAIRO_FILTER_NEAREST);
-    }
+        if (width != dst_width || height != dst_height)
+        {
+            cairo_matrix_t matrix;
+            cairo_pattern_t *pattern = cairo_get_source(cr);
+            ;
 
-    cairo_rectangle(cr, x, y, dst_width, dst_height);
-    cairo_fill(cr);
+            cairo_matrix_init_identity(&matrix);
+            cairo_matrix_scale(&matrix,
+                               (double)width / (double)dst_width,
+                               (double)height / (double)dst_height);
+            cairo_matrix_translate(&matrix, -x, -y);
+            cairo_pattern_set_matrix(pattern, &matrix);
+            cairo_pattern_set_filter(pattern,
+                                     Settings.BilinearFilter
+                                         ? CAIRO_FILTER_BILINEAR
+                                         : CAIRO_FILTER_NEAREST);
+        }
 
-    cairo_surface_finish(surface);
-    cairo_surface_destroy(surface);
+        cairo_rectangle(cr, x, y, dst_width, dst_height);
+        cairo_fill(cr);
 
-    window->release_cairo();
+        cairo_surface_finish(surface);
+        cairo_surface_destroy(surface);
+
+        window->release_cairo();
+    };
+
     window->set_mouseable_area(x, y, width, height);
 }
 
@@ -133,5 +139,8 @@ void S9xGTKDisplayDriver::clear()
 
 void S9xGTKDisplayDriver::refresh()
 {
-    clear();
+    //clear();
+    if (next_draw) {
+        next_draw();
+    }
 }

@@ -10,8 +10,10 @@
 #include "gtk_control.h"
 #include "filter/snes_ntsc.h"
 
-#include <X11/Xlib.h>
-#include <X11/extensions/Xrandr.h>
+#ifdef USE_X11
+#  include <X11/Xlib.h>
+#  include <X11/extensions/Xrandr.h>
+#endif
 #include <string>
 #include <array>
 
@@ -61,7 +63,9 @@ class Snes9xConfig
     bool ui_visible;
     int default_esc_behavior;
     bool prevent_screensaver;
+#ifdef USE_X11
     int xrr_index;
+#endif
     bool scale_to_fit;
     bool maintain_aspect_ratio;
     int aspect_ratio;
@@ -148,8 +152,10 @@ class Snes9xConfig
 
     int current_save_slot;
 
+#ifdef USE_X11
     XRRScreenResources *xrr_screen_resources;
     XRRCrtcInfo *xrr_crtc_info;
+#endif
 
     bool sync_to_vblank;
     bool use_shaders;

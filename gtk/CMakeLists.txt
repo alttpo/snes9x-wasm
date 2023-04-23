@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 project(snes9x-gtk VERSION 1.61)
 
 option(USE_SLANG "Build support for Vulkan output and .slangp shaders" ON)
+option(USE_X11 "Build support for X11" OFF)
 option(USE_XV "Build support for XVideo output" ON)
 option(USE_PORTAUDIO "Build PortAudio sound driver" ON)
 option(USE_ALSA "Build ALSA sound driver" ON)
@@ -42,6 +43,7 @@ set(INCLUDES ../apu/bapu ../ src)
 set(SOURCES)
 set(ARGS -Wall -Wno-unused-parameter)
 set(LIBS)
+SET(LINKARGS)
 set(DEFINES)
 
 include(CheckIncludeFile)
@@ -59,19 +61,20 @@ endforeach()
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL2 REQUIRED sdl2)
 pkg_check_modules(GTK REQUIRED gtkmm-3.0 gthread-2.0 libpng)
-pkg_check_modules(XRANDR REQUIRED xrandr)
 
-find_library(X11 X11 REQUIRED)
-find_library(XEXT Xext REQUIRED)
 find_library(DL dl REQUIRED)
-list(APPEND ARGS ${SDL2_CFLAGS} ${GTK_CFLAGS} ${XRANDR_CFLAGS})
-list(APPEND LIBS ${X11} ${XEXT} ${DL} ${SDL2_LIBRARIES} ${GTK_LIBRARIES} ${XRANDR_LIBRARIES})
+list(APPEND ARGS ${SDL2_CFLAGS} ${GTK_CFLAGS})
+list(APPEND LIBS ${DL})
+list(APPEND LINKARGS ${GTK_LDFLAGS})
+
+#list(APPEND LIBS ${SDL2_LIBRARIES})
+# MACOS specific:
+list(APPEND LINKARGS ${SDL2_LDFLAGS})
 
 pkg_check_modules(EPOXY REQUIRED epoxy)
 list(APPEND ARGS ${EPOXY_CFLAGS})
 list(APPEND LIBS ${EPOXY_LIBRARIES})
 list(APPEND SOURCES src/gtk_display_driver_opengl.cpp
-                    src/gtk_glx_context.cpp
                     ../shaders/glsl.cpp
                     ../shaders/shader_helpers.cpp
                     src/gtk_shader_parameters.cpp)
@@ -134,7 +137,22 @@ if(USE_SLANG)
                         ../vulkan/std_chrono_throttle.hpp
                         src/gtk_display_driver_vulkan.cpp
                         src/gtk_display_driver_vulkan.h)
+else()
+    list(APPEND SOURCES
+                        ../vulkan/std_chrono_throttle.cpp
+                        ../vulkan/std_chrono_throttle.hpp)
+endif()
 
+if(USE_X11)
+    pkg_check_modules(XRANDR REQUIRED xrandr)
+    find_library(X11 X11 REQUIRED)
+    find_library(XEXT Xext REQUIRED)
+
+    list(APPEND DEFINES "USE_X11")
+    list(APPEND ARGS ${XRANDR_CFLAGS})
+    list(APPEND LIBS ${X11} ${XEXT} ${XRANDR_LIBRARIES})
+    list(APPEND SOURCES
+                        src/gtk_glx_context.cpp)
 endif()
 
 if(USE_WAYLAND)
@@ -370,6 +388,7 @@ add_executable(snes9x-gtk ${SOURCES} ${jma} ${CMAKE_CURRENT_BINARY_DIR}/gtk_snes
 target_include_directories(snes9x-gtk PRIVATE ${INCLUDES})
 target_compile_options(snes9x-gtk PRIVATE ${ARGS})
 target_link_libraries(snes9x-gtk PRIVATE ${LIBS})
+target_link_options(snes9x-gtk PRIVATE ${LINKARGS})
 target_compile_definitions(snes9x-gtk PRIVATE ${DEFINES})
 
 if(USE_SLANG)

@@ -422,7 +422,9 @@ void Snes9xPreferences::move_settings_to_dialog()
     else
         set_entry_text("export_directory", config->export_directory.c_str());
 
+#ifdef USE_X11
     set_combo("resolution_combo",          config->xrr_index);
+#endif
     set_combo("scale_method_combo",        config->scale_method);
     set_entry_value("save_sram_after_sec", Settings.AutoSaveDelay);
     set_check("allow_invalid_vram_access", !Settings.BlockInvalidVRAMAccessMaster);
@@ -516,6 +518,7 @@ void Snes9xPreferences::get_settings_from_dialog()
         sound_needs_restart = true;
     }
 
+#ifdef USE_X11
     if ((config->change_display_resolution != get_check("change_display_resolution") ||
             (config->change_display_resolution &&
                     (config->xrr_index != get_combo("resolution_combo")))) &&
@@ -530,6 +533,7 @@ void Snes9xPreferences::get_settings_from_dialog()
     {
         config->xrr_index = get_combo("resolution_combo");
     }
+#endif
 
     config->change_display_resolution = get_check("change_display_resolution");
 

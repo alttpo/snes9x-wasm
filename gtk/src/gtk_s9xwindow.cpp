@@ -1034,6 +1034,7 @@ void Snes9xWindow::toggle_fullscreen_mode()
         enter_fullscreen_mode();
 }
 
+#ifdef USE_X11
 static double XRRGetExactRefreshRate(Display *dpy, Window window)
 {
     XRRScreenResources *resources = nullptr;
@@ -1077,6 +1078,7 @@ static double XRRGetExactRefreshRate(Display *dpy, Window window)
 
     return refresh_rate;
 }
+#endif
 
 double
 Snes9xWindow::get_refresh_rate()

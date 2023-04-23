@@ -333,6 +333,7 @@ bool S9xOpenGLDisplayDriver::create_context()
     gdk_window = drawing_area->get_window()->gobj();
     GdkDisplay *gdk_display = drawing_area->get_display()->gobj();
 
+    context = NULL;
 #ifdef GDK_WINDOWING_WAYLAND
     if (GDK_IS_WAYLAND_WINDOW(gdk_window))
     {
@@ -349,6 +350,8 @@ bool S9xOpenGLDisplayDriver::create_context()
         context = &glx;
     }
 #endif
+    if (!context)
+        return false;
 
     if (!context->create_context())
         return false;
