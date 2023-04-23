@@ -1,3 +1,26 @@
+# MacOS build
+This fork enables a working MacOS build of snes9x from the GTK port using cmake instead of XCode.
+
+## Changes:
+Some CMakeLists.txt changes were required to make optional the alleged X11 requirements of the GTK port. Most of the code dealing specifically with X11/Wayland is conditionally compiled away but some parts were missed so I fixed that up.
+
+The native GTK display driver did not properly update the main drawing area and was coded incorrectly per the GTK documentation. The visible effects were that new emulation frames would only appear while interacting with the main menu when it emitted a draw signal to refresh the window contents. The GTK display driver was attempting to update the screen outside the handling of a draw signal, which is incorrect per the documentation and so nothing would update on the screen. I changed it so that when a frame needs to be presented, it queues up a draw signal to be emitted and then draws onto the screen during the handling of the draw signal.
+
+## Drivers:
+The GTK OpenGL display driver is only coded for X11 and Wayland and has no MacOS support. The native GTK display driver is plenty fast enough so you don't miss anything speed-wise with hardware-accelerated display drivers. When turbo mode is engaged, I see ~2475 fps at 1x scale on a 14" MacBook Pro M1 2021.
+
+## Build Process:
+```
+brew install qt@5 gtkmm3 sdl2
+cd gtk
+mkdir build
+cd build
+cmake .. -DUSE_WAYLAND=OFF -DUSE_X11=OFF -DUSE_XV=OFF -DUSE_PULSEAUDIO=OFF -DUSE_ALSA=OFF -DUSE_SLANG=OFF
+make -j6
+```
+
+You should have a `./snes9x-gtk` executable in your `gtk/build/` folder now.
+
 # Snes9x
 *Snes9x - Portable Super Nintendo Entertainment System (TM) emulator*
 
