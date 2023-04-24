@@ -14,6 +14,7 @@ option(USE_XBRZ "Build the XBRZ family of filters" ON)
 option(USE_SYSTEMZIP "Force use of system minizip" ON)
 option(USE_WAYLAND "Build support for Wayland" ON)
 option(DANGEROUS_HACKS "Allow dangerous hacks to be used" ON)
+option(USE_WAMR "Enable WASM integrations through WAMR" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -241,6 +242,26 @@ endif()
 if(DANGEROUS_HACKS)
     list(APPEND DEFINES ALLOW_CPU_OVERCLOCK)
     message("Dangerous hacks are enabled. Use at your own risk.")
+endif()
+
+if(USE_WAMR)
+    set (WAMR_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/../external/wamr)
+
+    set (WAMR_BUILD_PLATFORM "darwin")
+    set (WAMR_BUILD_TARGET "AARCH64")
+    set (WAMR_BUILD_INTERP 1)
+    set (WAMR_BUILD_FAST_INTERP 1)
+    set (WAMR_BUILD_AOT 1)
+    set (WAMR_BUILD_LIBC_BUILTIN 1)
+    set (WAMR_BUILD_LIBC_WASI 1)
+    set (WAMR_BUILD_SIMD 1)
+
+    include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
+    add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE})
+
+    list (APPEND LIBS vmlib)
+
+    #list(APPEND SOURCES ../)
 endif()
 
 list(APPEND SOURCES

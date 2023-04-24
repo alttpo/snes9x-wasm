@@ -503,3 +503,11 @@ MigrationBackup/
 .DS_Store
 *.lock
 profile
+
+# CMake build directories
+/gtk/cmake-build-debug/
+/gtk/cmake-build-relwithdebinfo/
+/gtk/cmake-build-release/
+
+# IDE directories
+.idea/

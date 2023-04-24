@@ -13,3 +13,6 @@
 [submodule "external/vulkan-headers"]
 	path = external/vulkan-headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+[submodule "external/wamr"]
+	path = external/wamr
+	url = https://github.com/bytecodealliance/wasm-micro-runtime.git
