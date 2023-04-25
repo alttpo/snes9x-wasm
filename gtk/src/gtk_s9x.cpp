@@ -25,6 +25,7 @@
 #include "gfx.h"
 #include "memmap.h"
 #include "ppu.h"
+#include "wasm_export.h"
 
 static void S9xThrottle(int);
 static void S9xCheckPointerTimer();
@@ -131,6 +132,25 @@ int main(int argc, char *argv[])
 
     Settings.Paused = true;
     S9xNoROMLoaded();
+
+#ifdef USE_WASM
+    // initialize wasm runtime
+#if WASM_RUNTIME == WAMR
+    RuntimeInitArgs wamrInitArgs;
+    wamrInitArgs.native_module_name = "snes";
+    wamrInitArgs.mem_alloc_type = Alloc_With_Pool;
+    wamrInitArgs.mem_alloc_option.pool.heap_buf = new uint8_t[1048576];
+    wamrInitArgs.mem_alloc_option.pool.heap_size = 1048576;
+    wamrInitArgs.running_mode = Mode_Interp;
+    wamrInitArgs.n_native_symbols = 0;
+    wamrInitArgs.native_symbols = {
+    };
+    if (!wasm_runtime_full_init(&wamrInitArgs)) {
+        printf("wasm runtime init failed\n");
+        return -1;
+    }
+#endif
+#endif
 
     if (rom_filename)
     {
