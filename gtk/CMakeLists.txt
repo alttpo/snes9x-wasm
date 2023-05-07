@@ -267,7 +267,8 @@ if(USE_WAMR)
     list (APPEND DEFINES USE_WASM)
     list (APPEND DEFINES WASM_RUNTIME=WAMR)
 
-    #list(APPEND SOURCES ../)
+    list(APPEND INCLUDES ../wasm)
+    list(APPEND SOURCES ../wasm/wasm_host.cpp)
 endif()
 
 list(APPEND SOURCES
