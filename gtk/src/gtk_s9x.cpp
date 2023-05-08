@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
 
             CLOSE_STREAM(fp);
 
-            wasm_host_load_module(module_binary, module_size);
+            wasm_host_load_module("test", module_binary, module_size);
         }
     }
 #endif

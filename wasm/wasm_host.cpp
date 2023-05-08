@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <memory>
 #include <thread>
+#include <utility>
 #include <vector>
 
 // WAMR:
@@ -14,9 +15,8 @@
 
 class module {
 public:
-    module(wasm_module_t mod_p, wasm_module_inst_t mi_p)
-        : mod(mod_p), mi(mi_p)
-    {
+    module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p)
+        : name(std::move(name_p)), mod(mod_p), mi(mi_p) {
         env = wasm_runtime_create_exec_env(mi, 1048576);
         if (!env) {
             wasm_runtime_deinstantiate(mi);
@@ -70,20 +70,28 @@ public:
     }
 
     void start() {
-        printf("module thread started\n");
+        //pthread_setname_np("wasm");
+        //printf("module thread started\n");
+
         wasm_runtime_init_thread_env();
         runMain();
         wasm_runtime_destroy_thread_env();
-        printf("module thread exited\n");
+
+        auto m = static_cast<std::shared_ptr<module>*>(wasm_runtime_get_custom_data(mi));
+        delete m;
+        //printf("module thread exited\n");
     }
 
+
+
 private:
+    std::string name;
     wasm_module_t mod;
     wasm_module_inst_t mi;
     wasm_exec_env_t env;
 };
 
-std::vector< std::shared_ptr< module > > modules;
+std::vector<std::shared_ptr<module> > modules;
 
 bool wasm_host_init() {
     // initialize wasm runtime
@@ -106,47 +114,81 @@ bool wasm_host_init() {
 
     typedef uint16_t wasi_errno_t;
     typedef uint32_t wasi_fd_t;
-    typedef uint16_t wasi_fdflags_t;
-    typedef uint32_t wasi_lookupflags_t;
-    typedef uint16_t wasi_oflags_t;
-    typedef uint64_t wasi_rights_t;
 
-    auto wasi_overrides = new NativeSymbol[1];
-    new (&wasi_overrides[0]) NativeSymbol
-        {
-            "path_open",
-            (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t,
-            wasi_lookupflags_t, const char *, uint32, wasi_oflags_t, wasi_rights_t,
-            wasi_rights_t, wasi_fdflags_t, wasi_fd_t *)) (
-                [](wasm_exec_env_t exec_env,
-                    wasi_fd_t dirfd, wasi_lookupflags_t dirflags,
-                    const char *path, uint32 path_len,
-                    wasi_oflags_t oflags,
-                    wasi_rights_t fs_rights_base,
-                    wasi_rights_t fs_rights_inheriting,
-                    wasi_fdflags_t fs_flags,
-                    wasi_fd_t *fd_app
-                ) -> wasi_errno_t {
-                    printf("path_open(\"%.*s\")\n", path_len, path);
+    typedef struct iovec_app {
+        uint32 buf_offset;
+        uint32 buf_len;
+    } iovec_app_t;
+
+    auto *wasi_overrides = new std::vector<NativeSymbol>();
+    wasi_overrides->push_back({
+        "fd_read",
+        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, uint32 *)) (
+            [](wasm_exec_env_t exec_env,
+               wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, uint32 *nread_app
+            ) -> wasi_errno_t {
+                //printf("fd_read: fd=%d, iovs=%d\n", fd, iovs_len);
+
+                auto module_inst = wasm_runtime_get_module_inst(exec_env);
+                auto buf = ((uint8_t *)addr_app_to_native(iovec_app->buf_offset));
+                buf[0] = 1;
+
+                *nread_app = iovec_app->buf_len;
+                return 0;
+            }
+        ),
+        "(i*i*)i",
+        nullptr
+    });
+    wasi_overrides->push_back({
+        "fd_write",
+        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, uint32 *)) (
+            [](wasm_exec_env_t exec_env, wasi_fd_t fd,
+               const iovec_app_t *iovec_app, uint32 iovs_len,
+               uint32 *nwritten_app
+            ) -> wasi_errno_t {
+                //printf("fd_write: fd=%d, iovs=%d\n", fd, iovs_len);
+
+                auto module_inst = wasm_runtime_get_module_inst(exec_env);
+                auto m = *static_cast<std::shared_ptr<module>*>(wasm_runtime_get_custom_data(module_inst));
+
+                auto len = iovec_app->buf_len;
+                *nwritten_app = len;
+
+                if (fd == 1) {
+                    // don't echo wasm stdout to native stdout:
                     return 0;
+                } else if (fd == 2) {
+                    // wasm stderr goes to native stderr:
+                    const char *str = ((const char *)addr_app_to_native(iovec_app->buf_offset));
+                    fprintf(stderr, "%.*s", len, str);
+                } else {
+                    // TODO: handle other fds
+                    return -1;
                 }
-            ),
-            "(ii*~iIIi*)i",
-            nullptr
-        };
+
+                return 0;
+            }
+        ),
+        "(i*i*)i",
+        nullptr
+    });
+
     if (!wasm_runtime_register_natives(
         "wasi_snapshot_preview1",
-        wasi_overrides,
-        1
+        wasi_overrides->data(),
+        wasi_overrides->size()
     )) {
         printf("wasm_runtime_full_init failed\n");
         return false;
     }
 
+    // TODO: handle leaky `wasi_overrides`
+
     return true;
 }
 
-bool wasm_host_load_module(uint8_t *module_binary, uint32_t module_size) {
+bool wasm_host_load_module(const std::string& name, uint8_t *module_binary, uint32_t module_size) {
     char wamrError[1024];
 
     wasm_module_t mod = wasm_runtime_load(
@@ -165,8 +207,8 @@ bool wasm_host_load_module(uint8_t *module_binary, uint32_t module_size) {
 
     wasm_module_inst_t mi = wasm_runtime_instantiate(
         mod,
-        8192,
-        8192,
+        32768,
+        32768,
         wamrError,
         sizeof(wamrError)
     );
@@ -180,9 +222,13 @@ bool wasm_host_load_module(uint8_t *module_binary, uint32_t module_size) {
     }
 
     // track the new module:
-    auto &m = modules.emplace_back(std::make_shared<module>(mod, mi));
+    auto &m = modules.emplace_back(std::make_shared<module>(name, mod, mi));
+    // set custom_data to a new shared_ptr to `module`:
+    wasm_runtime_set_custom_data(mi, static_cast<void*>(new std::shared_ptr<module>(m)));
 
-    std::thread(&module::start, m).detach();
+    // create a dedicated thread to run the wasm main:
+    auto t = std::thread(&module::start, m);
+    t.detach();
 
     return true;
 }
