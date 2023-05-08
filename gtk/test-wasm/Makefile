@@ -1,2 +1,3 @@
-main.wasm: main.go
-	tinygo build -target wasm main.go
+main.gc.wasm: main.go go.mod go.sum
+#	tinygo build -target wasm main.go
+	GOOS=wasip1 GOARCH=wasm gotip build -o main.gc.wasm

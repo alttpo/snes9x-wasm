@@ -258,6 +258,7 @@ if(USE_WAMR)
     set (WAMR_BUILD_LIBC_BUILTIN 1)
     set (WAMR_BUILD_LIBC_WASI 1)
     set (WAMR_BUILD_SIMD 1)
+    #set (WAMR_BUILD_THREAD_MGR 1)
 
     include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
     add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE})

@@ -14,14 +14,24 @@
 
 class module {
 public:
-    module(wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t env_p)
-        : mod(mod_p), mi(mi_p), env(env_p) {
+    module(wasm_module_t mod_p, wasm_module_inst_t mi_p)
+        : mod(mod_p), mi(mi_p)
+    {
+        env = wasm_runtime_create_exec_env(mi, 1048576);
+        if (!env) {
+            wasm_runtime_deinstantiate(mi);
+            mi = nullptr;
+            wasm_runtime_unload(mod);
+            mod = nullptr;
+        }
     }
 
     ~module() {
         wasm_runtime_destroy_exec_env(env);
         wasm_runtime_deinstantiate(mi);
+        mi = nullptr;
         wasm_runtime_unload(mod);
+        mod = nullptr;
     }
 
     void runMain() {
@@ -33,7 +43,9 @@ public:
            the actual main function. Directly calling main function
            may cause exception thrown. */
         if ((func = wasm_runtime_lookup_wasi_start_function(mi))) {
-            wasm_runtime_call_wasm(env, func, 0, nullptr);
+            if (!wasm_runtime_call_wasm(env, func, 0, nullptr)) {
+                printf("wasm_runtime_call_wasm('_start'): %s\n", wasm_runtime_get_exception(mi));
+            }
             return;
         }
 #endif /* end of WASM_ENABLE_LIBC_WASI */
@@ -59,7 +71,9 @@ public:
 
     void start() {
         printf("module thread started\n");
+        wasm_runtime_init_thread_env();
         runMain();
+        wasm_runtime_destroy_thread_env();
         printf("module thread exited\n");
     }
 
@@ -86,6 +100,45 @@ bool wasm_host_init() {
     init.native_symbols = {};
 
     if (!wasm_runtime_full_init(&init)) {
+        printf("wasm_runtime_full_init failed\n");
+        return false;
+    }
+
+    typedef uint16_t wasi_errno_t;
+    typedef uint32_t wasi_fd_t;
+    typedef uint16_t wasi_fdflags_t;
+    typedef uint32_t wasi_lookupflags_t;
+    typedef uint16_t wasi_oflags_t;
+    typedef uint64_t wasi_rights_t;
+
+    auto wasi_overrides = new NativeSymbol[1];
+    new (&wasi_overrides[0]) NativeSymbol
+        {
+            "path_open",
+            (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t,
+            wasi_lookupflags_t, const char *, uint32, wasi_oflags_t, wasi_rights_t,
+            wasi_rights_t, wasi_fdflags_t, wasi_fd_t *)) (
+                [](wasm_exec_env_t exec_env,
+                    wasi_fd_t dirfd, wasi_lookupflags_t dirflags,
+                    const char *path, uint32 path_len,
+                    wasi_oflags_t oflags,
+                    wasi_rights_t fs_rights_base,
+                    wasi_rights_t fs_rights_inheriting,
+                    wasi_fdflags_t fs_flags,
+                    wasi_fd_t *fd_app
+                ) -> wasi_errno_t {
+                    printf("path_open(\"%.*s\")\n", path_len, path);
+                    return 0;
+                }
+            ),
+            "(ii*~iIIi*)i",
+            nullptr
+        };
+    if (!wasm_runtime_register_natives(
+        "wasi_snapshot_preview1",
+        wasi_overrides,
+        1
+    )) {
         printf("wasm_runtime_full_init failed\n");
         return false;
     }
@@ -126,19 +179,8 @@ bool wasm_host_load_module(uint8_t *module_binary, uint32_t module_size) {
         return false;
     }
 
-    wasm_exec_env_t env = wasm_runtime_create_exec_env(mi, 1048576);
-    if (!env) {
-        wasm_runtime_unload(mod);
-        wasm_runtime_deinstantiate(mi);
-        printf(
-            "wasm_runtime_create_exec_env: %s\n",
-            wamrError
-        );
-        return false;
-    }
-
     // track the new module:
-    auto m = modules.emplace_back(std::make_shared<module>(mod, mi, env));
+    auto &m = modules.emplace_back(std::make_shared<module>(mod, mi));
 
     std::thread(&module::start, m).detach();
 

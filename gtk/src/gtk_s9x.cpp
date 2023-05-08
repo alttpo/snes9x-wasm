@@ -148,19 +148,18 @@ int main(int argc, char *argv[])
         STREAM fp = OPEN_STREAM("test.wasm", "rb");
         if (!fp) {
             printf("open: could not find 'test.wasm'\n");
-            return false;
+        } else {
+            module_size = 1048576 * 100;
+            module_binary = new uint8_t[module_size];
+
+            module_size = READ_STREAM(module_binary,
+                                      module_size,
+                                      fp);
+
+            CLOSE_STREAM(fp);
+
+            wasm_host_load_module(module_binary, module_size);
         }
-
-        module_size = 1048576 * 10;
-        module_binary = new uint8_t[module_size];
-
-        module_size = READ_STREAM(module_binary,
-                                  module_size,
-                                  fp);
-
-        CLOSE_STREAM(fp);
-
-        wasm_host_load_module(module_binary, module_size);
     }
 #endif
 
