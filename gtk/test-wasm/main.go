@@ -1,62 +1,54 @@
 package main
 
 import (
-	"encoding/binary"
-	"encoding/hex"
+	"fmt"
 	_ "google.golang.org/protobuf/proto"
 	"io"
 	"os"
 )
 
+type ReaderWriterAt interface {
+	io.ReaderAt
+	io.WriterAt
+}
+
 var (
-	fIn  io.Reader
-	fOut io.Writer
+	wramFile ReaderWriterAt
+	nmiFile  io.Reader
 )
 
 func main() {
 	var err error
 
-	fIn = os.Stdin
-	fOut = os.Stdout
+	wramFile, err = os.OpenFile("/tmp/snes/mem/wram", os.O_RDWR, 0666)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "open(wram): %v\n", err)
+		return
+	}
+	//nmiFile, err = os.OpenFile("/tmp/snes/sig/nmi", os.O_RDONLY, 0666)
+	//if err != nil {
+	//	_, _ = fmt.Fprintf(os.Stderr, "open(nmi): %v\n", err)
+	//	return
+	//}
 
-	var frame [65536]byte
-	msgSizeLE := frame[0:2]
-
+	var wram [131072]byte
+	var nmiSignal [1]byte
 	for {
 		var n int
 
-		// read message size as uint16:
-		n, err = io.ReadFull(fIn, msgSizeLE)
-		if err != nil {
-			_, _ = os.Stderr.WriteString(err.Error())
-			return
-		}
-		_ = n
+		// wait for NMI:
+		//n, err = nmiFile.Read(nmiSignal[:])
+		//if n == 0 {
+		//	continue
+		//}
+		//fmt.Println("NMI")
+		_ = nmiSignal
 
-		size := int(binary.LittleEndian.Uint16(msgSizeLE))
-		if size == 0 {
-			// ignore empty messages:
+		// read a byte from WRAM:
+		n, err = wramFile.ReadAt(wram[0x10:0x10+1], 0)
+		if n == 0 {
 			continue
 		}
-
-		// read message:
-		msg := frame[2 : 2+size]
-		n, err = io.ReadFull(fIn, msg)
-		if err != nil {
-			_, _ = os.Stderr.WriteString(err.Error())
-			return
-		}
-
-		// echo message back:
-		n, err = fOut.Write(frame[0 : 2+size])
-		if err != nil {
-			_, _ = os.Stderr.WriteString(err.Error())
-			return
-		}
-
-		// dump hex of message to stderr:
-		errDump := hex.Dumper(os.Stderr)
-		errDump.Write(msg)
-		errDump.Close()
+		fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 	}
 }
