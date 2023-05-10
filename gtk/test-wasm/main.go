@@ -43,7 +43,7 @@ func main() {
 
 		var wram [131072]byte
 		var nmiSignal [1]byte
-		for i := 0; i < 16; i++ {
+		for {
 			var n int
 
 			// wait for NMI:
@@ -54,12 +54,16 @@ func main() {
 			//fmt.Println("NMI")
 			_ = nmiSignal
 
-			// read a byte from WRAM:
-			n, err = wramFile.ReadAt(wram[0x0010:0x0010+1], 0x0010)
+			// read all bytes from WRAM:
+			n, err = wramFile.ReadAt(wram[:], 0)
 			if n == 0 {
 				continue
 			}
 			fmt.Printf("wram[$10] = %02x\n", wram[0x10])
+
+			if wram[0x10] == 0x14 {
+				break
+			}
 		}
 
 		ch <- struct{}{}

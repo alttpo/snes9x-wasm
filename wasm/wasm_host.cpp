@@ -31,7 +31,7 @@ typedef struct iovec_app {
     uint32 buf_len;
 } iovec_app_t;
 
-typedef std::vector<std::vector<uint8>> iovec;
+typedef std::vector<std::pair<uint8*, uint32>> iovec;
 
 // base interface for handling fd read/write ops:
 class fd_inst {
@@ -68,12 +68,12 @@ public:
     wasi_errno_t pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) override {
         nread = 0;
         for (auto &item: iov) {
-            if (offset + item.size() >= 0x20000) {
+            if (offset + item.second - 1 >= 0x20000) {
                 return WASI_EINVAL;
             }
-            memcpy((void *) item.data(), &Memory.RAM[offset], item.size());
-            offset += item.size();
-            nread += item.size();
+            memcpy((void *) item.first, &Memory.RAM[offset], item.second);
+            offset += item.second;
+            nread += item.second;
         }
         return 0;
     }
@@ -87,8 +87,8 @@ public:
     wasi_errno_t write(const iovec &iov, uint32 &nwritten) override {
         nwritten = 0;
         for (const auto &item: iov) {
-            fprintf(stdout, "%.*s", (int)item.size(), item.data());
-            nwritten += item.size();
+            fprintf(stdout, "%.*s", (int)item.second, item.first);
+            nwritten += item.second;
         }
         return 0;
     }
@@ -270,7 +270,7 @@ private:
         const iovec_app_t *io_app = iovec_app;
         for (uint32 i = 0; i < iovs_len; i++, io_app++) {
             auto buf = ((uint8 *) addr_app_to_native(io_app->buf_offset));
-            io.emplace_back(buf, buf + io_app->buf_len);
+            io.emplace_back(std::make_pair(buf, io_app->buf_len));
         }
         return io;
     }
