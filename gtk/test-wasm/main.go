@@ -38,12 +38,17 @@ func main_bench() {
 func main() {
 	var err error
 
+	var f *os.File
 	fmt.Println("opening wram")
-	wramFile, err = os.OpenFile("/tmp/snes/mem/wram", os.O_RDWR, 0666)
+	f, err = os.OpenFile("/tmp/snes/mem/wram", os.O_RDWR, 0666)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "open(wram): %v\n", err)
 		return
 	}
+	defer f.Close()
+	fmt.Printf("fd: %d\n", f.Fd())
+	wramFile = f
+
 	//nmiFile, err = os.OpenFile("/tmp/snes/sig/nmi", os.O_RDONLY, 0666)
 	//if err != nil {
 	//	_, _ = fmt.Fprintf(os.Stderr, "open(nmi): %v\n", err)

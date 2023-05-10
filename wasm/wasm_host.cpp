@@ -60,23 +60,39 @@ protected:
     wasi_fd_t fd;
 };
 
-class fd_wram : public fd_inst {
+class fd_mem : public fd_inst {
 public:
-    explicit fd_wram(wasi_fd_t fd_p) : fd_inst(fd_p) {
-    }
+    explicit fd_mem(wasi_fd_t fd_p, uint8* mem_p, uint32 size_p)
+        : fd_inst(fd_p), mem(mem_p), size(size_p) {}
 
     wasi_errno_t pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) override {
         nread = 0;
         for (auto &item: iov) {
-            if (offset + item.second - 1 >= 0x20000) {
+            if (offset + item.second > size) {
                 return WASI_EINVAL;
             }
-            memcpy((void *) item.first, &Memory.RAM[offset], item.second);
+            memcpy((void *) item.first, &(mem)[offset], item.second);
             offset += item.second;
             nread += item.second;
         }
         return 0;
     }
+
+    wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32 &nwritten) override {
+        nwritten = 0;
+        for (auto &item: iov) {
+            if (offset + item.second > size) {
+                return WASI_EINVAL;
+            }
+            memcpy(&(mem)[offset], (void *) item.first, item.second);
+            offset += item.second;
+            nwritten += item.second;
+        }
+        return 0;
+    }
+
+    uint8 *mem;
+    uint32 size;
 };
 
 class fd_stdout : public fd_inst {
@@ -95,11 +111,23 @@ public:
 };
 
 // map of well-known absolute paths for virtual files:
-std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(wasi_fd_t fd)>> file_providers{
+std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(wasi_fd_t fd)>> file_providers {
+    {
+        "/tmp/snes/mem/rom",
+        [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            return std::make_shared<fd_mem>(fd, Memory.ROM, Memory.ROMStorage.size());
+        }
+    },
     {
         "/tmp/snes/mem/wram",
         [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-            return std::make_shared<fd_wram>(fd);
+            return std::make_shared<fd_mem>(fd, Memory.RAM, sizeof(Memory.RAM));
+        }
+    },
+    {
+        "/tmp/snes/mem/sram",
+        [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            return std::make_shared<fd_mem>(fd, Memory.SRAM, Memory.SRAMStorage.size());
         }
     }
 };
@@ -203,10 +231,26 @@ public:
             return WASI_ENOENT;
 
         // always succeed and create a new fd:
-        auto fd = ++last_fd;
+        auto fd = fd_free;
 
         fds.insert_or_assign(fd, (it->second)(fd));
         *fd_app = fd;
+
+        // find the next free fd:
+        while (fds.find(++fd_free) != fds.end()) {}
+
+        return 0;
+    }
+
+    wasi_errno_t fd_close(wasi_fd_t fd) {
+        auto it = fds.find(fd);
+        if (it == fds.end())
+            return WASI_EBADF;
+
+        fds.erase(it);
+
+        // track last freed fd for a quick path_open:
+        fd_free = fd;
 
         return 0;
     }
@@ -282,7 +326,7 @@ private:
     wasm_exec_env_t exec_env;
 
     std::unordered_map<wasi_fd_t, std::shared_ptr<fd_inst>> fds;
-    wasi_fd_t last_fd = 2;
+    wasi_fd_t fd_free = 3;
 };
 
 std::vector<std::weak_ptr<module> > modules;
@@ -379,6 +423,17 @@ bool wasm_host_init() {
             }
         ),
         "(i*iI*)i",
+        nullptr
+    });
+    wasi->push_back({
+        "fd_close",
+        (void *) (wasi_errno_t (*)(wasm_exec_env_t exec_env, wasi_fd_t fd)) (
+            [](wasm_exec_env_t exec_env, wasi_fd_t fd) -> wasi_errno_t {
+                auto m = static_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                return m->fd_close(fd);
+            }
+        ),
+        "(i)i",
         nullptr
     });
 
