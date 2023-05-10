@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"time"
 )
@@ -16,6 +17,23 @@ var (
 	wramFile ReaderWriterAt
 	nmiFile  io.Reader
 )
+
+func dummy() int {
+	return rand.Int()
+}
+
+func main_bench() {
+	for j := 0; j < 20; j++ {
+		start := time.Now()
+		x := 0
+		for i := 0; i < 1_000_000; i++ {
+			x += dummy()
+		}
+		end := time.Now()
+		fmt.Printf("%v\n", x)
+		fmt.Printf("delta %v\n", end.Sub(start).Nanoseconds())
+	}
+}
 
 func main() {
 	var err error
