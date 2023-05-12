@@ -13,6 +13,9 @@
 #include "snes9x.h"
 #include "memmap.h"
 
+static std::mutex nmi_cv_m;
+static std::condition_variable nmi_cv;
+
 #define WASI_EBADF           (8)
 #define WASI_EINVAL          (28)
 #define WASI_ENOENT          (44)
@@ -122,6 +125,34 @@ public:
     uint32 size;
 };
 
+class fd_nmi_blocking : public fd_inst {
+public:
+    explicit fd_nmi_blocking(wasi_fd_t fd_p) : fd_inst(fd_p) {
+    }
+
+    wasi_errno_t read(const iovec &iov, uint32 &nread) override {
+        // wait for NMI:
+        std::unique_lock<std::mutex> lk(nmi_cv_m);
+        auto status = nmi_cv.wait_for(lk, std::chrono::microseconds (16667));
+
+        // translate the no_timeout vs timeout status to a 1/0 value for the wasm module to consume:
+        uint8 report;
+        if (status == std::cv_status::no_timeout) {
+            report = 1;
+        } else {
+            report = 0;
+        }
+
+        nread = 0;
+        for (const auto &item: iov) {
+            item.first[0] = report;
+            nread++;
+        }
+
+        return 0;
+    }
+};
+
 class fd_stdout : public fd_inst {
 public:
     explicit fd_stdout(wasi_fd_t fd_p) : fd_inst(fd_p) {
@@ -141,7 +172,7 @@ public:
 std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(wasi_fd_t fd)>>
     file_exact_providers
     {
-        // console:
+        // console memory:
         {
             "/tmp/snes/mem/wram",
             [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
@@ -152,6 +183,13 @@ std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(wasi_fd_t
             "/tmp/snes/mem/vram",
             [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_array>(fd, Memory.VRAM, sizeof(Memory.VRAM));
+            }
+        },
+        // console signals:
+        {
+            "/tmp/snes/sig/blocking/nmi",
+            [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_nmi_blocking>(fd);
             }
         },
         // cart:
@@ -550,7 +588,15 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
     return true;
 }
 
+static void wasm_modules_cleanup() {
+    for (auto it = modules.begin(); it != modules.end(); it++) {
+        if (it->expired()) {
+            modules.erase(it);
+        }
+    }
+}
+
 void wasm_host_notify_nmi() {
-    // TODO
-    return;
+    // notify all wasm module threads that NMI is occurring:
+    nmi_cv.notify_all();
 }
