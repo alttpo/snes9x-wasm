@@ -153,19 +153,21 @@ public:
     }
 };
 
-class fd_stdout : public fd_inst {
+class fd_file_out : public fd_inst {
 public:
-    explicit fd_stdout(wasi_fd_t fd_p) : fd_inst(fd_p) {
+    explicit fd_file_out(wasi_fd_t fd_p, FILE *fout_p) : fd_inst(fd_p), fout(fout_p) {
     }
 
     wasi_errno_t write(const iovec &iov, uint32 &nwritten) override {
         nwritten = 0;
         for (const auto &item: iov) {
-            fprintf(stdout, "%.*s", (int) item.second, item.first);
+            fprintf(fout, "%.*s", (int) item.second, item.first);
             nwritten += item.second;
         }
         return 0;
     }
+
+    FILE *fout;
 };
 
 // map of well-known absolute paths for virtual files:
@@ -224,8 +226,9 @@ public:
         // set user_data to `this`:
         wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
 
-        // hook up stdout:
-        fds.insert_or_assign(1, std::make_shared<fd_stdout>(1));
+        // hook up stdout and stderr:
+        fds.insert_or_assign(1, std::make_shared<fd_file_out>(1, stdout));
+        fds.insert_or_assign(2, std::make_shared<fd_file_out>(2, stderr));
     }
 
     ~module() {
