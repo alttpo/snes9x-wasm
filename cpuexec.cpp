@@ -12,6 +12,11 @@
 #include "fxemu.h"
 #include "snapshot.h"
 #include "movie.h"
+
+#ifdef USE_WASM
+#include "wasm_host.h"
+#endif
+
 #ifdef DEBUGGER
 #include "debug.h"
 #include "missing.h"
@@ -65,6 +70,10 @@ void S9xMainLoop (void)
 
 				CHECK_FOR_IRQ_CHANGE();
 				S9xOpcode_NMI();
+
+#ifdef USE_WASM
+                wasm_host_notify_nmi();
+#endif
 			}
 		}
 

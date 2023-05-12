@@ -549,3 +549,8 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
 
     return true;
 }
+
+void wasm_host_notify_nmi() {
+    // TODO
+    return;
+}

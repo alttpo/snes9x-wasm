@@ -5,4 +5,6 @@ bool wasm_host_init();
 
 bool wasm_host_load_module(const std::string& name, uint8_t *module_binary, uint32_t module_size);
 
+void wasm_host_notify_nmi();
+
 #endif //SNES9X_GTK_WASM_HOST_H
