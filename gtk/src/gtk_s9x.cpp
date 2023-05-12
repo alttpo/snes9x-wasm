@@ -145,9 +145,11 @@ int main(int argc, char *argv[])
         uint8_t *module_binary;
         uint32_t module_size;
 
-        STREAM fp = OPEN_STREAM("test.wasm", "rb");
+        const char *module_name = "test.wasm";
+
+        STREAM fp = OPEN_STREAM(module_name, "rb");
         if (!fp) {
-            printf("open: could not find 'test.wasm'\n");
+            printf("open: could not find '%s'\n", module_name);
         } else {
             module_size = 1048576 * 100;
             module_binary = new uint8_t[module_size];
@@ -158,7 +160,7 @@ int main(int argc, char *argv[])
 
             CLOSE_STREAM(fp);
 
-            wasm_host_load_module("test", module_binary, module_size);
+            wasm_host_load_module(module_name, module_binary, module_size);
         }
     }
 #endif
