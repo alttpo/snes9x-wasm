@@ -31,7 +31,7 @@ typedef struct iovec_app {
     uint32 buf_len;
 } iovec_app_t;
 
-typedef std::vector<std::pair<uint8*, uint32>> iovec;
+typedef std::vector<std::pair<uint8 *, uint32>> iovec;
 
 // base interface for handling fd read/write ops:
 class fd_inst {
@@ -40,29 +40,21 @@ public:
 
     virtual ~fd_inst() = default;
 
-    virtual wasi_errno_t read(const iovec &iov, uint32 &nread) {
-        return WASI_ENOTSUP;
-    }
+    virtual wasi_errno_t read(const iovec &iov, uint32 &nread) { return WASI_ENOTSUP; }
 
-    virtual wasi_errno_t write(const iovec &iov, uint32 &nwritten) {
-        return WASI_ENOTSUP;
-    }
+    virtual wasi_errno_t write(const iovec &iov, uint32 &nwritten) { return WASI_ENOTSUP; }
 
-    virtual wasi_errno_t pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) {
-        return WASI_ENOTSUP;
-    }
+    virtual wasi_errno_t pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) { return WASI_ENOTSUP; }
 
-    virtual wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32 &nwritten) {
-        return WASI_ENOTSUP;
-    }
+    virtual wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32 &nwritten) { return WASI_ENOTSUP; }
 
 protected:
     wasi_fd_t fd;
 };
 
-class fd_mem : public fd_inst {
+class fd_mem_array : public fd_inst {
 public:
-    explicit fd_mem(wasi_fd_t fd_p, uint8* mem_p, uint32 size_p)
+    explicit fd_mem_array(wasi_fd_t fd_p, uint8 *mem_p, uint32 size_p)
         : fd_inst(fd_p), mem(mem_p), size(size_p) {}
 
     wasi_errno_t pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) override {
@@ -95,6 +87,41 @@ public:
     uint32 size;
 };
 
+class fd_mem_vec : public fd_inst {
+public:
+    explicit fd_mem_vec(wasi_fd_t fd_p, std::vector<uint8> &mem_p)
+        : fd_inst(fd_p), mem(mem_p) {}
+
+    wasi_errno_t pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) override {
+        nread = 0;
+        for (auto &item: iov) {
+            if (offset + item.second > mem.size()) {
+                return WASI_EINVAL;
+            }
+            memcpy((void *) item.first, &mem.at(offset), item.second);
+            offset += item.second;
+            nread += item.second;
+        }
+        return 0;
+    }
+
+    wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32 &nwritten) override {
+        nwritten = 0;
+        for (auto &item: iov) {
+            if (offset + item.second > mem.size()) {
+                return WASI_EINVAL;
+            }
+            memcpy(&mem.at(offset), (void *) item.first, item.second);
+            offset += item.second;
+            nwritten += item.second;
+        }
+        return 0;
+    }
+
+    std::vector<uint8> &mem;
+    uint32 size;
+};
+
 class fd_stdout : public fd_inst {
 public:
     explicit fd_stdout(wasi_fd_t fd_p) : fd_inst(fd_p) {
@@ -103,7 +130,7 @@ public:
     wasi_errno_t write(const iovec &iov, uint32 &nwritten) override {
         nwritten = 0;
         for (const auto &item: iov) {
-            fprintf(stdout, "%.*s", (int)item.second, item.first);
+            fprintf(stdout, "%.*s", (int) item.second, item.first);
             nwritten += item.second;
         }
         return 0;
@@ -111,26 +138,36 @@ public:
 };
 
 // map of well-known absolute paths for virtual files:
-std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(wasi_fd_t fd)>> file_providers {
+std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(wasi_fd_t fd)>>
+    file_exact_providers
     {
-        "/tmp/snes/mem/rom",
-        [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-            return std::make_shared<fd_mem>(fd, Memory.ROM, Memory.ROMStorage.size());
+        // console:
+        {
+            "/tmp/snes/mem/wram",
+            [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_mem_array>(fd, Memory.RAM, sizeof(Memory.RAM));
+            }
+        },
+        {
+            "/tmp/snes/mem/vram",
+            [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_mem_array>(fd, Memory.VRAM, sizeof(Memory.VRAM));
+            }
+        },
+        // cart:
+        {
+            "/tmp/snes/mem/rom",
+            [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_mem_vec>(fd, Memory.ROMStorage);
+            }
+        },
+        {
+            "/tmp/snes/mem/sram",
+            [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_mem_vec>(fd, Memory.SRAMStorage);
+            }
         }
-    },
-    {
-        "/tmp/snes/mem/wram",
-        [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-            return std::make_shared<fd_mem>(fd, Memory.RAM, sizeof(Memory.RAM));
-        }
-    },
-    {
-        "/tmp/snes/mem/sram",
-        [](wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-            return std::make_shared<fd_mem>(fd, Memory.SRAM, Memory.SRAMStorage.size());
-        }
-    }
-};
+    };
 
 class module {
 public:
@@ -220,15 +257,16 @@ public:
         std::string lpath(path, path + path_len);
 
         // special case for absolute paths:
-        if (dirfd == (uint32)-1) {
+        if (dirfd == (uint32) -1) {
             lpath.insert(0, "/");
         }
 
         // we only know how to open a limited set of virtual files identified by absolute paths,
         // similar to the linux procfs:
-        auto it = file_providers.find(lpath);
-        if (it == file_providers.end())
+        auto it = file_exact_providers.find(lpath);
+        if (it == file_exact_providers.end()) {
             return WASI_ENOENT;
+        }
 
         // always succeed and create a new fd:
         auto fd = fd_free;
@@ -281,7 +319,8 @@ public:
         return it->second->write(io, *nwritten_app);
     }
 
-    wasi_errno_t fd_pread(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, wasi_filesize_t offset, uint32 *nread_app) {
+    wasi_errno_t
+    fd_pread(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, wasi_filesize_t offset, uint32 *nread_app) {
         // find the fd:
         auto it = fds.find(fd);
         if (it == fds.end())
@@ -294,7 +333,8 @@ public:
         return it->second->pread(io, offset, *nread_app);
     }
 
-    wasi_errno_t fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, wasi_filesize_t offset, uint32 *nwritten_app) {
+    wasi_errno_t fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, wasi_filesize_t offset,
+                           uint32 *nwritten_app) {
         // find the fd:
         auto it = fds.find(fd);
         if (it == fds.end())
@@ -401,7 +441,8 @@ bool wasm_host_init() {
     });
     wasi->push_back({
         "fd_pread",
-        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, wasi_filesize_t, uint32 *)) (
+        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, wasi_filesize_t,
+                                   uint32 *)) (
             [](wasm_exec_env_t exec_env,
                wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, wasi_filesize_t offset, uint32 *nread_app
             ) -> wasi_errno_t {
@@ -414,7 +455,8 @@ bool wasm_host_init() {
     });
     wasi->push_back({
         "fd_pwrite",
-        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, wasi_filesize_t, uint32 *)) (
+        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, wasi_filesize_t,
+                                   uint32 *)) (
             [](wasm_exec_env_t exec_env,
                wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, wasi_filesize_t offset, uint32 *nwritten_app
             ) -> wasi_errno_t {
