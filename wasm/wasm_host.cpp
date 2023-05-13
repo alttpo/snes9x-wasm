@@ -1,5 +1,4 @@
 
-#include <cstdint>
 #include <memory>
 #include <thread>
 #include <utility>
@@ -11,14 +10,10 @@
 #include "wasi_types.h"
 #include "wasm_host.h"
 #include "wasm_module.h"
-#include "wasm_vfs.h"
 
 // snes9x:
 #include "snes9x.h"
 #include "memmap.h"
-
-std::mutex nmi_cv_m;
-std::condition_variable nmi_cv;
 
 std::vector<std::weak_ptr<module>> modules;
 
@@ -201,15 +196,16 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
     return true;
 }
 
-static void wasm_modules_cleanup() {
-    for (auto it = modules.begin(); it != modules.end(); it++) {
-        if (it->expired()) {
-            modules.erase(it);
-        }
-    }
-}
-
 void wasm_host_notify_nmi() {
     // notify all wasm module threads that NMI is occurring:
-    nmi_cv.notify_all();
+    for (auto it = modules.begin(); it != modules.end(); it++) {
+        auto &m_w = *it;
+        auto m = m_w.lock();
+        if (!m) {
+            modules.erase(it);
+            continue;
+        }
+
+        m->notify_nmi();
+    }
 }

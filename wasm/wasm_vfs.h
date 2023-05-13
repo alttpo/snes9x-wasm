@@ -12,6 +12,7 @@ class module;
 class fd_inst {
 public:
     explicit fd_inst(wasi_fd_t fd_p);
+
     virtual ~fd_inst() = default;
 
     virtual wasi_errno_t read(const iovec &iov, uint32_t &nread);
@@ -34,8 +35,8 @@ public:
 
     wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
 
-    uint8_t     *mem;
-    uint32_t    size;
+    uint8_t *mem;
+    uint32_t size;
 };
 
 class fd_mem_vec : public fd_inst {
@@ -46,15 +47,16 @@ public:
 
     wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
 
-    std::vector<uint8_t>    &mem;
-    uint32_t                size;
+    std::vector<uint8_t> &mem;
 };
 
 class fd_nmi_blocking : public fd_inst {
 public:
-    explicit fd_nmi_blocking(std::weak_ptr<module> m, wasi_fd_t fd_p);
+    explicit fd_nmi_blocking(std::weak_ptr<module> m_p, wasi_fd_t fd_p);
 
     wasi_errno_t read(const iovec &iov, uint32_t &nread) override;
+
+    std::weak_ptr<module> m_w;
 };
 
 class fd_file_out : public fd_inst {
@@ -67,7 +69,8 @@ public:
 };
 
 // map of well-known absolute paths for virtual files:
-extern std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak_ptr<module>, std::string, wasi_fd_t)>>
+extern std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak_ptr<module>, std::string,
+                                                                              wasi_fd_t)>>
     file_exact_providers;
 
 #endif //SNES9X_GTK_WASM_VFS_H

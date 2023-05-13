@@ -1,5 +1,7 @@
 
 #include "wasm_module.h"
+
+#include <utility>
 #include "wasm_vfs.h"
 
 module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p)
@@ -33,7 +35,7 @@ module::~module() {
 }
 
 [[nodiscard]] std::shared_ptr<module> module::create(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p) {
-    return std::shared_ptr<module>(new module(name_p, mod_p, mi_p));
+    return std::shared_ptr<module>(new module(std::move(name_p), mod_p, mi_p));
 }
 
 void module::runMain() {
@@ -92,7 +94,7 @@ wasi_errno_t module::path_open(
     std::string lpath(path, path + path_len);
 
     // special case for absolute paths:
-    if (dirfd == (uint32_t) - 1) {
+    if (dirfd == (uint32_t) -1) {
         lpath.insert(0, "/");
     }
 
@@ -181,6 +183,16 @@ wasi_errno_t module::fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint3
 
     // call the fd implementation:
     return it->second->pwrite(io, offset, *nwritten_app);
+}
+
+std::cv_status module::wait_for_nmi() {
+    std::unique_lock<std::mutex> lk(nmi_cv_m);
+    auto status = nmi_cv.wait_for(lk, std::chrono::microseconds(16750));
+    return status;
+}
+
+void module::notify_nmi() {
+    nmi_cv.notify_one();
 }
 
 iovec module::create_iovec(const iovec_app_t *iovec_app, uint32_t iovs_len) {

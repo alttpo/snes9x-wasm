@@ -2,6 +2,8 @@
 #include "wasm_module.h"
 #include "wasm_vfs.h"
 
+#include <utility>
+
 // snes9x:
 #include "snes9x.h"
 #include "memmap.h"
@@ -49,7 +51,7 @@ wasi_errno_t fd_mem_array::pwrite(const iovec &iov, wasi_filesize_t offset, uint
     return 0;
 }
 
-fd_mem_vec::fd_mem_vec(wasi_fd_t fd_p, std::vector <uint8> &mem_p)
+fd_mem_vec::fd_mem_vec(wasi_fd_t fd_p, std::vector<uint8> &mem_p)
     : fd_inst(fd_p), mem(mem_p) {}
 
 wasi_errno_t fd_mem_vec::pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) {
@@ -78,13 +80,17 @@ wasi_errno_t fd_mem_vec::pwrite(const iovec &iov, wasi_filesize_t offset, uint32
     return 0;
 }
 
-fd_nmi_blocking::fd_nmi_blocking(std::weak_ptr <module> m, wasi_fd_t fd_p) : fd_inst(fd_p) {
+fd_nmi_blocking::fd_nmi_blocking(std::weak_ptr<module> m_p, wasi_fd_t fd_p) : fd_inst(fd_p), m_w(std::move(m_p)) {
 }
 
 wasi_errno_t fd_nmi_blocking::read(const iovec &iov, uint32 &nread) {
+    auto m = m_w.lock();
+    if (!m) {
+        return EBADF;
+    }
+
     // wait for NMI:
-    std::unique_lock <std::mutex> lk(nmi_cv_m);
-    auto status = nmi_cv.wait_for(lk, std::chrono::microseconds(16750));
+    auto status = m->wait_for_nmi();
 
     // translate the no_timeout vs timeout status to a 1/0 value for the wasm module to consume:
     uint8 report;
@@ -117,39 +123,39 @@ wasi_errno_t fd_file_out::write(const iovec &iov, uint32 &nwritten) {
 }
 
 // map of well-known absolute paths for virtual files:
-std::unordered_map <std::string, std::function<std::shared_ptr<fd_inst>(std::weak_ptr<module> , std::string, wasi_fd_t)>>
+std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak_ptr<module>, std::string, wasi_fd_t)>>
     file_exact_providers
     {
         // console memory:
         {
             "/tmp/snes/mem/wram",
-            [](std::weak_ptr <module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr <fd_inst> {
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_array>(fd, Memory.RAM, sizeof(Memory.RAM));
             }
         },
         {
             "/tmp/snes/mem/vram",
-            [](std::weak_ptr <module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr <fd_inst> {
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_array>(fd, Memory.VRAM, sizeof(Memory.VRAM));
             }
         },
         // console signals:
         {
             "/tmp/snes/sig/blocking/nmi",
-            [](std::weak_ptr <module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr <fd_inst> {
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_nmi_blocking>(m, fd);
             }
         },
         // cart:
         {
             "/tmp/snes/mem/rom",
-            [](std::weak_ptr <module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr <fd_inst> {
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_vec>(fd, Memory.ROMStorage);
             }
         },
         {
             "/tmp/snes/mem/sram",
-            [](std::weak_ptr <module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr <fd_inst> {
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_vec>(fd, Memory.SRAMStorage);
             }
         }

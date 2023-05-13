@@ -23,7 +23,8 @@ public:
 
     ~module();
 
-    [[nodiscard]] static std::shared_ptr<module> create(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p);
+    [[nodiscard]] static std::shared_ptr<module>
+    create(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p);
 
     void runMain();
 
@@ -45,10 +46,15 @@ public:
     wasi_errno_t fd_write(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, uint32_t *nwritten_app);
 
     wasi_errno_t
-    fd_pread(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, wasi_filesize_t offset, uint32_t *nread_app);
+    fd_pread(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, wasi_filesize_t offset,
+             uint32_t *nread_app);
 
     wasi_errno_t fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, wasi_filesize_t offset,
                            uint32_t *nwritten_app);
+
+    std::cv_status wait_for_nmi();
+
+    void notify_nmi();
 
 private:
     iovec create_iovec(const iovec_app_t *iovec_app, uint32_t iovs_len);
@@ -61,6 +67,9 @@ private:
 
     std::unordered_map<wasi_fd_t, std::shared_ptr<fd_inst>> fds;
     wasi_fd_t fd_free = 3;
+
+    std::mutex nmi_cv_m;
+    std::condition_variable nmi_cv;
 };
 
 #endif //SNES9X_GTK_WASM_MODULE_H
