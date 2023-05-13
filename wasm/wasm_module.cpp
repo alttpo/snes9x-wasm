@@ -4,18 +4,8 @@
 #include <utility>
 #include "wasm_vfs.h"
 
-module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p)
-    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p) {
-    // TODO: move this to a static construct function returning optional<T>:
-    exec_env = wasm_runtime_create_exec_env(module_inst, 1048576);
-    if (!exec_env) {
-        wasm_runtime_deinstantiate(module_inst);
-        module_inst = nullptr;
-        wasm_runtime_unload(mod);
-        mod = nullptr;
-        return;
-    }
-
+module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p)
+    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p) {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
 
@@ -34,8 +24,18 @@ module::~module() {
     mod = nullptr;
 }
 
-[[nodiscard]] std::shared_ptr<module> module::create(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p) {
-    return std::shared_ptr<module>(new module(std::move(name_p), mod_p, mi_p));
+[[nodiscard]] std::shared_ptr<module>
+module::create(std::string name, wasm_module_t mod, wasm_module_inst_t module_inst) {
+    auto exec_env = wasm_runtime_create_exec_env(module_inst, 1048576);
+    if (!exec_env) {
+        wasm_runtime_deinstantiate(module_inst);
+        module_inst = nullptr;
+        wasm_runtime_unload(mod);
+        mod = nullptr;
+        return nullptr;
+    }
+
+    return std::shared_ptr<module>(new module(std::move(name), mod, module_inst, exec_env));
 }
 
 void module::runMain() {
@@ -185,13 +185,23 @@ wasi_errno_t module::fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint3
     return it->second->pwrite(io, offset, *nwritten_app);
 }
 
-std::cv_status module::wait_for_nmi() {
+bool module::wait_for_nmi() {
     std::unique_lock<std::mutex> lk(nmi_cv_m);
-    auto status = nmi_cv.wait_for(lk, std::chrono::microseconds(16750));
-    return status;
+    //printf("wait_for_nmi()\n");
+    nmi_cv.wait_for(lk, std::chrono::microseconds(4000));
+    if (nmi_triggered) {
+        nmi_triggered = false;
+        return true;
+    }
+    return false;
 }
 
 void module::notify_nmi() {
+    //printf("notify_nmi()\n");
+    {
+        std::unique_lock<std::mutex> lk(nmi_cv_m);
+        nmi_triggered = true;
+    }
     nmi_cv.notify_one();
 }
 

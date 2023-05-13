@@ -19,7 +19,7 @@
 
 class module : public std::enable_shared_from_this<module> {
 public:
-    module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p);
+    module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p);
 
     ~module();
 
@@ -52,7 +52,7 @@ public:
     wasi_errno_t fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, wasi_filesize_t offset,
                            uint32_t *nwritten_app);
 
-    std::cv_status wait_for_nmi();
+    bool wait_for_nmi();
 
     void notify_nmi();
 
@@ -70,6 +70,7 @@ private:
 
     std::mutex nmi_cv_m;
     std::condition_variable nmi_cv;
+    bool nmi_triggered = false;
 };
 
 #endif //SNES9X_GTK_WASM_MODULE_H

@@ -90,11 +90,11 @@ wasi_errno_t fd_nmi_blocking::read(const iovec &iov, uint32 &nread) {
     }
 
     // wait for NMI:
-    auto status = m->wait_for_nmi();
+    bool status = m->wait_for_nmi();
 
-    // translate the no_timeout vs timeout status to a 1/0 value for the wasm module to consume:
+    // translate the status to a 1/0 value for the wasm module to consume:
     uint8 report;
-    if (status == std::cv_status::no_timeout) {
+    if (status) {
         report = 1;
     } else {
         report = 0;

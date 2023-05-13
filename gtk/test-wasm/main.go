@@ -88,6 +88,8 @@ func main() {
 
 		var wram [0x20000]byte
 		var nmiSignal [1]byte
+
+		lastNMI := time.Now()
 		for {
 			var n int
 
@@ -102,13 +104,15 @@ func main() {
 				fmt.Printf("NMI timeout: %d us\n", nd.Sub(st).Microseconds())
 				continue
 			}
-			fmt.Printf("NMI: %d us\n", nd.Sub(st).Microseconds())
+			fmt.Printf("NMI: %d us\n", nd.Sub(lastNMI).Microseconds())
+			lastNMI = nd
 
 			// read one byte from WRAM:
-			n, err = wramFile.ReadAt(wram[0x10:0x11], 0x10)
+			n, err = wramFile.ReadAt(wram[0x10:0x20], 0x10)
 			if n == 0 {
 				continue
 			}
+			fmt.Printf("wram[$1A] = %02x\n", wram[0x1A])
 			fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 
 			if wram[0x10] == 0x14 {
@@ -128,7 +132,8 @@ func main() {
 				fmt.Printf("NMI timeout: %d us\n", nd.Sub(st).Microseconds())
 				continue
 			}
-			fmt.Printf("NMI: %d us\n", nd.Sub(st).Microseconds())
+			fmt.Printf("NMI: %d us\n", nd.Sub(lastNMI).Microseconds())
+			lastNMI = nd
 
 			_, err = vramFile.ReadAt(vram[0xE000:], 0xE000)
 			if err != nil {
@@ -136,11 +141,12 @@ func main() {
 			}
 			fmt.Println(hex.Dump(vram[0xE000:0xE010]))
 
-			_, err = wramFile.ReadAt(wram[0x10:0x11], 0x10)
+			_, err = wramFile.ReadAt(wram[0x10:0x20], 0x10)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "readat(wram): %v\n", err)
 			}
-			fmt.Println(hex.Dump(wram[0x0010:0x0011]))
+			fmt.Printf("wram[$1A] = %02x\n", wram[0x1A])
+			fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 
 			if wram[0x10] == 0x07 {
 				break
