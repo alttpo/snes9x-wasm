@@ -1,6 +1,6 @@
 
-#ifndef SNES9X_GTK_WASM_MODULE_H
-#define SNES9X_GTK_WASM_MODULE_H
+#ifndef SNES9X_WASM_MODULE_H
+#define SNES9X_WASM_MODULE_H
 
 #include <cstdint>
 #include <memory>
@@ -73,4 +73,4 @@ private:
     bool nmi_triggered = false;
 };
 
-#endif //SNES9X_GTK_WASM_MODULE_H
+#endif //SNES9X_WASM_MODULE_H

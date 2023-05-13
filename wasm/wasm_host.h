@@ -1,5 +1,6 @@
-#ifndef SNES9X_GTK_WASM_HOST_H
-#define SNES9X_GTK_WASM_HOST_H
+
+#ifndef SNES9X_WASM_HOST_H
+#define SNES9X_WASM_HOST_H
 
 bool wasm_host_init();
 
@@ -7,4 +8,4 @@ bool wasm_host_load_module(const std::string& name, uint8_t *module_binary, uint
 
 void wasm_host_notify_nmi();
 
-#endif //SNES9X_GTK_WASM_HOST_H
+#endif //SNES9X_WASM_HOST_H

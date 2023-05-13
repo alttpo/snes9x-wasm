@@ -1,6 +1,6 @@
 
-#ifndef SNES9X_GTK_WASI_TYPES_H
-#define SNES9X_GTK_WASI_TYPES_H
+#ifndef SNES9X_WASI_TYPES_H
+#define SNES9X_WASI_TYPES_H
 
 #include <cstdint>
 
@@ -24,4 +24,4 @@ typedef struct iovec_app {
 
 typedef std::vector<std::pair<uint8_t *, uint32_t>> iovec;
 
-#endif //SNES9X_GTK_WASI_TYPES_H
+#endif //SNES9X_WASI_TYPES_H
