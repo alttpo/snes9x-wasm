@@ -57,15 +57,20 @@ func main() {
 	fmt.Printf("fd: %d\n", fROM.Fd())
 	romFile = fROM
 
-	//nmiFile, err = os.OpenFile("/tmp/snes/sig/nmi", os.O_RDONLY, 0666)
-	//if err != nil {
-	//	_, _ = fmt.Fprintf(os.Stderr, "open(nmi): %v\n", err)
-	//	return
-	//}
+	var fNMI *os.File
+	fmt.Println("opening nmi")
+	fNMI, err = os.OpenFile("/tmp/snes/sig/blocking/nmi", os.O_RDONLY, 0666)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "open(nmi): %v\n", err)
+		return
+	}
+	defer fNMI.Close()
+	fmt.Printf("fd: %d\n", fNMI.Fd())
+	nmiFile = fNMI
 
-	fmt.Println("sleep 1s")
-	time.Sleep(time.Second)
-	fmt.Println("sleep 1s complete")
+	//fmt.Println("sleep 1s")
+	//time.Sleep(time.Second)
+	//fmt.Println("sleep 1s complete")
 
 	ch := make(chan struct{})
 
@@ -87,12 +92,17 @@ func main() {
 			var n int
 
 			// wait for NMI:
-			//n, err = nmiFile.Read(nmiSignal[:])
-			//if n == 0 {
-			//	continue
-			//}
-			//fmt.Println("NMI")
-			_ = nmiSignal
+			st := time.Now()
+			n, err = nmiFile.Read(nmiSignal[:])
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "read(nmi): %v\n", err)
+			}
+			nd := time.Now()
+			if nmiSignal[0] == 0 {
+				fmt.Printf("NMI timeout: %d us\n", nd.Sub(st).Microseconds())
+				continue
+			}
+			fmt.Printf("NMI: %d us\n", nd.Sub(st).Microseconds())
 
 			// read one byte from WRAM:
 			n, err = wramFile.ReadAt(wram[0x10:0x11], 0x10)
@@ -108,17 +118,30 @@ func main() {
 
 		var vram [0x10000]byte
 		for {
+			st := time.Now()
+			_, err = nmiFile.Read(nmiSignal[:])
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "read(nmi): %v\n", err)
+			}
+			nd := time.Now()
+			if nmiSignal[0] == 0 {
+				fmt.Printf("NMI timeout: %d us\n", nd.Sub(st).Microseconds())
+				continue
+			}
+			fmt.Printf("NMI: %d us\n", nd.Sub(st).Microseconds())
+
 			_, err = vramFile.ReadAt(vram[0xE000:], 0xE000)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "readat(vram): %v\n", err)
 			}
-
-			fmt.Println(hex.Dump(vram[0xE000:]))
+			fmt.Println(hex.Dump(vram[0xE000:0xE010]))
 
 			_, err = wramFile.ReadAt(wram[0x10:0x11], 0x10)
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "readat(wram): %v\n", err)
 			}
+			fmt.Println(hex.Dump(wram[0x0010:0x0011]))
+
 			if wram[0x10] == 0x07 {
 				break
 			}
