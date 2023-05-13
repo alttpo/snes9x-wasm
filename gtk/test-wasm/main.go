@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -68,12 +67,6 @@ func main() {
 	fmt.Printf("fd: %d\n", fNMI.Fd())
 	nmiFile = fNMI
 
-	//fmt.Println("sleep 1s")
-	//time.Sleep(time.Second)
-	//fmt.Println("sleep 1s complete")
-
-	ch := make(chan struct{})
-
 	// read rom header:
 	var romTitle [21]byte
 	_, err = romFile.ReadAt(romTitle[:], 0x7FC0)
@@ -83,80 +76,35 @@ func main() {
 	}
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
-	go func() {
-		fmt.Println("hello from goroutine")
+	var wram [0x20000]byte
+	var nmiSignal [1]byte
 
-		var wram [0x20000]byte
-		var nmiSignal [1]byte
+	lastNMI := time.Now()
+	for {
+		var n int
 
-		lastNMI := time.Now()
-		for {
-			var n int
-
-			// wait for NMI:
-			st := time.Now()
-			n, err = nmiFile.Read(nmiSignal[:])
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "read(nmi): %v\n", err)
-			}
-			nd := time.Now()
-			if nmiSignal[0] == 0 {
-				fmt.Printf("NMI timeout: %d us\n", nd.Sub(st).Microseconds())
-				continue
-			}
-			fmt.Printf("NMI: %d us\n", nd.Sub(lastNMI).Microseconds())
-			lastNMI = nd
-
-			// read one byte from WRAM:
-			n, err = wramFile.ReadAt(wram[0x10:0x20], 0x10)
-			if n == 0 {
-				continue
-			}
-			fmt.Printf("wram[$1A] = %02x\n", wram[0x1A])
-			fmt.Printf("wram[$10] = %02x\n", wram[0x10])
-
-			if wram[0x10] == 0x14 {
-				break
-			}
+		// wait for NMI:
+		//st := time.Now()
+		n, err = nmiFile.Read(nmiSignal[:])
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "read(nmi): %v\n", err)
 		}
-
-		var vram [0x10000]byte
-		for {
-			st := time.Now()
-			_, err = nmiFile.Read(nmiSignal[:])
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "read(nmi): %v\n", err)
-			}
-			nd := time.Now()
-			if nmiSignal[0] == 0 {
-				fmt.Printf("NMI timeout: %d us\n", nd.Sub(st).Microseconds())
-				continue
-			}
-			fmt.Printf("NMI: %d us\n", nd.Sub(lastNMI).Microseconds())
-			lastNMI = nd
-
-			_, err = vramFile.ReadAt(vram[0xE000:], 0xE000)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "readat(vram): %v\n", err)
-			}
-			fmt.Println(hex.Dump(vram[0xE000:0xE010]))
-
-			_, err = wramFile.ReadAt(wram[0x10:0x20], 0x10)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "readat(wram): %v\n", err)
-			}
-			fmt.Printf("wram[$1A] = %02x\n", wram[0x1A])
-			fmt.Printf("wram[$10] = %02x\n", wram[0x10])
-
-			if wram[0x10] == 0x07 {
-				break
-			}
+		nd := time.Now()
+		if nmiSignal[0] == 0 {
+			//fmt.Printf("NMI timeout: %d us\n", nd.Sub(st).Microseconds())
+			continue
 		}
+		fmt.Printf("NMI: %d us\n", nd.Sub(lastNMI).Microseconds())
+		lastNMI = nd
 
-		ch <- struct{}{}
-	}()
-
-	_ = <-ch
+		// read half of WRAM:
+		n, err = wramFile.ReadAt(wram[0x0:0x10000], 0x0)
+		if n == 0 {
+			continue
+		}
+		fmt.Printf("%02x\n", wram[0x1A])
+		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
+	}
 
 	fmt.Println("exit")
 }
