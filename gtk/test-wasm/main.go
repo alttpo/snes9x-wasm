@@ -101,6 +101,7 @@ func main() {
 	//                                                          g = green (5-bits)
 	//                                                          b = blue (5-bits)
 	//                                                          p = priority [0..3]
+	//    0000_0000_0000_00pp_1_rrrrr_ggggg_bbbbb
 	testPixels := [8]uint32{
 		// ---
 		0b0000_0000_0000_0000_1_00000_00000_00000,
@@ -120,15 +121,16 @@ func main() {
 		0b0000_0000_0000_0000_1_11111_11111_11111,
 	}
 
+	r := 0
 	rotatingPixels := [8]uint32{}
-	rotate := func(r int) {
-		n := copy(rotatingPixels[:], testPixels[r:])
-		copy(rotatingPixels[n:], testPixels[0:n])
-	}
 	rotatedPixelBytes := (*[8 * 4]byte)(unsafe.Pointer(&rotatingPixels[0]))[:]
+	rotate := func() {
+		n := copy(rotatingPixels[:], testPixels[r:])
+		copy(rotatingPixels[n:], testPixels[0:8-n])
+		r = (r + 1) & 7
+	}
 
 	lastNMI := time.Now()
-	r := 0
 	for {
 		var n int
 
@@ -146,6 +148,12 @@ func main() {
 		fmt.Printf("NMI: %d us\n", nd.Sub(lastNMI).Microseconds())
 		lastNMI = nd
 
+		// write to bg1 main a rotating test pixel pattern:
+		for y := int64(0); y < 7; y++ {
+			rotate()
+			_, _ = bg1MainFile.WriteAt(rotatedPixelBytes, (512*(110+y)+118)*4)
+		}
+
 		// read half of WRAM:
 		n, err = wramFile.ReadAt(wram[0x0:0x10000], 0x0)
 		if n == 0 {
@@ -153,23 +161,6 @@ func main() {
 		}
 		fmt.Printf("%02x\n", wram[0x1A])
 		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
-
-		// write to bg1 main a rotating test pixel pattern:
-		rotate(r)
-		_, _ = bg1MainFile.WriteAt(rotatedPixelBytes, (512*100+112)*4)
-		r = (r + 1) & 7
-		rotate(r)
-		_, _ = bg1MainFile.WriteAt(rotatedPixelBytes, (512*101+112)*4)
-		r = (r + 1) & 7
-		rotate(r)
-		_, _ = bg1MainFile.WriteAt(rotatedPixelBytes, (512*102+112)*4)
-		r = (r + 1) & 7
-		rotate(r)
-		_, _ = bg1MainFile.WriteAt(rotatedPixelBytes, (512*103+112)*4)
-		r = (r + 1) & 7
-		rotate(r)
-		_, _ = bg1MainFile.WriteAt(rotatedPixelBytes, (512*104+112)*4)
-		r = (r + 1) & 7
 	}
 
 	fmt.Println("exit")
