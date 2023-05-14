@@ -273,6 +273,7 @@ if(USE_WAMR)
             ../wasm/wasm_host.cpp
             ../wasm/wasm_module.cpp
             ../wasm/wasm_vfs.cpp
+            ../wasm/wasm_ppux.cpp
             )
 endif()
 

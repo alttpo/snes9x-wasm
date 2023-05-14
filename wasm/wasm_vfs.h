@@ -2,9 +2,10 @@
 #ifndef SNES9X_WASM_VFS_H
 #define SNES9X_WASM_VFS_H
 
-#include "wasi_types.h"
-
 #include <mutex>
+
+#include "wasi_types.h"
+#include "wasm_ppux.h"
 
 class module;
 
@@ -72,12 +73,13 @@ public:
 
 class fd_ppux : public fd_inst {
 public:
-    explicit fd_ppux(std::weak_ptr<module> m_p, int layer_p, wasi_fd_t fd_p);
+    explicit fd_ppux(std::weak_ptr<module> m_p, ppux::layer layer_p, bool sub_p, wasi_fd_t fd_p);
 
     wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
 
     std::weak_ptr<module> m_w;
-    int layer;
+    ppux::layer layer;
+    bool sub;
 };
 
 // map of well-known absolute paths for virtual files:

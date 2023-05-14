@@ -8,4 +8,7 @@ bool wasm_host_load_module(const std::string& name, uint8_t *module_binary, uint
 
 void wasm_host_notify_nmi();
 
+void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart);
+void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl);
+
 #endif //SNES9X_WASM_HOST_H

@@ -124,25 +124,6 @@ wasi_errno_t fd_file_out::write(const iovec &iov, uint32 &nwritten) {
     return 0;
 }
 
-fd_ppux::fd_ppux(std::weak_ptr<module> m_p, int layer_p, wasi_fd_t fd_p)
-    : fd_inst(fd_p), m_w(std::move(m_p)), layer(layer_p) {}
-
-wasi_errno_t fd_ppux::pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) {
-    auto m = m_w.lock();
-    if (!m) {
-        return EBADF;
-    }
-
-    nwritten = 0;
-    for (const auto &io: iov) {
-        std::copy_n(io.first, io.second, m->ppux[layer].begin() + (long) offset);
-        offset += io.second;
-        nwritten += io.second;
-    }
-
-    return 0;
-}
-
 // map of well-known absolute paths for virtual files:
 std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak_ptr<module>, std::string, wasi_fd_t)>>
     file_exact_providers
@@ -182,33 +163,63 @@ std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak
         },
         // console ppux rendering extensions:
         {
-            "/tmp/snes/ppux/bg1",
+            "/tmp/snes/ppux/bg1/main",
             [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-                return std::make_shared<fd_ppux>(m, 0, fd);
+                return std::make_shared<fd_ppux>(m, ppux::layer::BG1, false, fd);
             }
         },
         {
-            "/tmp/snes/ppux/bg2",
+            "/tmp/snes/ppux/bg2/main",
             [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-                return std::make_shared<fd_ppux>(m, 1, fd);
+                return std::make_shared<fd_ppux>(m, ppux::layer::BG2, false, fd);
             }
         },
         {
-            "/tmp/snes/ppux/bg3",
+            "/tmp/snes/ppux/bg3/main",
             [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-                return std::make_shared<fd_ppux>(m, 2, fd);
+                return std::make_shared<fd_ppux>(m, ppux::layer::BG3, false, fd);
             }
         },
         {
-            "/tmp/snes/ppux/bg4",
+            "/tmp/snes/ppux/bg4/main",
             [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-                return std::make_shared<fd_ppux>(m, 3, fd);
+                return std::make_shared<fd_ppux>(m, ppux::layer::BG4, false, fd);
             }
         },
         {
-            "/tmp/snes/ppux/obj",
+            "/tmp/snes/ppux/obj/main",
             [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-                return std::make_shared<fd_ppux>(m, 4, fd);
+                return std::make_shared<fd_ppux>(m, ppux::layer::OBJ, false, fd);
+            }
+        },
+        {
+            "/tmp/snes/ppux/bg1/sub",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, ppux::layer::BG1, true, fd);
+            }
+        },
+        {
+            "/tmp/snes/ppux/bg2/sub",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, ppux::layer::BG2, true, fd);
+            }
+        },
+        {
+            "/tmp/snes/ppux/bg3/sub",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, ppux::layer::BG3, true, fd);
+            }
+        },
+        {
+            "/tmp/snes/ppux/bg4/sub",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, ppux::layer::BG4, true, fd);
+            }
+        },
+        {
+            "/tmp/snes/ppux/obj/sub",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, ppux::layer::OBJ, true, fd);
             }
         },
     };

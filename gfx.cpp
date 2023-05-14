@@ -1,6 +1,6 @@
 /*****************************************************************************\
-     Snes9x - Portable Super Nintendo Entertainment System (TM) emulator.
-                This file is licensed under the Snes9x License.
+	 Snes9x - Portable Super Nintendo Entertainment System (TM) emulator.
+				This file is licensed under the Snes9x License.
    For further information, consult the LICENSE file in the root directory.
 \*****************************************************************************/
 
@@ -14,6 +14,10 @@
 #include "screenshot.h"
 #include "font.h"
 #include "display.h"
+
+#ifdef USE_WASM
+#include "wasm_host.h"
+#endif
 
 extern struct SCheatData		Cheat;
 extern struct SLineData			LineData[240];
@@ -312,6 +316,14 @@ static inline void RenderScreen (bool8 sub)
 	uint8	BGActive;
 	int		D;
 
+#ifdef USE_WASM
+#   define DO_BG_PPUX(n, Zh, Zl)    wasm_ppux_render_bg_lines(n, sub, D + Zh, D + Zl);
+#   define DO_OBJ_PPUX()            wasm_ppux_render_obj_lines(sub, D + 4)
+#else
+#   define DO_BG_PPUX(n, Zh, Zl)
+#   define DO_OBJ_PPUX()
+#endif
+
 	if (!sub)
 	{
 		GFX.S = GFX.Screen;
@@ -377,39 +389,55 @@ static inline void RenderScreen (bool8 sub)
 	{
 		case 0:
 			DO_BG(0,  0, 2, FALSE, FALSE, 15, 11, 0);
+			DO_BG_PPUX(0, 15, 11);
 			DO_BG(1, 32, 2, FALSE, FALSE, 14, 10, 0);
+			DO_BG_PPUX(1, 14, 10);
 			DO_BG(2, 64, 2, FALSE, FALSE,  7,  3, 0);
+			DO_BG_PPUX(2, 7, 3);
 			DO_BG(3, 96, 2, FALSE, FALSE,  6,  2, 0);
+			DO_BG_PPUX(3, 6, 2);
 			break;
 
 		case 1:
 			DO_BG(0,  0, 4, FALSE, FALSE, 15, 11, 0);
+			DO_BG_PPUX(0, 15, 11);
 			DO_BG(1,  0, 4, FALSE, FALSE, 14, 10, 0);
+			DO_BG_PPUX(1, 14, 10);
 			DO_BG(2,  0, 2, FALSE, FALSE, (PPU.BG3Priority ? 17 : 7), 3, 0);
+			DO_BG_PPUX(2, (PPU.BG3Priority ? 17 : 7), 3);
 			break;
 
 		case 2:
 			DO_BG(0,  0, 4, FALSE, TRUE,  15,  7, 8);
+			DO_BG_PPUX(0, 15, 7);
 			DO_BG(1,  0, 4, FALSE, TRUE,  11,  3, 8);
+			DO_BG_PPUX(1, 11, 3);
 			break;
 
 		case 3:
 			DO_BG(0,  0, 8, FALSE, FALSE, 15,  7, 0);
+			DO_BG_PPUX(0, 15, 7);
 			DO_BG(1,  0, 4, FALSE, FALSE, 11,  3, 0);
+			DO_BG_PPUX(1, 11, 3);
 			break;
 
 		case 4:
 			DO_BG(0,  0, 8, FALSE, TRUE,  15,  7, 0);
+			DO_BG_PPUX(0, 15, 7);
 			DO_BG(1,  0, 2, FALSE, TRUE,  11,  3, 0);
+			DO_BG_PPUX(1, 11, 3);
 			break;
 
 		case 5:
 			DO_BG(0,  0, 4, TRUE,  FALSE, 15,  7, 0);
+			DO_BG_PPUX(0, 15, 7);
 			DO_BG(1,  0, 2, TRUE,  FALSE, 11,  3, 0);
+			DO_BG_PPUX(1, 11, 3);
 			break;
 
 		case 6:
 			DO_BG(0,  0, 4, TRUE,  TRUE,  15,  7, 8);
+			DO_BG_PPUX(0, 15, 7);
 			break;
 
 		case 7:
@@ -656,8 +684,8 @@ static void SetupOBJ (void)
 		 * So we only initialise them per line, as needed. [Neb]
 		 * Bonus: We can quickly avoid looping if a line has no OBJs.
 		 */
-        bool8 AnyOBJOnLine[SNES_HEIGHT_EXTENDED];
-        memset(AnyOBJOnLine, FALSE, sizeof(AnyOBJOnLine)); // better
+		bool8 AnyOBJOnLine[SNES_HEIGHT_EXTENDED];
+		memset(AnyOBJOnLine, FALSE, sizeof(AnyOBJOnLine)); // better
 
 		for (S = 0; S < 128; S++)
 		{
@@ -1796,13 +1824,13 @@ static void DisplayStringFromBottom (const char *string, int linesFromBottom, in
 
 static void S9xDisplayStringType (const char *string, int linesFromBottom, int pixelsFromLeft, bool allowWrap, int type)
 {
-    if (S9xCustomDisplayString)
-    {
-            S9xCustomDisplayString (string, linesFromBottom, pixelsFromLeft, allowWrap, type);
-            return;
-    }
+	if (S9xCustomDisplayString)
+	{
+			S9xCustomDisplayString (string, linesFromBottom, pixelsFromLeft, allowWrap, type);
+			return;
+	}
 
-    S9xDisplayString (string, linesFromBottom, pixelsFromLeft, allowWrap);
+	S9xDisplayString (string, linesFromBottom, pixelsFromLeft, allowWrap);
 }
 
 static void DisplayTime (void)
@@ -1853,7 +1881,7 @@ static void DisplayPressedKeys (void)
 	static int		KeyOrder[] = { 8, 10, 7, 9, 0, 6, 14, 13, 5, 1, 4, 3, 2, 11, 12 }; // < ^ > v   A B Y X  L R  S s
 
 	enum controllers	controller;
-    int					line = Settings.DisplayMovieFrame && S9xMovieActive() ? 2 : 1;
+	int					line = Settings.DisplayMovieFrame && S9xMovieActive() ? 2 : 1;
 	int8				ids[4];
 	char				string[255];
 

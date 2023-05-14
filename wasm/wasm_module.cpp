@@ -5,18 +5,13 @@
 #include "wasm_vfs.h"
 
 module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p)
-    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p) {
+    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), ppux() {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
 
     // hook up stdout and stderr:
     fds.insert_or_assign(1, std::make_shared<fd_file_out>(1, stdout));
     fds.insert_or_assign(2, std::make_shared<fd_file_out>(2, stderr));
-
-    // initialize ppux layers:
-    for (auto &layer: ppux) {
-        layer.resize(module::ppux_pitch * MAX_SNES_HEIGHT);
-    }
 }
 
 module::~module() {
