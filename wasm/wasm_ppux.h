@@ -21,10 +21,11 @@ struct ppux {
     // ppux allows integrating custom colors into PPU's 5 layers:
     //   0 = BG1, 1 = BG2, 2 = BG3, 3 = BG4, 4 = OBJ
     // each layer is MAX_SNES_WIDTH x MAX_SNES_HEIGHT in dimensions
-    // each pixel is 4 bytes:
-    //   byte 0        byte 1        byte 2        byte 3
-    // [ 7654 3210 ] [ 7654 3210 ] [ 7654 3210 ] [ 7654 3210 ]
-    //   gggr rrrr     -bbb bbgg     E--- --pp     ---- ----    E = enable pixel
+    // each pixel is represented by a 4-byte little-endian uint32:
+    //   MSB                                             LSB
+    //   1111 1111     1111 1111     0000 0000     0000 0000
+    // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+    //   ---- ----     ---- --pp     Errr rrgg     gggb bbbb    E = enable pixel
     //                                                          r = red (5-bits)
     //                                                          g = green (5-bits)
     //                                                          b = blue (5-bits)
@@ -35,7 +36,7 @@ struct ppux {
     static const long bpp = 4;
     static const long pitch = MAX_SNES_WIDTH;
 
-    static const uint32_t PX_ENABLE = (1UL << 23);  // `E`
+    static const uint32_t PX_ENABLE = (1UL << 0x0f);  // `E`
 
     template<class MATH>
     void lines_math_main(

@@ -68,6 +68,7 @@ void ppux::lines_math_main(
             // map priority of pixel to depth value:
             auto prio = (xp[x] >> 16) & 3;
             auto xd = priority_depth_map[prio];
+
             if ((xp[x] & PX_ENABLE) == PX_ENABLE && xd >= md[x]) {
                 mc[x] = MATH::Calc(xp[x] & 0x7fff, sc[x], sd[x]);
                 md[x] = xd;
@@ -83,7 +84,21 @@ void ppux::lines_sub(
     uint16 *c,
     uint8  *d
 ) {
-
+    uint32_t *xp = sub[layer].data() + (GFX.StartY * pitch);
+    for (uint32 l = GFX.StartY; l <= GFX.EndY; l++,
+        c += GFX.PPL, d += GFX.PPL,
+        xp += pitch
+        ) {
+        for (int x = left; x < right; x++) {
+            // map priority of pixel to depth value:
+            auto prio = (xp[x] >> 16) & 3;
+            auto xd = priority_depth_map[prio];
+            if ((xp[x] & PX_ENABLE) == PX_ENABLE && xd >= d[x]) {
+                c[x] = xp[x] & 0x7fff;
+                d[x] = xd;
+            }
+        }
+    }
 }
 
 void ppux::render_line_main(ppux::layer layer) {
