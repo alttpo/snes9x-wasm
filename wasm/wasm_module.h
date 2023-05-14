@@ -71,6 +71,22 @@ private:
     std::mutex nmi_cv_m;
     std::condition_variable nmi_cv;
     bool nmi_triggered = false;
+
+public:
+    // ppux allows integrating custom colors into PPU's 5 layers:
+    //   0 = BG1, 1 = BG2, 2 = BG3, 3 = BG4, 4 = OBJ
+    // each layer is MAX_SNES_WIDTH x MAX_SNES_HEIGHT in dimensions
+    // each pixel is 4 bytes:
+    //   byte 0        byte 1        byte 2        byte 3
+    // [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ] [ 7654 3210 ]
+    //   gggr rrrr     Ebbb bbgg     ---- --pp     ---- ----    E = enable pixel
+    //                                                          r = red (5-bits)
+    //                                                          g = green (5-bits)
+    //                                                          b = blue (5-bits)
+    //                                                          p = priority [0..3]
+    std::vector<uint8_t> ppux[5];
+
+    static const int ppux_pitch = 4 * MAX_SNES_WIDTH;
 };
 
 #endif //SNES9X_WASM_MODULE_H

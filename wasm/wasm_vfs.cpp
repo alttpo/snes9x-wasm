@@ -14,6 +14,8 @@ extern std::condition_variable nmi_cv;
 // base interface for handling fd read/write ops:
 fd_inst::fd_inst(wasi_fd_t fd_p) : fd(fd_p) {}
 
+wasi_errno_t fd_inst::close() { return 0; }
+
 wasi_errno_t fd_inst::read(const iovec &iov, uint32 &nread) { return WASI_ENOTSUP; }
 
 wasi_errno_t fd_inst::write(const iovec &iov, uint32 &nwritten) { return WASI_ENOTSUP; }
@@ -122,6 +124,25 @@ wasi_errno_t fd_file_out::write(const iovec &iov, uint32 &nwritten) {
     return 0;
 }
 
+fd_ppux::fd_ppux(std::weak_ptr<module> m_p, int layer_p, wasi_fd_t fd_p)
+    : fd_inst(fd_p), m_w(std::move(m_p)), layer(layer_p) {}
+
+wasi_errno_t fd_ppux::pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) {
+    auto m = m_w.lock();
+    if (!m) {
+        return EBADF;
+    }
+
+    nwritten = 0;
+    for (const auto &io: iov) {
+        std::copy_n(io.first, io.second, m->ppux[layer].begin() + (long) offset);
+        offset += io.second;
+        nwritten += io.second;
+    }
+
+    return 0;
+}
+
 // map of well-known absolute paths for virtual files:
 std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak_ptr<module>, std::string, wasi_fd_t)>>
     file_exact_providers
@@ -139,13 +160,6 @@ std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak
                 return std::make_shared<fd_mem_array>(fd, Memory.VRAM, sizeof(Memory.VRAM));
             }
         },
-        // console signals:
-        {
-            "/tmp/snes/sig/blocking/nmi",
-            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-                return std::make_shared<fd_nmi_blocking>(m, fd);
-            }
-        },
         // cart:
         {
             "/tmp/snes/mem/rom",
@@ -158,5 +172,43 @@ std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak
             [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_vec>(fd, Memory.SRAMStorage);
             }
-        }
+        },
+        // console signals:
+        {
+            "/tmp/snes/sig/blocking/nmi",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_nmi_blocking>(m, fd);
+            }
+        },
+        // console ppux rendering extensions:
+        {
+            "/tmp/snes/ppux/bg1",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, 0, fd);
+            }
+        },
+        {
+            "/tmp/snes/ppux/bg2",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, 1, fd);
+            }
+        },
+        {
+            "/tmp/snes/ppux/bg3",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, 2, fd);
+            }
+        },
+        {
+            "/tmp/snes/ppux/bg4",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, 3, fd);
+            }
+        },
+        {
+            "/tmp/snes/ppux/obj",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux>(m, 4, fd);
+            }
+        },
     };

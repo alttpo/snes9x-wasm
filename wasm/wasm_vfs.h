@@ -15,6 +15,8 @@ public:
 
     virtual ~fd_inst() = default;
 
+    virtual wasi_errno_t close();
+
     virtual wasi_errno_t read(const iovec &iov, uint32_t &nread);
 
     virtual wasi_errno_t write(const iovec &iov, uint32_t &nwritten);
@@ -66,6 +68,16 @@ public:
     wasi_errno_t write(const iovec &iov, uint32_t &nwritten) override;
 
     FILE *fout;
+};
+
+class fd_ppux : public fd_inst {
+public:
+    explicit fd_ppux(std::weak_ptr<module> m_p, int layer_p, wasi_fd_t fd_p);
+
+    wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
+
+    std::weak_ptr<module> m_w;
+    int layer;
 };
 
 // map of well-known absolute paths for virtual files:

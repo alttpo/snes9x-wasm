@@ -12,10 +12,15 @@ module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p,
     // hook up stdout and stderr:
     fds.insert_or_assign(1, std::make_shared<fd_file_out>(1, stdout));
     fds.insert_or_assign(2, std::make_shared<fd_file_out>(2, stderr));
+
+    // initialize ppux layers:
+    for (auto &layer: ppux) {
+        layer.resize(module::ppux_pitch * MAX_SNES_HEIGHT);
+    }
 }
 
 module::~module() {
-    printf("wasm [%s] module dtor\n", name.c_str());
+    //printf("wasm [%s] module dtor\n", name.c_str());
 
     wasm_runtime_destroy_exec_env(exec_env);
     wasm_runtime_deinstantiate(module_inst);
@@ -122,12 +127,14 @@ wasi_errno_t module::fd_close(wasi_fd_t fd) {
     if (it == fds.end())
         return WASI_EBADF;
 
+    auto err = it->second->close();
+
     fds.erase(it);
 
     // track last freed fd for a quick path_open:
     fd_free = fd;
 
-    return 0;
+    return err;
 }
 
 wasi_errno_t module::fd_read(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, uint32_t *nread_app) {
