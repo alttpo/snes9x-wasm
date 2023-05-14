@@ -38,6 +38,41 @@ wasi_errno_t fd_ppux::pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t 
     return 0;
 }
 
+fd_ppux_cmd::fd_ppux_cmd(std::weak_ptr<module> m_p, wasi_fd_t fd_p)
+    : fd_inst(fd_p), m_w(std::move(m_p)) {}
+
+wasi_errno_t fd_ppux_cmd::write(const iovec &iov, uint32_t &nwritten) {
+    auto m = m_w.lock();
+    if (!m) {
+        return EBADF;
+    }
+
+    nwritten = 0;
+
+    ppux &ppux = m->ppux;
+    for (const auto &io: iov) {
+        if (io.second & 3) {
+            // size must be multiple of 4
+            return EINVAL;
+        }
+
+        auto data = (uint32_t *) io.first;
+        auto size = io.second / 4;
+        for (auto p = data; p < data + size; p++) {
+            if (*p == 0) {
+                std::unique_lock<std::mutex> lk(ppux.cmd_m);
+                ppux.cmd = ppux.cmdNext;
+                ppux.cmdNext.erase(ppux.cmdNext.begin(), ppux.cmdNext.end());
+                break;
+            }
+
+            ppux.cmdNext.push_back(*p);
+        }
+    }
+
+    return 0;
+}
+
 ppux::ppux() {
     // initialize ppux layers:
     for (auto &layer: main) {

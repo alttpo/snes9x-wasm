@@ -8,9 +8,6 @@
 #include "snes9x.h"
 #include "memmap.h"
 
-extern std::mutex nmi_cv_m;
-extern std::condition_variable nmi_cv;
-
 // base interface for handling fd read/write ops:
 fd_inst::fd_inst(wasi_fd_t fd_p) : fd(fd_p) {}
 
@@ -111,7 +108,6 @@ wasi_errno_t fd_nmi_blocking::read(const iovec &iov, uint32 &nread) {
     return 0;
 }
 
-
 fd_file_out::fd_file_out(wasi_fd_t fd_p, FILE *fout_p) : fd_inst(fd_p), fout(fout_p) {
 }
 
@@ -162,6 +158,12 @@ std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak
             }
         },
         // console ppux rendering extensions:
+        {
+            "/tmp/snes/ppux/cmd",
+            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_ppux_cmd>(m, fd);
+            }
+        },
         {
             "/tmp/snes/ppux/bg1/main",
             [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {

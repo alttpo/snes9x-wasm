@@ -4,7 +4,11 @@
 
 #include <cstdint>
 #include <vector>
+#include <mutex>
+
 #include "snes9x.h"
+
+#include "wasm_vfs.h"
 
 struct ppux {
     ppux();
@@ -38,6 +42,11 @@ struct ppux {
 
     static const uint32_t PX_ENABLE = (1UL << 0x0f);  // `E`
 
+    // draw commands:
+    std::mutex cmd_m;
+    std::vector<uint32_t> cmd;
+    std::vector<uint32_t> cmdNext;
+
     template<class MATH>
     void lines_math_main(
         int left,
@@ -63,6 +72,26 @@ public:
     void render_line_main(layer layer);
 
     void render_line_sub(layer layer);
+};
+
+class fd_ppux : public fd_inst {
+public:
+    explicit fd_ppux(std::weak_ptr<module> m_p, ppux::layer layer_p, bool sub_p, wasi_fd_t fd_p);
+
+    wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
+
+    std::weak_ptr<module> m_w;
+    ppux::layer layer;
+    bool sub;
+};
+
+class fd_ppux_cmd : public fd_inst {
+public:
+    explicit fd_ppux_cmd(std::weak_ptr<module> m_p, wasi_fd_t fd_p);
+
+    wasi_errno_t write(const iovec &iov, uint32_t &nwritten) override;
+
+    std::weak_ptr<module> m_w;
 };
 
 #endif //SNES9X_WASM_PPUX_H
