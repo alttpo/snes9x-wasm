@@ -229,40 +229,63 @@ wasi_errno_t fd_ppux_cmd::write(const iovec &iov, uint32_t &nwritten) {
     nwritten = 0;
 
     ppux &ppux = m->ppux;
+    auto &cmdNext = ppux.cmdNext;
     for (const auto &io: iov) {
-        // a 0-sized write flushes command list:
-        if (io.second == 0) {
-            // atomically copy cmdNext to cmd and clear cmdNext:
-            std::unique_lock<std::mutex> lk(ppux.cmd_m);
-            ppux.cmd = ppux.cmdNext;
-            ppux.cmdNext.erase(ppux.cmdNext.begin(), ppux.cmdNext.end());
-            return 0;
-        }
-
         if (io.second & 3) {
             // size must be multiple of 4
             return EINVAL;
         }
 
+        // append the uint32_ts:
         auto data = (uint32_t *) io.first;
         auto size = io.second / 4;
-        for (auto p = data; p < data + size; p++) {
-            ppux.cmdNext.push_back(*p);
+        cmdNext.insert(cmdNext.end(), data, data + size);
+    }
+
+    // skip through opcode frames to find end-of-list:
+    auto endit = cmdNext.end();
+    auto opit = cmdNext.begin();
+    while (opit != cmdNext.end()) {
+        auto it = opit;
+
+        //   MSB                                             LSB
+        //   1111 1111     1111 1111     0000 0000     0000 0000
+        // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+        //   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
+        //                                                          s = size of packet in uint32_ts
+        if ((*it & (1 << 31)) == 0) {
+            // MSB must be 1 to indicate opcode/size start of frame:
+            fprintf(stderr, "enqueued cmd list malformed at index %ld; opcode must have MSB set\n", it - cmdNext.begin());
+            cmdNext.erase(cmdNext.begin(), cmdNext.end());
+            return EINVAL;
         }
+
+        auto size = *it & 0xffff;
+        if (size == 0) {
+            // end of list:
+            endit = opit;
+            break;
+        }
+
+        it++;
+
+        // jump to next opcode:
+        opit = it + size;
+        if (opit > cmdNext.end()) {
+            opit = cmdNext.end();
+        }
+    }
+
+    // did we find the end?
+    if (endit != cmdNext.end()) {
+        // atomically copy cmdNext to cmd and clear cmdNext:
+        std::unique_lock<std::mutex> lk(ppux.cmd_m);
+        ppux.cmd = cmdNext;
+        cmdNext.erase(cmdNext.begin(), cmdNext.end());
+        return 0;
     }
 
     return 0;
-}
-
-void wasm_ppux_start_screen() {
-    for (const auto &m_w: modules) {
-        auto m = m_w.lock();
-        if (!m) {
-            continue;
-        }
-
-        m->ppux.render_cmd();
-    }
 }
 
 void ppux::render_cmd() {
@@ -289,13 +312,20 @@ void ppux::render_cmd() {
         // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
         //   oooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
         //                                                          s = size of packet in uint32_ts
+        if ((*it & (1 << 31)) == 0) {
+            fprintf(stderr, "cmd list malformed at index %ld; opcode must have MSB set\n", it - cmd.begin());
+            cmd.erase(cmd.begin(), cmd.end());
+            return;
+        }
+
         auto size = *it & 0xffff;
         if (size == 0) {
             // stop:
             break;
         }
 
-        auto o = *it >> 24;
+        auto o = (*it >> 24) & 0x7F;
+        it++;
 
         // find start of next opcode:
         opit = it + size;
@@ -303,7 +333,6 @@ void ppux::render_cmd() {
             opit = cmd.end();
         }
 
-        it++;
         if (o == 1) {
             // draw horizontal runs of 16bpp pixels starting at x,y. wrap at
             // width and proceed to next line until `size` pixels in total are
@@ -361,6 +390,17 @@ void ppux::render_cmd() {
                 }
             }
         }
+    }
+}
+
+void wasm_ppux_start_screen() {
+    for (const auto &m_w: modules) {
+        auto m = m_w.lock();
+        if (!m) {
+            continue;
+        }
+
+        m->ppux.render_cmd();
     }
 }
 

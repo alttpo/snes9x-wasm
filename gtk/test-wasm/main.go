@@ -15,11 +15,11 @@ type ReaderWriterAt interface {
 }
 
 var (
-	romFile     ReaderWriterAt
-	wramFile    ReaderWriterAt
-	vramFile    ReaderWriterAt
-	nmiFile     io.Reader
-	bg1MainFile io.WriterAt
+	romFile   ReaderWriterAt
+	wramFile  ReaderWriterAt
+	vramFile  ReaderWriterAt
+	nmiFile   io.Reader
+	ppuxQueue io.Writer
 )
 
 func main() {
@@ -69,16 +69,20 @@ func main() {
 	fmt.Printf("fd: %d\n", fNMI.Fd())
 	nmiFile = fNMI
 
-	var fBG1Main *os.File
+	var fPPUX *os.File
 	fmt.Println("opening bg1/main")
-	fBG1Main, err = os.OpenFile("/tmp/snes/ppux/bg1/main", os.O_RDONLY, 0666)
+	fPPUX, err = os.OpenFile("/tmp/snes/ppux/cmd", os.O_RDONLY, 0666)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "open(bg1/main): %v\n", err)
 		return
 	}
-	defer fBG1Main.Close()
-	fmt.Printf("fd: %d\n", fBG1Main.Fd())
-	bg1MainFile = fBG1Main
+	defer fPPUX.Close()
+	fmt.Printf("fd: %d\n", fPPUX.Fd())
+	ppuxQueue = fPPUX
+
+	ppuxWrite := func(v []uint32) {
+		_, _ = ppuxQueue.Write(unsafe.Slice((*byte)(unsafe.Pointer(&v[0])), len(v)*4))
+	}
 
 	// read rom header:
 	var romTitle [21]byte
@@ -123,7 +127,6 @@ func main() {
 
 	r := 0
 	rotatingPixels := [8]uint32{}
-	rotatedPixelBytes := (*[8 * 4]byte)(unsafe.Pointer(&rotatingPixels[0]))[:]
 	rotate := func() {
 		n := copy(rotatingPixels[:], testPixels[r:])
 		copy(rotatingPixels[n:], testPixels[0:8-n])
@@ -149,10 +152,31 @@ func main() {
 		lastNMI = nd
 
 		// write to bg1 main a rotating test pixel pattern:
+		// (512*(110+y)+118)*4
+		ppuxWrite([]uint32{
+			//   MSB                                             LSB
+			//   1111 1111     1111 1111     0000 0000     0000 0000
+			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+			//   oooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
+			//                                                          s = size of packet in uint32_ts
+			0b1000_0001_0000_0000_0000_0000_0000_0000 + (8 * 7) + 2,
+			//   MSB                                             LSB
+			//   1111 1111     1111 1111     0000 0000     0000 0000
+			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+			//   ---- ----     ---- mlll     ---- --ww     wwww wwww
+			0b0000_0000_0000_0000_0000_0000_0000_0000 + 8,
+			//   MSB                                             LSB
+			//   1111 1111     1111 1111     0000 0000     0000 0000
+			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+			//   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx
+			(110 << 16) | (118),
+		})
 		for y := int64(0); y < 7; y++ {
 			rotate()
-			_, _ = bg1MainFile.WriteAt(rotatedPixelBytes, (512*(110+y)+118)*4)
+			ppuxWrite(rotatingPixels[:])
 		}
+		// end of list:
+		ppuxWrite([]uint32{0b1000_0000_0000_0000_0000_0000_0000_0000})
 
 		// read half of WRAM:
 		n, err = wramFile.ReadAt(wram[0x0:0x10000], 0x0)
