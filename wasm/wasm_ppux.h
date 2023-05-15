@@ -29,7 +29,7 @@ struct ppux {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //   ---- ----     ---- --pp     Errr rrgg     gggb bbbb    E = enable pixel
+    //   E--- ----     ---- --pp     -rrr rrgg     gggb bbbb    E = enable pixel
     //                                                          r = red (5-bits)
     //                                                          g = green (5-bits)
     //                                                          b = blue (5-bits)
@@ -40,7 +40,7 @@ struct ppux {
     static const long bpp = 4;
     static const long pitch = MAX_SNES_WIDTH;
 
-    static const uint32_t PX_ENABLE = (1UL << 0x0f);  // `E`
+    static const uint32_t PX_ENABLE = (1UL << 0x1f);  // `E`
 
     // draw commands:
     std::mutex cmd_m;

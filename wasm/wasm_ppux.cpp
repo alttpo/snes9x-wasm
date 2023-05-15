@@ -335,16 +335,16 @@ void ppux::render_cmd() {
 
         if (o == 1) {
             // draw horizontal runs of 16bpp pixels starting at x,y. wrap at
-            // width and proceed to next line until `size` pixels in total are
+            // width and proceed to next line until `size-2` pixels in total are
             // drawn.
 
             //   MSB                                             LSB
             //   1111 1111     1111 1111     0000 0000     0000 0000
             // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-            //   ---- ----     ---- mlll     ---- --ww     wwww wwww
+            //   ---- ----     ---- slll     ---- --ww     wwww wwww
             //                                                          w = width in pixels
             //                                                          l = PPU layer
-            //                                                          m = main or sub screen; main=0, sub=1
+            //                                                          s = main or sub screen; main=0, sub=1
 
             // width up to 1024 where 0 represents 1024 and 1..1023 are normal:
             auto width = *it & 0x03ff;
