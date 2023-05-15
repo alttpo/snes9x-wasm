@@ -15,11 +15,11 @@ type ReaderWriterAt interface {
 }
 
 var (
-	romFile   ReaderWriterAt
-	wramFile  ReaderWriterAt
-	vramFile  ReaderWriterAt
-	nmiFile   io.Reader
-	ppuxQueue io.Writer
+	romFile    ReaderWriterAt
+	wramFile   ReaderWriterAt
+	vramFile   ReaderWriterAt
+	eventsFile io.Reader
+	ppuxQueue  io.Writer
 )
 
 func main() {
@@ -58,22 +58,22 @@ func main() {
 	fmt.Printf("fd: %d\n", fROM.Fd())
 	romFile = fROM
 
-	var fNMI *os.File
-	fmt.Println("opening nmi")
-	fNMI, err = os.OpenFile("/tmp/snes/sig/blocking/nmi", os.O_RDONLY, 0666)
+	var fEvents *os.File
+	fmt.Println("opening events")
+	fEvents, err = os.OpenFile("/tmp/snes/events", os.O_RDONLY, 0666)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "open(nmi): %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "open(events): %v\n", err)
 		return
 	}
-	defer fNMI.Close()
-	fmt.Printf("fd: %d\n", fNMI.Fd())
-	nmiFile = fNMI
+	defer fEvents.Close()
+	fmt.Printf("fd: %d\n", fEvents.Fd())
+	eventsFile = fEvents
 
 	var fPPUX *os.File
-	fmt.Println("opening bg1/main")
+	fmt.Println("opening ppux")
 	fPPUX, err = os.OpenFile("/tmp/snes/ppux/cmd", os.O_RDONLY, 0666)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "open(bg1/main): %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "open(ppux): %v\n", err)
 		return
 	}
 	defer fPPUX.Close()
@@ -94,7 +94,7 @@ func main() {
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
 	var wram [0x20000]byte
-	var nmiSignal [1]byte
+	var events uint32
 
 	// each pixel is represented by a 4-byte little-endian uint32:
 	//   MSB                                             LSB
@@ -139,13 +139,14 @@ func main() {
 
 		// wait for NMI:
 		//st := time.Now()
-		n, err = nmiFile.Read(nmiSignal[:])
+		eventsSlice := unsafe.Slice((*byte)(unsafe.Pointer(&events)), 4)
+		n, err = eventsFile.Read(eventsSlice)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "read(nmi): %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "read(events): %v\n", err)
 		}
 		nd := time.Now()
-		if nmiSignal[0] == 0 {
-			//fmt.Printf("NMI timeout: %d us\n", nd.Sub(st).Microseconds())
+		if events&4 == 0 {
+			//fmt.Printf("events timeout: %d us\n", nd.Sub(st).Microseconds())
 			continue
 		}
 		fmt.Printf("NMI: %d us\n", nd.Sub(lastNMI).Microseconds())
@@ -180,7 +181,7 @@ func main() {
 		ppuxWrite([]uint32{0b1000_0000_0000_0000_0000_0000_0000_0000})
 
 		// read half of WRAM:
-		n, err = wramFile.ReadAt(wram[0x0:0x10000], 0x0)
+		n, err = wramFile.ReadAt(wram[0x0:0x100], 0x0)
 		if n == 0 {
 			continue
 		}

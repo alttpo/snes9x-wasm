@@ -394,16 +394,30 @@ void ppux::render_cmd() {
 }
 
 void wasm_ppux_start_screen() {
-    for (const auto &m_w: modules) {
+    // notify all wasm module threads that NMI is occurring:
+    for (auto it = modules.begin(); it != modules.end(); it++) {
+        auto &m_w = *it;
         auto m = m_w.lock();
         if (!m) {
+            modules.erase(it);
             continue;
         }
 
+        m->notify_events(module::event_kind::frame_start);
         m->ppux.render_cmd();
     }
 }
 
 void wasm_ppux_end_screen() {
+    // notify all wasm module threads that NMI is occurring:
+    for (auto it = modules.begin(); it != modules.end(); it++) {
+        auto &m_w = *it;
+        auto m = m_w.lock();
+        if (!m) {
+            modules.erase(it);
+            continue;
+        }
 
+        m->notify_events(module::event_kind::frame_end);
+    }
 }

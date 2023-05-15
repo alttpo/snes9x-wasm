@@ -79,31 +79,28 @@ wasi_errno_t fd_mem_vec::pwrite(const iovec &iov, wasi_filesize_t offset, uint32
     return 0;
 }
 
-fd_nmi_blocking::fd_nmi_blocking(std::weak_ptr<module> m_p, wasi_fd_t fd_p) : fd_inst(fd_p), m_w(std::move(m_p)) {
+fd_events::fd_events(std::weak_ptr<module> m_p, wasi_fd_t fd_p) : fd_inst(fd_p), m_w(std::move(m_p)) {
 }
 
-wasi_errno_t fd_nmi_blocking::read(const iovec &iov, uint32 &nread) {
+wasi_errno_t fd_events::read(const iovec &iov, uint32 &nread) {
     auto m = m_w.lock();
     if (!m) {
         return EBADF;
     }
-
-    // wait for NMI:
-    bool status = m->wait_for_nmi();
-
-    // translate the status to a 1/0 value for the wasm module to consume:
-    uint8 report;
-    if (status) {
-        report = 1;
-    } else {
-        report = 0;
+    // only accept a single read target:
+    if (iov.size() != 1) {
+        return EINVAL;
     }
 
-    nread = 0;
-    for (const auto &item: iov) {
-        item.first[0] = report;
-        nread++;
+    // only allow reading a 4-byte uint32:
+    auto &io = iov.at(0);
+    if (io.second != 4) {
+        return EINVAL;
     }
+
+    // wait for events:
+    m->wait_for_events(*((uint32_t *)io.first));
+    nread = 4;
 
     return 0;
 }
@@ -150,11 +147,11 @@ std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak
                 return std::make_shared<fd_mem_vec>(fd, Memory.SRAMStorage);
             }
         },
-        // console signals:
+        // console events:
         {
-            "/tmp/snes/sig/blocking/nmi",
+            "/tmp/snes/events",
             [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-                return std::make_shared<fd_nmi_blocking>(m, fd);
+                return std::make_shared<fd_events>(m, fd);
             }
         },
         // console ppux rendering extensions:

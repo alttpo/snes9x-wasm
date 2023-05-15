@@ -52,9 +52,9 @@ public:
     std::vector<uint8_t> &mem;
 };
 
-class fd_nmi_blocking : public fd_inst {
+class fd_events : public fd_inst {
 public:
-    explicit fd_nmi_blocking(std::weak_ptr<module> m_p, wasi_fd_t fd_p);
+    explicit fd_events(std::weak_ptr<module> m_p, wasi_fd_t fd_p);
 
     wasi_errno_t read(const iovec &iov, uint32_t &nread) override;
 

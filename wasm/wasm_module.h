@@ -54,9 +54,18 @@ public:
     wasi_errno_t fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, wasi_filesize_t offset,
                            uint32_t *nwritten_app);
 
-    bool wait_for_nmi();
+public:
+    enum event_kind : uint32_t {
+        none = 0UL,
+        nmi = (1UL << 0),
+        irq = (1UL << 1),
+        frame_start = (1UL << 2),
+        frame_end = (1UL << 3),
+    };
 
-    void notify_nmi();
+    bool wait_for_events(uint32_t &events_p);
+
+    void notify_events(uint32_t events_p);
 
 private:
     iovec create_iovec(const iovec_app_t *iovec_app, uint32_t iovs_len);
@@ -70,9 +79,9 @@ private:
     std::unordered_map<wasi_fd_t, std::shared_ptr<fd_inst>> fds;
     wasi_fd_t fd_free = 3;
 
-    std::mutex nmi_cv_m;
-    std::condition_variable nmi_cv;
-    bool nmi_triggered = false;
+    std::mutex events_cv_mtx;
+    std::condition_variable events_cv;
+    std::atomic<uint32_t> events = event_kind::none;
 
 public:
     ppux ppux;

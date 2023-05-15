@@ -206,6 +206,20 @@ void wasm_host_notify_nmi() {
             continue;
         }
 
-        m->notify_nmi();
+        m->notify_events(module::event_kind::nmi);
+    }
+}
+
+void wasm_host_notify_irq() {
+    // notify all wasm module threads that NMI is occurring:
+    for (auto it = modules.begin(); it != modules.end(); it++) {
+        auto &m_w = *it;
+        auto m = m_w.lock();
+        if (!m) {
+            modules.erase(it);
+            continue;
+        }
+
+        m->notify_events(module::event_kind::irq);
     }
 }

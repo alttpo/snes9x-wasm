@@ -103,6 +103,10 @@ void S9xMainLoop (void)
 				/* The flag pushed onto the stack is the new value */
 				CHECK_FOR_IRQ_CHANGE();
 				S9xOpcode_IRQ();
+
+#ifdef USE_WASM
+                wasm_host_notify_irq();
+#endif
 			}
 		}
 

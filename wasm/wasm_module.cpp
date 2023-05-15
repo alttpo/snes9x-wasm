@@ -187,24 +187,25 @@ wasi_errno_t module::fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint3
     return it->second->pwrite(io, offset, *nwritten_app);
 }
 
-bool module::wait_for_nmi() {
-    std::unique_lock<std::mutex> lk(nmi_cv_m);
+bool module::wait_for_events(uint32_t &events_p) {
+    events_p = event_kind::none;
+
+    std::unique_lock<std::mutex> lk(events_cv_mtx);
     //printf("wait_for_nmi()\n");
-    nmi_cv.wait_for(lk, std::chrono::microseconds(4000));
-    if (nmi_triggered) {
-        nmi_triggered = false;
-        return true;
-    }
-    return false;
+    events_cv.wait_for(lk, std::chrono::microseconds(400));
+    events_p = events;
+    events = event_kind::none;
+
+    return events_p != 0;
 }
 
-void module::notify_nmi() {
-    //printf("notify_nmi()\n");
+void module::notify_events(uint32_t events_p) {
+    //printf("notify_events()\n");
     {
-        std::unique_lock<std::mutex> lk(nmi_cv_m);
-        nmi_triggered = true;
+        std::unique_lock<std::mutex> lk(events_cv_mtx);
+        events |= events_p;
     }
-    nmi_cv.notify_one();
+    events_cv.notify_one();
 }
 
 iovec module::create_iovec(const iovec_app_t *iovec_app, uint32_t iovs_len) {
