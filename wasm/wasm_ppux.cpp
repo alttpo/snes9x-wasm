@@ -7,72 +7,6 @@
 #include "gfx.h"
 #include "tileimpl.h"
 
-fd_ppux::fd_ppux(std::weak_ptr<module> m_p, ppux::layer layer_p, bool sub_p, wasi_fd_t fd_p)
-    : fd_inst(fd_p), m_w(std::move(m_p)), layer(layer_p), sub(sub_p) {}
-
-wasi_errno_t fd_ppux::pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) {
-    auto m = m_w.lock();
-    if (!m) {
-        return EBADF;
-    }
-
-    nwritten = 0;
-
-    auto &vec = m->ppux.main[layer];
-    auto vec_size = vec.size() * ppux::bpp;
-    for (const auto &io: iov) {
-        size_t size = io.second;
-        if (offset + size > vec_size) {
-            size = vec_size - offset;
-        }
-        if (size == 0) {
-            continue;
-        }
-
-        memcpy((uint8_t *) vec.data() + (long) offset, io.first, size);
-
-        offset += size;
-        nwritten += size;
-    }
-
-    return 0;
-}
-
-fd_ppux_cmd::fd_ppux_cmd(std::weak_ptr<module> m_p, wasi_fd_t fd_p)
-    : fd_inst(fd_p), m_w(std::move(m_p)) {}
-
-wasi_errno_t fd_ppux_cmd::write(const iovec &iov, uint32_t &nwritten) {
-    auto m = m_w.lock();
-    if (!m) {
-        return EBADF;
-    }
-
-    nwritten = 0;
-
-    ppux &ppux = m->ppux;
-    for (const auto &io: iov) {
-        if (io.second & 3) {
-            // size must be multiple of 4
-            return EINVAL;
-        }
-
-        auto data = (uint32_t *) io.first;
-        auto size = io.second / 4;
-        for (auto p = data; p < data + size; p++) {
-            if (*p == 0) {
-                std::unique_lock<std::mutex> lk(ppux.cmd_m);
-                ppux.cmd = ppux.cmdNext;
-                ppux.cmdNext.erase(ppux.cmdNext.begin(), ppux.cmdNext.end());
-                break;
-            }
-
-            ppux.cmdNext.push_back(*p);
-        }
-    }
-
-    return 0;
-}
-
 ppux::ppux() {
     // initialize ppux layers:
     for (auto &layer: main) {
@@ -81,6 +15,10 @@ ppux::ppux() {
     for (auto &layer: sub) {
         layer.resize(ppux::pitch * MAX_SNES_HEIGHT);
     }
+    priority_depth_map[0] = 0;
+    priority_depth_map[1] = 0;
+    priority_depth_map[2] = 0;
+    priority_depth_map[3] = 0;
 }
 
 template<class MATH>
@@ -213,7 +151,6 @@ void ppux::render_line_main(ppux::layer layer) {
                 break;
             default:
                 assert(false);
-                break;
         }
     }
 }
@@ -278,4 +215,155 @@ void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
             ppux.render_line_main((ppux::layer) layer);
         }
     }
+}
+
+fd_ppux_cmd::fd_ppux_cmd(std::weak_ptr<module> m_p, wasi_fd_t fd_p)
+    : fd_inst(fd_p), m_w(std::move(m_p)) {}
+
+wasi_errno_t fd_ppux_cmd::write(const iovec &iov, uint32_t &nwritten) {
+    auto m = m_w.lock();
+    if (!m) {
+        return EBADF;
+    }
+
+    nwritten = 0;
+
+    ppux &ppux = m->ppux;
+    for (const auto &io: iov) {
+        // a 0-sized write flushes command list:
+        if (io.second == 0) {
+            // atomically copy cmdNext to cmd and clear cmdNext:
+            std::unique_lock<std::mutex> lk(ppux.cmd_m);
+            ppux.cmd = ppux.cmdNext;
+            ppux.cmdNext.erase(ppux.cmdNext.begin(), ppux.cmdNext.end());
+            return 0;
+        }
+
+        if (io.second & 3) {
+            // size must be multiple of 4
+            return EINVAL;
+        }
+
+        auto data = (uint32_t *) io.first;
+        auto size = io.second / 4;
+        for (auto p = data; p < data + size; p++) {
+            ppux.cmdNext.push_back(*p);
+        }
+    }
+
+    return 0;
+}
+
+void wasm_ppux_start_screen() {
+    for (const auto &m_w: modules) {
+        auto m = m_w.lock();
+        if (!m) {
+            continue;
+        }
+
+        m->ppux.render_cmd();
+    }
+}
+
+void ppux::render_cmd() {
+    std::unique_lock<std::mutex> lk(cmd_m);
+
+    // clear all layers:
+    for (auto &layer: main) {
+        layer.assign(ppux::pitch * MAX_SNES_HEIGHT, 0);
+    }
+    for (auto &layer: sub) {
+        layer.assign(ppux::pitch * MAX_SNES_HEIGHT, 0);
+    }
+
+    // process draw commands:
+    auto opit = cmd.begin();
+    while (opit != cmd.end()) {
+        // NOTE: the bits of adjacent fields are intentionally not packed to allow
+        // for trivial rewriting of values that are aligned at byte boundaries.
+
+        auto it = opit;
+
+        //   MSB                                             LSB
+        //   1111 1111     1111 1111     0000 0000     0000 0000
+        // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+        //   oooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
+        //                                                          s = size of packet in uint32_ts
+        auto size = *it & 0xffff;
+        if (size == 0) {
+            // stop:
+            break;
+        }
+
+        auto o = *it >> 24;
+
+        // find start of next opcode:
+        opit = it + size;
+        if (opit > cmd.end()) {
+            opit = cmd.end();
+        }
+
+        it++;
+        if (o == 1) {
+            // draw horizontal runs of 16bpp pixels starting at x,y. wrap at
+            // width and proceed to next line until `size` pixels in total are
+            // drawn.
+
+            //   MSB                                             LSB
+            //   1111 1111     1111 1111     0000 0000     0000 0000
+            // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+            //   ---- ----     ---- mlll     ---- --ww     wwww wwww
+            //                                                          w = width in pixels
+            //                                                          l = PPU layer
+            //                                                          m = main or sub screen; main=0, sub=1
+
+            // width up to 1024 where 0 represents 1024 and 1..1023 are normal:
+            auto width = *it & 0x03ff;
+            if (width == 0) { width = 1024; }
+
+            // which ppux layer to render to: (BG1..4, OBJ)
+            auto layer = (*it >> 16) & 7;
+
+            // main or sub screen (main=0, sub=1):
+            auto is_sub = ((*it >> 16) >> 4) & 1;
+
+            //   MSB                                             LSB
+            //   1111 1111     1111 1111     0000 0000     0000 0000
+            // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+            //   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx
+            it++;
+            if (it == cmd.end()) break;
+
+            auto x0 = *it & 0x03ff;
+            auto y0 = (*it >> 16) & 0x03ff;
+            auto x1 = x0 + width;
+
+            it++;
+
+            // copy pixels in:
+            // each pixel is represented by a 4-byte little-endian uint32:
+            //   MSB                                             LSB
+            //   1111 1111     1111 1111     0000 0000     0000 0000
+            // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+            //   ---- ----     ---- --pp     Errr rrgg     gggb bbbb    E = enable pixel
+            //                                                          r = red (5-bits)
+            //                                                          g = green (5-bits)
+            //                                                          b = blue (5-bits)
+            //                                                          p = priority [0..3] for OBJ, [0..1] for BG
+            auto offs = (y0 * pitch);
+            std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
+            for (uint32_t x = x0; it != opit && it != cmd.end(); it++) {
+                vec[offs + x] = *it;
+                // wrap at width and move down a line:
+                if (++x >= x1) {
+                    x = x0;
+                    offs += pitch;
+                }
+            }
+        }
+    }
+}
+
+void wasm_ppux_end_screen() {
+
 }

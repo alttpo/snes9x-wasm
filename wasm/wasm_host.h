@@ -11,4 +11,7 @@ void wasm_host_notify_nmi();
 void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart);
 void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl);
 
+void wasm_ppux_start_screen();
+void wasm_ppux_end_screen();
+
 #endif //SNES9X_WASM_HOST_H

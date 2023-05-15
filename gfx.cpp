@@ -184,6 +184,10 @@ void S9xStartScreenRefresh (void)
 
 		memset(GFX.ZBuffer, 0, GFX.ScreenSize);
 		memset(GFX.SubZBuffer, 0, GFX.ScreenSize);
+
+#ifdef USE_WASM
+        wasm_ppux_start_screen();
+#endif
 	}
 
 	if (++IPPU.FrameCount == (uint32)Memory.ROMFramesPerSecond)
@@ -204,6 +208,10 @@ void S9xEndScreenRefresh (void)
 	if (IPPU.RenderThisFrame)
 	{
 		FLUSH_REDRAW();
+
+#ifdef USE_WASM
+        wasm_ppux_end_screen();
+#endif
 
 		if (GFX.DoInterlace && S9xInterlaceField() == 0)
 		{

@@ -69,6 +69,8 @@ struct ppux {
     uint8_t priority_depth_map[4];
 
 public:
+    void render_cmd();
+
     void render_line_main(layer layer);
 
     void render_line_sub(layer layer);
