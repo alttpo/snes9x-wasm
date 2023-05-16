@@ -80,7 +80,7 @@ class fd_ppux : public fd_inst {
 public:
     explicit fd_ppux(std::weak_ptr<module> m_p, ppux::layer layer_p, bool sub_p, wasi_fd_t fd_p);
 
-    wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
+    wasi_errno_t pwrite(const wasi_iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
 
     std::weak_ptr<module> m_w;
     ppux::layer layer;
@@ -91,7 +91,7 @@ class fd_ppux_cmd : public fd_inst {
 public:
     explicit fd_ppux_cmd(std::weak_ptr<module> m_p, wasi_fd_t fd_p);
 
-    wasi_errno_t write(const iovec &iov, uint32_t &nwritten) override;
+    wasi_errno_t write(const wasi_iovec &iov, uint32_t &nwritten) override;
 
     std::weak_ptr<module> m_w;
 };

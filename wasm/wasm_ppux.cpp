@@ -177,12 +177,7 @@ void ppux::render_line_sub(ppux::layer layer) {
 }
 
 void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart) {
-    for (const auto &m_w: modules) {
-        auto m = m_w.lock();
-        if (!m) {
-            continue;
-        }
-
+    for_each_module([=](std::shared_ptr<module> m) {
         ppux &ppux = m->ppux;
         ppux.priority_depth_map[0] = zstart;
         ppux.priority_depth_map[1] = zstart + 4;
@@ -194,33 +189,29 @@ void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart) {
         } else {
             ppux.render_line_main(ppux::layer::OBJ);
         }
-    }
+    });
 }
 
 void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
-    for (const auto &m_w: modules) {
-        auto m = m_w.lock();
-        if (!m) {
-            continue;
-        }
-
+    for_each_module([=](std::shared_ptr<module> m) {
         ppux &ppux = m->ppux;
         ppux.priority_depth_map[0] = zl;
         ppux.priority_depth_map[1] = zh;
         ppux.priority_depth_map[2] = zl;
         ppux.priority_depth_map[3] = zh;
+
         if (sub) {
             ppux.render_line_sub((ppux::layer) layer);
         } else {
             ppux.render_line_main((ppux::layer) layer);
         }
-    }
+    });
 }
 
 fd_ppux_cmd::fd_ppux_cmd(std::weak_ptr<module> m_p, wasi_fd_t fd_p)
     : fd_inst(fd_p), m_w(std::move(m_p)) {}
 
-wasi_errno_t fd_ppux_cmd::write(const iovec &iov, uint32_t &nwritten) {
+wasi_errno_t fd_ppux_cmd::write(const wasi_iovec &iov, uint32_t &nwritten) {
     auto m = m_w.lock();
     if (!m) {
         return EBADF;
@@ -390,34 +381,5 @@ void ppux::render_cmd() {
                 }
             }
         }
-    }
-}
-
-void wasm_ppux_start_screen() {
-    // notify all wasm module threads that NMI is occurring:
-    for (auto it = modules.begin(); it != modules.end(); it++) {
-        auto &m_w = *it;
-        auto m = m_w.lock();
-        if (!m) {
-            modules.erase(it);
-            continue;
-        }
-
-        m->notify_events(module::event_kind::frame_start);
-        m->ppux.render_cmd();
-    }
-}
-
-void wasm_ppux_end_screen() {
-    // notify all wasm module threads that NMI is occurring:
-    for (auto it = modules.begin(); it != modules.end(); it++) {
-        auto &m_w = *it;
-        auto m = m_w.lock();
-        if (!m) {
-            modules.erase(it);
-            continue;
-        }
-
-        m->notify_events(module::event_kind::frame_end);
     }
 }

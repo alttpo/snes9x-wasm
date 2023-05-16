@@ -22,6 +22,6 @@ typedef struct iovec_app {
     uint32_t buf_len;
 } iovec_app_t;
 
-typedef std::vector<std::pair<uint8_t *, uint32_t>> iovec;
+typedef std::vector<std::pair<uint8_t *, uint32_t>> wasi_iovec;
 
 #endif //SNES9X_WASI_TYPES_H

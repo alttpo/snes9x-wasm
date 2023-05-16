@@ -139,30 +139,6 @@ int main(int argc, char *argv[])
 #ifdef USE_WASM
     // initialize wasm runtime:
     wasm_host_init();
-
-    // load a test wasm module:
-    {
-        uint8_t *module_binary;
-        uint32_t module_size;
-
-        const char *module_name = "test.wasm";
-
-        STREAM fp = OPEN_STREAM(module_name, "rb");
-        if (!fp) {
-            printf("open: could not find '%s'\n", module_name);
-        } else {
-            module_size = 1048576 * 100;
-            module_binary = new uint8_t[module_size];
-
-            module_size = READ_STREAM(module_binary,
-                                      module_size,
-                                      fp);
-
-            CLOSE_STREAM(fp);
-
-            wasm_host_load_module(module_name, module_binary, module_size);
-        }
-    }
 #endif
 
     if (rom_filename)
@@ -248,6 +224,29 @@ void S9xROMLoaded()
         top_level->enter_fullscreen_mode();
     }
 
+#ifdef USE_WASM
+    {
+        auto wasm_filename = S9xGetFilename(".wasm", PATCH_DIR);
+
+        STREAM fp = OPEN_STREAM(wasm_filename.c_str(), "rb");
+        if (fp) {
+            uint8_t *module_binary;
+            uint32_t module_size;
+
+            module_size = 1048576 * 100;
+            module_binary = new uint8_t[module_size];
+
+            module_size = READ_STREAM(module_binary, module_size, fp);
+
+            CLOSE_STREAM(fp);
+
+            wasm_host_load_module(wasm_filename, module_binary, module_size);
+        } else {
+            fprintf(stderr, "unable to load `%s`\n", wasm_filename.c_str());
+        }
+    }
+#endif
+
     S9xSoundStart();
 }
 
@@ -255,6 +254,9 @@ void S9xNoROMLoaded()
 {
     S9xSoundStop();
     gui_config->rom_loaded = false;
+#ifdef USE_WASM
+    wasm_host_notify_events(wasm_event_kind::rom_closed);
+#endif
     S9xDisplayRefresh();
     top_level->configure_widgets();
 }

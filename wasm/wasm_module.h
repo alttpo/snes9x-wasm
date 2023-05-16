@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <utility>
+#include <thread>
 #include <vector>
 #include <string>
 
@@ -14,10 +15,9 @@
 #include "wasm_export.h"
 
 #include "wasi_types.h"
-
 #include "wasm_vfs.h"
-
 #include "wasm_ppux.h"
+#include "wasm_host.h"
 
 class module : public std::enable_shared_from_this<module> {
 public:
@@ -32,6 +32,7 @@ public:
 
     void start();
 
+    std::string name;
 public:
     wasi_errno_t path_open(
         wasi_fd_t dirfd,
@@ -55,38 +56,44 @@ public:
                            uint32_t *nwritten_app);
 
 public:
-    enum event_kind : uint32_t {
-        none = 0UL,
-        nmi = (1UL << 0),
-        irq = (1UL << 1),
-        frame_start = (1UL << 2),
-        frame_end = (1UL << 3),
-    };
-
     bool wait_for_events(uint32_t &events_p);
 
     void notify_events(uint32_t events_p);
 
 private:
-    iovec create_iovec(const iovec_app_t *iovec_app, uint32_t iovs_len);
+    wasi_iovec create_iovec(const iovec_app_t *iovec_app, uint32_t iovs_len);
 
 private:
-    std::string name;
     wasm_module_t mod;
     wasm_module_inst_t module_inst;
+
     wasm_exec_env_t exec_env;
-
     std::unordered_map<wasi_fd_t, std::shared_ptr<fd_inst>> fds;
-    wasi_fd_t fd_free = 3;
 
+    wasi_fd_t fd_free = 3;
     std::mutex events_cv_mtx;
     std::condition_variable events_cv;
-    std::atomic<uint32_t> events = event_kind::none;
+
+    std::atomic<uint32_t> events = wasm_event_kind::none;
 
 public:
     ppux ppux;
+
+private:
+    wasm_thread_t thread_id;
 };
 
-extern std::vector<std::weak_ptr<module>> modules;
+extern std::vector<std::shared_ptr<module>> modules;
+
+template<typename ITER>
+static void for_each_module(ITER iter) {
+    for (auto & m : modules) {
+        if (!m) {
+            continue;
+        }
+
+        iter(m);
+    }
+}
 
 #endif //SNES9X_WASM_MODULE_H

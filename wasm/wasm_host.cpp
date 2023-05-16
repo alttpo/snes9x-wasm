@@ -15,7 +15,8 @@
 #include "snes9x.h"
 #include "memmap.h"
 
-std::vector<std::weak_ptr<module>> modules;
+// TODO: destructor of thread on exit() throws error
+std::vector<std::shared_ptr<module>> modules;
 
 bool wasm_host_init() {
     // initialize wasm runtime
@@ -142,6 +143,22 @@ bool wasm_host_init() {
 bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint32_t module_size) {
     char wamrError[1024];
 
+    for (auto it = modules.begin(); it != modules.end(); ) {
+        auto &me = *it;
+        if (name != me->name) {
+            it++;
+            continue;
+        }
+
+        // notify module for termination:
+        me->notify_events(wasm_event_kind::rom_closed);
+        // TODO: wait a bit for clean termination
+        me.reset();
+
+        // releasing the shared_ptr should delete the module* and likely crash any running thread
+        it = modules.erase(it);
+    }
+
     wasm_module_t mod = wasm_runtime_load(
         module_binary,
         module_size,
@@ -176,50 +193,24 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
     auto m = module::create(name, mod, mi);
     modules.emplace_back(m);
 
-    // create a dedicated thread to run the wasm main:
-    auto t = std::thread(
-        [](std::shared_ptr<module> *sm) {
-            // transfer shared_ptr to a local:
-            std::shared_ptr<module> m(*sm);
-            delete sm;
-
-            // start wasm:
-            m->start();
-
-            // clean up:
-            m.reset();
-        },
-        new std::shared_ptr<module>(m)
-    );
-    t.detach();
-
     return true;
 }
 
-void wasm_host_notify_nmi() {
-    // notify all wasm module threads that NMI is occurring:
-    for (auto it = modules.begin(); it != modules.end(); it++) {
-        auto &m_w = *it;
-        auto m = m_w.lock();
-        if (!m) {
-            modules.erase(it);
-            continue;
-        }
-
-        m->notify_events(module::event_kind::nmi);
-    }
+void wasm_host_notify_events(wasm_event_kind events) {
+    for_each_module([=](std::shared_ptr<module> m) {
+        m->notify_events(events);
+    });
 }
 
-void wasm_host_notify_irq() {
-    // notify all wasm module threads that NMI is occurring:
-    for (auto it = modules.begin(); it != modules.end(); it++) {
-        auto &m_w = *it;
-        auto m = m_w.lock();
-        if (!m) {
-            modules.erase(it);
-            continue;
-        }
+void wasm_ppux_start_screen() {
+    for_each_module([=](std::shared_ptr<module> m) {
+        m->notify_events(wasm_event_kind::frame_start);
+        m->ppux.render_cmd();
+    });
+}
 
-        m->notify_events(module::event_kind::irq);
-    }
+void wasm_ppux_end_screen() {
+    for_each_module([=](std::shared_ptr<module> m) {
+        m->notify_events(wasm_event_kind::frame_end);
+    });
 }

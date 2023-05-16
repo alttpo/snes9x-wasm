@@ -13,18 +13,18 @@ fd_inst::fd_inst(wasi_fd_t fd_p) : fd(fd_p) {}
 
 wasi_errno_t fd_inst::close() { return 0; }
 
-wasi_errno_t fd_inst::read(const iovec &iov, uint32 &nread) { return WASI_ENOTSUP; }
+wasi_errno_t fd_inst::read(const wasi_iovec &iov, uint32 &nread) { return WASI_ENOTSUP; }
 
-wasi_errno_t fd_inst::write(const iovec &iov, uint32 &nwritten) { return WASI_ENOTSUP; }
+wasi_errno_t fd_inst::write(const wasi_iovec &iov, uint32 &nwritten) { return WASI_ENOTSUP; }
 
-wasi_errno_t fd_inst::pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) { return WASI_ENOTSUP; }
+wasi_errno_t fd_inst::pread(const wasi_iovec &iov, wasi_filesize_t offset, uint32 &nread) { return WASI_ENOTSUP; }
 
-wasi_errno_t fd_inst::pwrite(const iovec &iov, wasi_filesize_t offset, uint32 &nwritten) { return WASI_ENOTSUP; }
+wasi_errno_t fd_inst::pwrite(const wasi_iovec &iov, wasi_filesize_t offset, uint32 &nwritten) { return WASI_ENOTSUP; }
 
 fd_mem_array::fd_mem_array(wasi_fd_t fd_p, uint8 *mem_p, uint32 size_p)
     : fd_inst(fd_p), mem(mem_p), size(size_p) {}
 
-wasi_errno_t fd_mem_array::pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) {
+wasi_errno_t fd_mem_array::pread(const wasi_iovec &iov, wasi_filesize_t offset, uint32 &nread) {
     nread = 0;
     for (auto &item: iov) {
         if (offset + item.second > size) {
@@ -37,7 +37,7 @@ wasi_errno_t fd_mem_array::pread(const iovec &iov, wasi_filesize_t offset, uint3
     return 0;
 }
 
-wasi_errno_t fd_mem_array::pwrite(const iovec &iov, wasi_filesize_t offset, uint32 &nwritten) {
+wasi_errno_t fd_mem_array::pwrite(const wasi_iovec &iov, wasi_filesize_t offset, uint32 &nwritten) {
     nwritten = 0;
     for (auto &item: iov) {
         if (offset + item.second > size) {
@@ -53,7 +53,7 @@ wasi_errno_t fd_mem_array::pwrite(const iovec &iov, wasi_filesize_t offset, uint
 fd_mem_vec::fd_mem_vec(wasi_fd_t fd_p, std::vector<uint8> &mem_p)
     : fd_inst(fd_p), mem(mem_p) {}
 
-wasi_errno_t fd_mem_vec::pread(const iovec &iov, wasi_filesize_t offset, uint32 &nread) {
+wasi_errno_t fd_mem_vec::pread(const wasi_iovec &iov, wasi_filesize_t offset, uint32 &nread) {
     nread = 0;
     for (auto &item: iov) {
         if (offset + item.second > mem.size()) {
@@ -66,7 +66,7 @@ wasi_errno_t fd_mem_vec::pread(const iovec &iov, wasi_filesize_t offset, uint32 
     return 0;
 }
 
-wasi_errno_t fd_mem_vec::pwrite(const iovec &iov, wasi_filesize_t offset, uint32 &nwritten) {
+wasi_errno_t fd_mem_vec::pwrite(const wasi_iovec &iov, wasi_filesize_t offset, uint32 &nwritten) {
     nwritten = 0;
     for (auto &item: iov) {
         if (offset + item.second > mem.size()) {
@@ -82,7 +82,7 @@ wasi_errno_t fd_mem_vec::pwrite(const iovec &iov, wasi_filesize_t offset, uint32
 fd_events::fd_events(std::weak_ptr<module> m_p, wasi_fd_t fd_p) : fd_inst(fd_p), m_w(std::move(m_p)) {
 }
 
-wasi_errno_t fd_events::read(const iovec &iov, uint32 &nread) {
+wasi_errno_t fd_events::read(const wasi_iovec &iov, uint32 &nread) {
     auto m = m_w.lock();
     if (!m) {
         return EBADF;
@@ -108,7 +108,7 @@ wasi_errno_t fd_events::read(const iovec &iov, uint32 &nread) {
 fd_file_out::fd_file_out(wasi_fd_t fd_p, FILE *fout_p) : fd_inst(fd_p), fout(fout_p) {
 }
 
-wasi_errno_t fd_file_out::write(const iovec &iov, uint32 &nwritten) {
+wasi_errno_t fd_file_out::write(const wasi_iovec &iov, uint32 &nwritten) {
     nwritten = 0;
     for (const auto &item: iov) {
         fprintf(fout, "%.*s", (int) item.second, item.first);

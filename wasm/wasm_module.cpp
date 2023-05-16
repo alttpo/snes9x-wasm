@@ -1,27 +1,57 @@
 
-#include "wasm_module.h"
-
 #include <utility>
-#include "wasm_vfs.h"
+
+#include "wasm_module.h"
+#include "thread_manager.h"
 
 module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p)
-    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), ppux() {
+    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), ppux(), thread_id(0) {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
 
     // hook up stdout and stderr:
     fds.insert_or_assign(1, std::make_shared<fd_file_out>(1, stdout));
     fds.insert_or_assign(2, std::make_shared<fd_file_out>(2, stderr));
+
+    printf("spawn thread\n");
+    // spawn thread which can be later canceled:
+    if (!wasm_runtime_spawn_thread(
+        exec_env,
+        &thread_id,
+        (wasm_thread_callback_t) [](wasm_exec_env_t env, void *arg) -> void * {
+            auto *self = (module *) arg;
+
+            printf("wasm thread started with env=%p, arg=%p\n", env, arg);
+
+            // start main():
+            self->start();
+
+            return nullptr;
+        },
+        (void *) this
+    )) {
+        printf("wasm_runtime_spawn_thread failed!\n");
+    }
 }
 
 module::~module() {
-    //printf("wasm [%s] module dtor\n", name.c_str());
+    printf("wasm [%s] module dtor\n", name.c_str());
 
+    printf("cancel thread\n");
+    wasm_cluster_cancel_thread(exec_env);
+
+    printf("join thread\n");
+    void *retval;
+    wasm_runtime_join_thread(thread_id, &retval);
+
+    printf("destroy env\n");
     wasm_runtime_destroy_exec_env(exec_env);
     wasm_runtime_deinstantiate(module_inst);
     module_inst = nullptr;
     wasm_runtime_unload(mod);
     mod = nullptr;
+
+    printf("module dtor complete\n");
 }
 
 [[nodiscard]] std::shared_ptr<module>
@@ -139,7 +169,7 @@ wasi_errno_t module::fd_read(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_
         return WASI_EBADF;
 
     // construct a vector of vector<uint8_t>s pointing to wasm memory:
-    iovec io = create_iovec(iovec_app, iovs_len);
+    auto io = create_iovec(iovec_app, iovs_len);
 
     // call the fd implementation:
     return it->second->read(io, *nread_app);
@@ -152,7 +182,7 @@ wasi_errno_t module::fd_write(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32
         return WASI_EBADF;
 
     // construct a vector of vector<uint8_t>s pointing to wasm memory:
-    iovec io = create_iovec(iovec_app, iovs_len);
+    auto io = create_iovec(iovec_app, iovs_len);
 
     // call the fd implementation:
     return it->second->write(io, *nwritten_app);
@@ -167,7 +197,7 @@ module::fd_pread(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, 
         return WASI_EBADF;
 
     // construct a vector of vector<uint8_t>s pointing to wasm memory:
-    iovec io = create_iovec(iovec_app, iovs_len);
+    auto io = create_iovec(iovec_app, iovs_len);
 
     // call the fd implementation:
     return it->second->pread(io, offset, *nread_app);
@@ -181,20 +211,22 @@ wasi_errno_t module::fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint3
         return WASI_EBADF;
 
     // construct a vector of vector<uint8_t>s pointing to wasm memory:
-    iovec io = create_iovec(iovec_app, iovs_len);
+    auto io = create_iovec(iovec_app, iovs_len);
 
     // call the fd implementation:
     return it->second->pwrite(io, offset, *nwritten_app);
 }
 
 bool module::wait_for_events(uint32_t &events_p) {
-    events_p = event_kind::none;
+    events_p = wasm_event_kind::none;
 
     std::unique_lock<std::mutex> lk(events_cv_mtx);
     //printf("wait_for_nmi()\n");
     events_cv.wait_for(lk, std::chrono::microseconds(400));
     events_p = events;
-    events = event_kind::none;
+
+    // reset events signals:
+    events = wasm_event_kind::none;
 
     return events_p != 0;
 }
@@ -208,8 +240,8 @@ void module::notify_events(uint32_t events_p) {
     events_cv.notify_one();
 }
 
-iovec module::create_iovec(const iovec_app_t *iovec_app, uint32_t iovs_len) {
-    iovec io;
+wasi_iovec module::create_iovec(const iovec_app_t *iovec_app, uint32_t iovs_len) {
+    wasi_iovec io;
     io.reserve(iovs_len);
     const iovec_app_t *io_app = iovec_app;
     for (uint32_t i = 0; i < iovs_len; i++, io_app++) {

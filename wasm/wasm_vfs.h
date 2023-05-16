@@ -17,13 +17,13 @@ public:
 
     virtual wasi_errno_t close();
 
-    virtual wasi_errno_t read(const iovec &iov, uint32_t &nread);
+    virtual wasi_errno_t read(const wasi_iovec &iov, uint32_t &nread);
 
-    virtual wasi_errno_t write(const iovec &iov, uint32_t &nwritten);
+    virtual wasi_errno_t write(const wasi_iovec &iov, uint32_t &nwritten);
 
-    virtual wasi_errno_t pread(const iovec &iov, wasi_filesize_t offset, uint32_t &nread);
+    virtual wasi_errno_t pread(const wasi_iovec &iov, wasi_filesize_t offset, uint32_t &nread);
 
-    virtual wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten);
+    virtual wasi_errno_t pwrite(const wasi_iovec &iov, wasi_filesize_t offset, uint32_t &nwritten);
 
 protected:
     wasi_fd_t fd;
@@ -33,9 +33,9 @@ class fd_mem_array : public fd_inst {
 public:
     explicit fd_mem_array(wasi_fd_t fd_p, uint8_t *mem_p, uint32_t size_p);
 
-    wasi_errno_t pread(const iovec &iov, wasi_filesize_t offset, uint32_t &nread) override;
+    wasi_errno_t pread(const wasi_iovec &iov, wasi_filesize_t offset, uint32_t &nread) override;
 
-    wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
+    wasi_errno_t pwrite(const wasi_iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
 
     uint8_t *mem;
     uint32_t size;
@@ -45,9 +45,9 @@ class fd_mem_vec : public fd_inst {
 public:
     explicit fd_mem_vec(wasi_fd_t fd_p, std::vector<uint8_t> &mem_p);
 
-    wasi_errno_t pread(const iovec &iov, wasi_filesize_t offset, uint32_t &nread) override;
+    wasi_errno_t pread(const wasi_iovec &iov, wasi_filesize_t offset, uint32_t &nread) override;
 
-    wasi_errno_t pwrite(const iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
+    wasi_errno_t pwrite(const wasi_iovec &iov, wasi_filesize_t offset, uint32_t &nwritten) override;
 
     std::vector<uint8_t> &mem;
 };
@@ -56,7 +56,7 @@ class fd_events : public fd_inst {
 public:
     explicit fd_events(std::weak_ptr<module> m_p, wasi_fd_t fd_p);
 
-    wasi_errno_t read(const iovec &iov, uint32_t &nread) override;
+    wasi_errno_t read(const wasi_iovec &iov, uint32_t &nread) override;
 
     std::weak_ptr<module> m_w;
 };
@@ -65,7 +65,7 @@ class fd_file_out : public fd_inst {
 public:
     explicit fd_file_out(wasi_fd_t fd_p, FILE *fout_p);
 
-    wasi_errno_t write(const iovec &iov, uint32_t &nwritten) override;
+    wasi_errno_t write(const wasi_iovec &iov, uint32_t &nwritten) override;
 
     FILE *fout;
 };

@@ -72,7 +72,7 @@ void S9xMainLoop (void)
 				S9xOpcode_NMI();
 
 #ifdef USE_WASM
-                wasm_host_notify_nmi();
+                wasm_host_notify_events(wasm_event_kind::nmi);
 #endif
 			}
 		}
@@ -105,7 +105,7 @@ void S9xMainLoop (void)
 				S9xOpcode_IRQ();
 
 #ifdef USE_WASM
-                wasm_host_notify_irq();
+                wasm_host_notify_events(wasm_event_kind::irq);
 #endif
 			}
 		}
