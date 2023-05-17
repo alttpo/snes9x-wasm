@@ -5,53 +5,21 @@
 #include "thread_manager.h"
 
 module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p)
-    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), ppux(), thread_id(0) {
+    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), ppux() {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
 
     // hook up stdout and stderr:
     fds.insert_or_assign(1, std::make_shared<fd_file_out>(1, stdout));
     fds.insert_or_assign(2, std::make_shared<fd_file_out>(2, stderr));
-
-    printf("spawn thread\n");
-    // spawn thread which can be later canceled:
-    if (!wasm_runtime_spawn_thread(
-        exec_env,
-        &thread_id,
-        (wasm_thread_callback_t) [](wasm_exec_env_t env, void *arg) -> void * {
-            auto *self = (module *) arg;
-
-            printf("wasm thread started with env=%p, arg=%p\n", env, arg);
-
-            // start main():
-            self->start();
-
-            return nullptr;
-        },
-        (void *) this
-    )) {
-        printf("wasm_runtime_spawn_thread failed!\n");
-    }
 }
 
 module::~module() {
-    printf("wasm [%s] module dtor\n", name.c_str());
-
-    printf("cancel thread\n");
-    wasm_cluster_cancel_thread(exec_env);
-
-    printf("join thread\n");
-    void *retval;
-    wasm_runtime_join_thread(thread_id, &retval);
-
-    printf("destroy env\n");
     wasm_runtime_destroy_exec_env(exec_env);
     wasm_runtime_deinstantiate(module_inst);
     module_inst = nullptr;
     wasm_runtime_unload(mod);
     mod = nullptr;
-
-    printf("module dtor complete\n");
 }
 
 [[nodiscard]] std::shared_ptr<module>
@@ -68,7 +36,29 @@ module::create(std::string name, wasm_module_t mod, wasm_module_inst_t module_in
     return std::shared_ptr<module>(new module(std::move(name), mod, module_inst, exec_env));
 }
 
-void module::runMain() {
+void module::start_thread() {
+    // spawn thread which can be later canceled:
+    std::thread(
+        [](std::shared_ptr<module> *m_p) {
+            std::shared_ptr<module> &m = *m_p;
+
+            //pthread_setname_np("wasm");
+
+            wasm_runtime_init_thread_env();
+            m->thread_main();
+            wasm_runtime_destroy_thread_env();
+
+            delete m_p;
+        },
+        new std::shared_ptr<module>(shared_from_this())
+    ).detach();
+}
+
+void module::cancel_thread() {
+    wasm_cluster_cancel_thread(exec_env);
+}
+
+void module::thread_main() {
     WASMFunctionInstanceCommon *func;
 
 #if WASM_ENABLE_LIBC_WASI != 0
@@ -78,7 +68,7 @@ void module::runMain() {
        may cause exception thrown. */
     if ((func = wasm_runtime_lookup_wasi_start_function(module_inst))) {
         if (!wasm_runtime_call_wasm(exec_env, func, 0, nullptr)) {
-            printf("wasm_runtime_call_wasm('_start'): %s\n", wasm_runtime_get_exception(module_inst));
+            fprintf(stderr, "wasm_runtime_call_wasm('_start'): %s\n", wasm_runtime_get_exception(module_inst));
         }
         return;
     }
@@ -101,17 +91,6 @@ void module::runMain() {
         );
 #endif
     }
-}
-
-void module::start() {
-    //pthread_setname_np("wasm");
-    printf("wasm [%s] module thread started\n", name.c_str());
-
-    wasm_runtime_init_thread_env();
-    runMain();
-    wasm_runtime_destroy_thread_env();
-
-    printf("wasm [%s] module thread exited\n", name.c_str());
 }
 
 wasi_errno_t module::path_open(
@@ -221,7 +200,6 @@ bool module::wait_for_events(uint32_t &events_p) {
     events_p = wasm_event_kind::none;
 
     std::unique_lock<std::mutex> lk(events_cv_mtx);
-    //printf("wait_for_nmi()\n");
     events_cv.wait_for(lk, std::chrono::microseconds(400));
     events_p = events;
 
@@ -232,7 +210,6 @@ bool module::wait_for_events(uint32_t &events_p) {
 }
 
 void module::notify_events(uint32_t events_p) {
-    //printf("notify_events()\n");
     {
         std::unique_lock<std::mutex> lk(events_cv_mtx);
         events |= events_p;

@@ -28,9 +28,13 @@ public:
     [[nodiscard]] static std::shared_ptr<module>
     create(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p);
 
-    void runMain();
+    void start_thread();
 
-    void start();
+    void cancel_thread();
+
+    void thread_main();
+
+    void thread_start();
 
     std::string name;
 public:
@@ -78,16 +82,13 @@ private:
 
 public:
     ppux ppux;
-
-private:
-    wasm_thread_t thread_id;
 };
 
 extern std::vector<std::shared_ptr<module>> modules;
 
 template<typename ITER>
 static void for_each_module(ITER iter) {
-    for (auto & m : modules) {
+    for (auto &m: modules) {
         if (!m) {
             continue;
         }

@@ -33,7 +33,7 @@ bool wasm_host_init() {
     init.native_symbols = {};
 
     if (!wasm_runtime_full_init(&init)) {
-        printf("wasm_runtime_full_init failed\n");
+        fprintf(stderr, "wasm_runtime_full_init failed\n");
         return false;
     }
 
@@ -131,7 +131,7 @@ bool wasm_host_init() {
         wasi->data(),
         wasi->size()
     )) {
-        printf("wasm_runtime_full_init failed\n");
+        fprintf(stderr, "wasm_runtime_full_init failed\n");
         return false;
     }
 
@@ -143,7 +143,7 @@ bool wasm_host_init() {
 bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint32_t module_size) {
     char wamrError[1024];
 
-    for (auto it = modules.begin(); it != modules.end(); ) {
+    for (auto it = modules.begin(); it != modules.end();) {
         auto &me = *it;
         if (name != me->name) {
             it++;
@@ -166,10 +166,7 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
         sizeof(wamrError)
     );
     if (!mod) {
-        printf(
-            "wasm_runtime_load: %s\n",
-            wamrError
-        );
+        fprintf(stderr, "wasm_runtime_load: %s\n", wamrError);
         return false;
     }
 
@@ -182,16 +179,16 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
     );
     if (!mi) {
         wasm_runtime_unload(mod);
-        printf(
-            "wasm_runtime_instantiate: %s\n",
-            wamrError
-        );
+        fprintf(stderr, "wasm_runtime_instantiate: %s\n", wamrError);
         return false;
     }
 
     // track the new module:
     auto m = module::create(name, mod, mi);
     modules.emplace_back(m);
+
+    // start the new thread:
+    m->start_thread();
 
     return true;
 }

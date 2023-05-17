@@ -22,6 +22,15 @@ var (
 	ppuxQueue  io.Writer
 )
 
+const (
+	ev_rom_loaded = 1 << iota
+	ev_rom_closed
+	ev_irq
+	ev_nmi
+	ev_frame_start
+	ev_frame_end
+)
+
 func main() {
 	var err error
 
@@ -84,15 +93,6 @@ func main() {
 		_, _ = ppuxQueue.Write(unsafe.Slice((*byte)(unsafe.Pointer(&v[0])), len(v)*4))
 	}
 
-	// read rom header:
-	var romTitle [21]byte
-	_, err = romFile.ReadAt(romTitle[:], 0x7FC0)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "read(rom): %v\n", err)
-		return
-	}
-	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
-
 	var wram [0x20000]byte
 	var events uint32
 
@@ -133,58 +133,75 @@ func main() {
 		r = (r + 1) & 7
 	}
 
-	lastNMI := time.Now()
+	lastEvent := time.Now()
 	for {
-		var n int
-
-		// wait for NMI:
-		//st := time.Now()
+		// poll for snes events:
 		eventsSlice := unsafe.Slice((*byte)(unsafe.Pointer(&events)), 4)
-		n, err = eventsFile.Read(eventsSlice)
+		_, err = eventsFile.Read(eventsSlice)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "read(events): %v\n", err)
+			continue
 		}
+
 		nd := time.Now()
-		if events&4 == 0 {
+		if events == 0 {
+			continue
+		}
+		fmt.Printf("event(%08b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
+		lastEvent = nd
+
+		// was rom just loaded?
+		if events&ev_rom_loaded != 0 {
+			// read rom header:
+			var romTitle [21]byte
+			_, err = romFile.ReadAt(romTitle[:], 0x7FC0)
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "read(rom): %v\n", err)
+				return
+			}
+			fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
+		}
+		if events&ev_rom_closed != 0 {
+			break
+		}
+
+		if events&ev_frame_end == 0 {
 			//fmt.Printf("events timeout: %d us\n", nd.Sub(st).Microseconds())
 			continue
 		}
-		fmt.Printf("NMI: %d us\n", nd.Sub(lastNMI).Microseconds())
-		lastNMI = nd
 
-		// write to bg1 main a rotating test pixel pattern:
-		// (512*(110+y)+118)*4
-		ppuxWrite([]uint32{
+		// write to bg2 main a rotating test pixel pattern:
+		cmdBytes := [1 + 2 + 8*7 + 1]uint32{}
+		cmd := cmdBytes[:0]
+		cmd = append(cmd,
 			//   MSB                                             LSB
 			//   1111 1111     1111 1111     0000 0000     0000 0000
 			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-			//   oooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
+			//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
 			//                                                          s = size of packet in uint32_ts
-			0b1000_0001_0000_0000_0000_0000_0000_0000 + (8 * 7) + 2,
+			0b1000_0001_0000_0000_0000_0000_0000_0000+(8*7)+2,
 			//   MSB                                             LSB
 			//   1111 1111     1111 1111     0000 0000     0000 0000
 			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
 			//   ---- ----     ---- slll     ---- --ww     wwww wwww
 			// w = 8, l = 1 (BG2), s = 0
-			0b0000_0000_0000_0001_0000_0000_0000_0000 + 8,
+			0b0000_0000_0000_0001_0000_0000_0000_0000+8,
 			//   MSB                                             LSB
 			//   1111 1111     1111 1111     0000 0000     0000 0000
 			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
 			//   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx
-			uint32((110 << 16) | (118 + r)),
-		})
+			uint32((110<<16)|(118+r)),
+		)
 		for y := int64(0); y < 7; y++ {
 			rotate()
-			ppuxWrite(rotatingPixels[:])
+			cmd = append(cmd, rotatingPixels[:]...)
 		}
 		// end of list:
-		ppuxWrite([]uint32{0b1000_0000_0000_0000_0000_0000_0000_0000})
+		cmd = append(cmd, 0b1000_0000_0000_0000_0000_0000_0000_0000)
+		ppuxWrite(cmd)
 
 		// read half of WRAM:
-		n, err = wramFile.ReadAt(wram[0x0:0x100], 0x0)
-		if n == 0 {
-			continue
-		}
+		_, err = wramFile.ReadAt(wram[0x0:0x100], 0x0)
 		fmt.Printf("%02x\n", wram[0x1A])
 		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 	}
