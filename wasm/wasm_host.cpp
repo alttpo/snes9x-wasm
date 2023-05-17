@@ -140,6 +140,24 @@ bool wasm_host_init() {
     return true;
 }
 
+void module_shutdown(std::shared_ptr<module> &m) {
+    // notify module for termination:
+    m->notify_events(wasm_event_kind::ev_shutdown);
+    // TODO: allow a grace period and then forcefully shut down with m->cancel_thread()
+    m.reset();
+}
+
+void wasm_host_unload_all_modules() {
+    for (auto it = modules.begin(); it != modules.end();) {
+        auto &me = *it;
+
+        module_shutdown(me);
+
+        // releasing the shared_ptr should delete the module* and likely crash any running thread
+        it = modules.erase(it);
+    }
+}
+
 bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint32_t module_size) {
     char wamrError[1024];
 
@@ -150,12 +168,8 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
             continue;
         }
 
-        // notify module for termination:
-        me->notify_events(wasm_event_kind::rom_closed);
-        // TODO: wait a bit for clean termination
-        me.reset();
+        module_shutdown(me);
 
-        // releasing the shared_ptr should delete the module* and likely crash any running thread
         it = modules.erase(it);
     }
 
@@ -201,13 +215,13 @@ void wasm_host_notify_events(wasm_event_kind events) {
 
 void wasm_ppux_start_screen() {
     for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_events(wasm_event_kind::frame_start);
+        m->notify_events(wasm_event_kind::ev_ppu_frame_start);
         m->ppux.render_cmd();
     });
 }
 
 void wasm_ppux_end_screen() {
     for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_events(wasm_event_kind::frame_end);
+        m->notify_events(wasm_event_kind::ev_ppu_frame_end);
     });
 }

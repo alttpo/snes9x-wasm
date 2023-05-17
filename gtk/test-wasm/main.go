@@ -23,12 +23,13 @@ var (
 )
 
 const (
-	ev_rom_loaded = 1 << iota
-	ev_rom_closed
-	ev_irq
-	ev_nmi
-	ev_frame_start
-	ev_frame_end
+	ev_snes_nmi = 1 << iota
+	ev_snes_irq
+	ev_ppu_frame_start
+	ev_ppu_frame_end
+
+	ev_msg_received = 1 << 30
+	ev_shutdown     = 1 << 31
 )
 
 func main() {
@@ -133,6 +134,15 @@ func main() {
 		r = (r + 1) & 7
 	}
 
+	// read rom header:
+	var romTitle [21]byte
+	_, err = romFile.ReadAt(romTitle[:], 0x7FC0)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "read(rom): %v\n", err)
+		return
+	}
+	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
+
 	lastEvent := time.Now()
 	for {
 		// poll for snes events:
@@ -150,22 +160,12 @@ func main() {
 		fmt.Printf("event(%08b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
 		lastEvent = nd
 
-		// was rom just loaded?
-		if events&ev_rom_loaded != 0 {
-			// read rom header:
-			var romTitle [21]byte
-			_, err = romFile.ReadAt(romTitle[:], 0x7FC0)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "read(rom): %v\n", err)
-				return
-			}
-			fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
-		}
-		if events&ev_rom_closed != 0 {
+		// graceful exit condition:
+		if events&ev_shutdown != 0 {
 			break
 		}
 
-		if events&ev_frame_end == 0 {
+		if events&ev_ppu_frame_end == 0 {
 			//fmt.Printf("events timeout: %d us\n", nd.Sub(st).Microseconds())
 			continue
 		}

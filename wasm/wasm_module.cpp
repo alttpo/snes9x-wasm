@@ -40,15 +40,14 @@ void module::start_thread() {
     // spawn thread which can be later canceled:
     std::thread(
         [](std::shared_ptr<module> *m_p) {
-            std::shared_ptr<module> &m = *m_p;
+            std::shared_ptr<module> m = *m_p;
+            delete m_p;
 
             //pthread_setname_np("wasm");
 
             wasm_runtime_init_thread_env();
             m->thread_main();
             wasm_runtime_destroy_thread_env();
-
-            delete m_p;
         },
         new std::shared_ptr<module>(shared_from_this())
     ).detach();
@@ -197,14 +196,14 @@ wasi_errno_t module::fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint3
 }
 
 bool module::wait_for_events(uint32_t &events_p) {
-    events_p = wasm_event_kind::none;
+    events_p = wasm_event_kind::ev_none;
 
     std::unique_lock<std::mutex> lk(events_cv_mtx);
     events_cv.wait_for(lk, std::chrono::microseconds(400));
     events_p = events;
 
     // reset events signals:
-    events = wasm_event_kind::none;
+    events = wasm_event_kind::ev_none;
 
     return events_p != 0;
 }

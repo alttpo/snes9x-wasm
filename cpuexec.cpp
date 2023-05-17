@@ -72,7 +72,7 @@ void S9xMainLoop (void)
 				S9xOpcode_NMI();
 
 #ifdef USE_WASM
-                wasm_host_notify_events(wasm_event_kind::nmi);
+                wasm_host_notify_events(wasm_event_kind::ev_snes_nmi);
 #endif
 			}
 		}
@@ -105,7 +105,7 @@ void S9xMainLoop (void)
 				S9xOpcode_IRQ();
 
 #ifdef USE_WASM
-                wasm_host_notify_events(wasm_event_kind::irq);
+                wasm_host_notify_events(wasm_event_kind::ev_snes_irq);
 #endif
 			}
 		}

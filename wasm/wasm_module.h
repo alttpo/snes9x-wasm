@@ -34,8 +34,6 @@ public:
 
     void thread_main();
 
-    void thread_start();
-
     std::string name;
 public:
     wasi_errno_t path_open(
@@ -78,7 +76,7 @@ private:
     std::mutex events_cv_mtx;
     std::condition_variable events_cv;
 
-    std::atomic<uint32_t> events = wasm_event_kind::none;
+    std::atomic<uint32_t> events = wasm_event_kind::ev_none;
 
 public:
     ppux ppux;

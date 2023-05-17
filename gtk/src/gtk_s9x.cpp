@@ -225,6 +225,9 @@ void S9xROMLoaded()
     }
 
 #ifdef USE_WASM
+    // unload existing modules first:
+    wasm_host_unload_all_modules();
+
     {
         auto wasm_filename = S9xGetFilename(".wasm", PATCH_DIR);
 
@@ -242,7 +245,7 @@ void S9xROMLoaded()
 
             wasm_host_load_module(wasm_filename, module_binary, module_size);
         } else {
-            fprintf(stderr, "unable to load `%s`\n", wasm_filename.c_str());
+            fprintf(stderr, "wasm: unable to load `%s`\n", wasm_filename.c_str());
         }
     }
 #endif
@@ -255,7 +258,7 @@ void S9xNoROMLoaded()
     S9xSoundStop();
     gui_config->rom_loaded = false;
 #ifdef USE_WASM
-    wasm_host_notify_events(wasm_event_kind::rom_closed);
+    wasm_host_unload_all_modules();
 #endif
     S9xDisplayRefresh();
     top_level->configure_widgets();
