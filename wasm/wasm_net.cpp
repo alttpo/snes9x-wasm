@@ -40,10 +40,18 @@ wasi_errno_t fd_net::read(const wasi_iovec &iov, uint32_t &nread) {
 
     // fill in buffers with the message:
     uint8_t *p = msg.bytes.data();
+    uint32_t remaining = msg.bytes.size();
     for (auto &io: iov) {
-        memcpy(io.first, p, io.second);
-        p += io.second;
-        nread += io.second;
+        const uint32_t &n = std::min(remaining, io.second);
+        if (n == 0) {
+            break;
+        }
+
+        memcpy(io.first, p, n);
+
+        p += n;
+        nread += n;
+        remaining -= n;
     }
 
     // pop message off the queue:
@@ -89,23 +97,27 @@ void net_queues_io_thread(std::shared_ptr<module> *m_p) {
         // take a temporary shared_ptr during each loop iteration:
         auto m = m_w.lock();
         auto &net = m->net;
-        std::unique_lock<std::mutex> lk(net.sock_mtx);
+
+        fd_set readfds;
+        FD_ZERO(&readfds);
 
         int max_fd = 0;
-        fd_set readfds;
-        fd_set writefds;
-        FD_ZERO(&readfds);
-        FD_ZERO(&writefds);
+        int sock_accept;
+        int sock_data;
+        {
+            std::unique_lock<std::mutex> lk(net.sock_mtx);
+            sock_accept = net.sock[0];
+            sock_data = net.sock[1];
+        }
 
-        if (net.sock[1] > 0) {
-            // only listen to single connection:
-            FD_SET(net.sock[1], &readfds);
-            FD_SET(net.sock[1], &writefds);
-            max_fd = net.sock[1] + 1;
+        if (sock_data > 0) {
+            // only listen to data connection:
+            FD_SET(sock_data, &readfds);
+            max_fd = sock_data + 1;
         } else {
             // accept incoming connection:
-            FD_SET(net.sock[0], &readfds);
-            max_fd = net.sock[0] + 1;
+            FD_SET(sock_accept, &readfds);
+            max_fd = sock_accept + 1;
         }
 
         // select on either socket for read/write:
@@ -119,36 +131,39 @@ void net_queues_io_thread(std::shared_ptr<module> *m_p) {
             break;
         }
 
-        // accept a new connection:
-        if ((net.sock[1] < 0) && FD_ISSET(net.sock[0], &readfds)) {
+        // accept only a single connection:
+        if ((sock_data <= 0) && FD_ISSET(sock_accept, &readfds)) {
             printf("net_sock: accept\n");
-            int sock = accept(net.sock[0], nullptr, nullptr);
+            int sock = accept(sock_accept, nullptr, nullptr);
             if (sock < 0) {
                 fprintf(stderr, "net_sock: accept error %d\n", errno);
                 break;
             }
 
+            std::unique_lock<std::mutex> lk(net.sock_mtx);
             net.sock[1] = sock;
             continue;
         }
 
         // read incoming data:
-        if ((net.sock[1] > 0) && FD_ISSET(net.sock[1], &readfds)) {
+        if ((sock_data > 0) && FD_ISSET(sock_data, &readfds)) {
             // TODO: framing protocol at this layer?
             uint8_t buf[65536];
             printf("net_sock: read\n");
-            auto n = read(net.sock[1], buf, 65536);
+            auto n = read(sock_data, buf, 65536);
             if (n < 0) {
                 fprintf(stderr, "net_sock: read error %d\n", errno);
                 break;
             }
             if (n == 0) {
                 // EOF
-                printf("net_sock: close(%d)\n", net.sock[1]);
-                if (close(net.sock[1]) < 0) {
+                printf("net_sock: close(%d)\n", sock_data);
+                if (close(sock_data) < 0) {
                     fprintf(stderr, "net_sock: close error %d\n", errno);
                     break;
                 }
+
+                std::unique_lock<std::mutex> lk(net.sock_mtx);
                 net.sock[1] = -1;
                 continue;
             }
@@ -166,17 +181,31 @@ void net_queues_io_thread(std::shared_ptr<module> *m_p) {
         }
 
         // write outgoing data:
-        if ((net.sock[1] > 0) && FD_ISSET(net.sock[1], &writefds)) {
+        if (sock_data > 0) {
             std::unique_lock<std::mutex> outbox_lk(net.outbox_mtx);
 
             if (!net.outbox.empty()) {
                 auto &msg = net.outbox.front();
+
                 printf("net_sock: write\n");
-                auto n = write(net.sock[1], msg.bytes.data(), msg.bytes.size());
+                auto n = write(sock_data, msg.bytes.data(), msg.bytes.size());
                 if (n < 0) {
                     fprintf(stderr, "net_sock: write error %d\n", errno);
                     break;
                 }
+                if (n == 0) {
+                    // EOF:
+                    printf("net_sock: close(%d)\n", sock_data);
+                    if (close(sock_data) < 0) {
+                        fprintf(stderr, "net_sock: close error %d\n", errno);
+                        break;
+                    }
+
+                    std::unique_lock<std::mutex> lk(net.sock_mtx);
+                    net.sock[1] = -1;
+                    continue;
+                }
+
                 // TODO: confirm n written bytes
                 net.outbox.pop();
             }

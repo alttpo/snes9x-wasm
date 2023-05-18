@@ -175,6 +175,21 @@ func main() {
 			break
 		}
 
+		if events&ev_msg_received != 0 {
+			var msg [65536]byte
+			var n int
+			n, err = fNet.Read(msg[:])
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "read(net): %v\n", err)
+				continue
+			}
+			_, err = fNet.Write(msg[:n])
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "write(net): %v\n", err)
+				continue
+			}
+		}
+
 		if events&ev_ppu_frame_end == 0 {
 			//fmt.Printf("events timeout: %d us\n", nd.Sub(st).Microseconds())
 			continue
