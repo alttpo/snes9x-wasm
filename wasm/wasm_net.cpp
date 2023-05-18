@@ -86,14 +86,14 @@ wasi_errno_t fd_net::write(const wasi_iovec &iov, uint32_t &nwritten) {
     }
 
     // notify write thread:
-    printf("fd_net: write: notify\n");
+    //printf("fd_net: write: notify\n");
     net.outbox_cv.notify_one();
 
     return 0;
 }
 
 void net_queues_read_thread(std::shared_ptr<module> *m_p) {
-    printf("net_sock_reader\n");
+    //printf("net_sock_reader\n");
 
     // downgrade to a weak_ptr so this thread isn't an owner:
     std::weak_ptr<module> m_w(*m_p);
@@ -130,7 +130,7 @@ void net_queues_read_thread(std::shared_ptr<module> *m_p) {
         struct timeval timeout{};
         timeout.tv_sec = 0;
         timeout.tv_usec = 500000;
-        printf("net_sock_reader: select(%d)\n", max_fd);
+        //printf("net_sock_reader: select(%d)\n", max_fd);
         int res = select(max_fd, &readfds, nullptr, nullptr, &timeout);
         if (res < 0) {
             fprintf(stderr, "net_sock_reader: select error %d\n", errno);
@@ -139,12 +139,14 @@ void net_queues_read_thread(std::shared_ptr<module> *m_p) {
 
         // accept only a single connection:
         if ((sock_data <= 0) && FD_ISSET(sock_accept, &readfds)) {
-            printf("net_sock_reader: accept\n");
+            //printf("net_sock_reader: accept\n");
             int sock = accept(sock_accept, nullptr, nullptr);
             if (sock < 0) {
                 fprintf(stderr, "net_sock_reader: accept error %d\n", errno);
                 break;
             }
+
+            printf("net_sock_reader: accepted tcp connection %d\n", sock);
 
             std::unique_lock<std::mutex> lk(net.sock_mtx);
             net.sock[1] = sock;
@@ -155,7 +157,7 @@ void net_queues_read_thread(std::shared_ptr<module> *m_p) {
         if ((sock_data > 0) && FD_ISSET(sock_data, &readfds)) {
             // TODO: framing protocol at this layer?
             uint8_t buf[65536];
-            printf("net_sock_reader: read\n");
+            //printf("net_sock_reader: read\n");
             auto n = read(sock_data, buf, 65536);
             if (n < 0) {
                 fprintf(stderr, "net_sock_reader: read error %d\n", errno);
@@ -163,7 +165,7 @@ void net_queues_read_thread(std::shared_ptr<module> *m_p) {
             }
             if (n == 0) {
                 // EOF
-                printf("net_sock_reader: close(%d)\n", sock_data);
+                printf("net_sock_reader: eof; close(%d)\n", sock_data);
                 if (close(sock_data) < 0) {
                     fprintf(stderr, "net_sock_reader: close error %d\n", errno);
                     break;
@@ -187,11 +189,11 @@ void net_queues_read_thread(std::shared_ptr<module> *m_p) {
         }
     }
 
-    printf("!net_sock_reader\n");
+    //printf("!net_sock_reader\n");
 }
 
 void net_queues_write_thread(std::shared_ptr<module> *m_p) {
-    printf("net_sock_writer\n");
+    //printf("net_sock_writer\n");
 
     // downgrade to a weak_ptr so this thread isn't an owner:
     std::weak_ptr<module> m_w(*m_p);
@@ -214,7 +216,7 @@ void net_queues_write_thread(std::shared_ptr<module> *m_p) {
             }
         }
 
-        printf("net_sock_writer: notified\n");
+        //printf("net_sock_writer: notified\n");
 
         fd_set writefds;
         FD_ZERO(&writefds);
@@ -236,7 +238,7 @@ void net_queues_write_thread(std::shared_ptr<module> *m_p) {
         struct timeval timeout{};
         timeout.tv_sec = 0;
         timeout.tv_usec = 500000;
-        printf("net_sock_writer: select(%d)\n", max_fd);
+        //printf("net_sock_writer: select(%d)\n", max_fd);
         int res = select(max_fd, nullptr, &writefds, nullptr, &timeout);
         if (res < 0) {
             fprintf(stderr, "net_sock_writer: select error %d\n", errno);
@@ -250,7 +252,7 @@ void net_queues_write_thread(std::shared_ptr<module> *m_p) {
             if (!net.outbox.empty()) {
                 auto &msg = net.outbox.front();
 
-                printf("net_sock_writer: write\n");
+                //printf("net_sock_writer: write\n");
                 auto n = write(sock_data, msg.bytes.data(), msg.bytes.size());
                 if (n < 0) {
                     fprintf(stderr, "net_sock_writer: write error %d\n", errno);
@@ -258,7 +260,7 @@ void net_queues_write_thread(std::shared_ptr<module> *m_p) {
                 }
                 if (n == 0) {
                     // EOF:
-                    printf("net_sock_writer: close(%d)\n", sock_data);
+                    printf("net_sock_writer: eof; close(%d)\n", sock_data);
                     if (close(sock_data) < 0) {
                         fprintf(stderr, "net_sock_writer: close error %d\n", errno);
                         break;
@@ -275,11 +277,11 @@ void net_queues_write_thread(std::shared_ptr<module> *m_p) {
         }
     }
 
-    printf("~net_sock_writer\n");
+    //printf("~net_sock_writer\n");
 }
 
 net_sock::~net_sock() {
-    printf("~net_sock\n");
+    //printf("~net_sock\n");
 
     std::unique_lock<std::mutex> lk(sock_mtx);
     if (sock[0] > 0) {
@@ -294,7 +296,7 @@ net_sock::~net_sock() {
 
 void net_sock::late_init(std::shared_ptr<module> m_p) {
     std::call_once(late_init_flag, [this, &m_p]() {
-        printf("net_sock: socket\n");
+        //printf("net_sock: socket\n");
         auto s = socket(AF_INET, SOCK_STREAM, 0);
         if (s < 0) {
             fprintf(stderr, "wasm: unable to create network socket; error %d\n", errno);
@@ -311,17 +313,19 @@ void net_sock::late_init(std::shared_ptr<module> m_p) {
         // TODO: configurable port per module?
         address.sin_port = htons(25600);
 
-        printf("net_sock: bind\n");
+        //printf("net_sock: bind\n");
         if (bind(s, (const sockaddr *) &address, sizeof(address)) < 0) {
             fprintf(stderr, "net_sock: unable to bind socket; error %d\n", errno);
             return;
         }
 
-        printf("net_sock: listen\n");
+        //printf("net_sock: listen\n");
         if (listen(s, 1) < 0) {
             fprintf(stderr, "net_sock: unable to listen on socket; error %d\n", errno);
             return;
         }
+
+        printf("net_sock: listening on tcp port %d\n", ntohs(address.sin_port));
 
         // assign listen socket to instance:
         sock[0] = s;
