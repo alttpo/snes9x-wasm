@@ -1,8 +1,8 @@
 
+#include <utility>
+
 #include "wasm_module.h"
 #include "wasm_vfs.h"
-
-#include <utility>
 
 // snes9x:
 #include "snes9x.h"
@@ -85,21 +85,21 @@ fd_events::fd_events(std::weak_ptr<module> m_p, wasi_fd_t fd_p) : fd_inst(fd_p),
 wasi_errno_t fd_events::read(const wasi_iovec &iov, uint32 &nread) {
     auto m = m_w.lock();
     if (!m) {
-        return EBADF;
+        return WASI_EBADF;
     }
     // only accept a single read target:
     if (iov.size() != 1) {
-        return EINVAL;
+        return WASI_EINVAL;
     }
 
     // only allow reading a 4-byte uint32:
     auto &io = iov.at(0);
     if (io.second != 4) {
-        return EINVAL;
+        return WASI_EINVAL;
     }
 
     // wait for events:
-    m->wait_for_events(*((uint32_t *)io.first));
+    m->wait_for_events(*((uint32_t *) io.first));
     nread = 4;
 
     return 0;
@@ -118,46 +118,53 @@ wasi_errno_t fd_file_out::write(const wasi_iovec &iov, uint32 &nwritten) {
 }
 
 // map of well-known absolute paths for virtual files:
-std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::weak_ptr<module>, std::string, wasi_fd_t)>>
+std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::shared_ptr<module>, std::string, wasi_fd_t)>>
     file_exact_providers
     {
         // console memory:
         {
             "/tmp/snes/mem/wram",
-            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            [](std::shared_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_array>(fd, Memory.RAM, sizeof(Memory.RAM));
             }
         },
         {
             "/tmp/snes/mem/vram",
-            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            [](std::shared_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_array>(fd, Memory.VRAM, sizeof(Memory.VRAM));
             }
         },
         // cart:
         {
             "/tmp/snes/mem/rom",
-            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            [](std::shared_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_vec>(fd, Memory.ROMStorage);
             }
         },
         {
             "/tmp/snes/mem/sram",
-            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            [](std::shared_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_mem_vec>(fd, Memory.SRAMStorage);
             }
         },
-        // console events:
+        // event subsystem:
         {
-            "/tmp/snes/events",
-            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            "/tmp/events",
+            [](std::shared_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_events>(m, fd);
+            }
+        },
+        // network inbox/outbox subsystem:
+        {
+            "/tmp/net",
+            [](std::shared_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+                return std::make_shared<fd_net>(m->net, fd);
             }
         },
         // console ppux rendering extensions:
         {
             "/tmp/snes/ppux/cmd",
-            [](std::weak_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            [](std::shared_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
                 return std::make_shared<fd_ppux_cmd>(m, fd);
             }
         },

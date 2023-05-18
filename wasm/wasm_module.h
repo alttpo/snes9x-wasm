@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <utility>
+#include <queue>
 #include <thread>
 #include <vector>
 #include <string>
@@ -18,6 +19,7 @@
 #include "wasm_vfs.h"
 #include "wasm_ppux.h"
 #include "wasm_host.h"
+#include "wasm_net.h"
 
 class module : public std::enable_shared_from_this<module> {
 public:
@@ -68,18 +70,19 @@ private:
 private:
     wasm_module_t mod;
     wasm_module_inst_t module_inst;
-
     wasm_exec_env_t exec_env;
-    std::unordered_map<wasi_fd_t, std::shared_ptr<fd_inst>> fds;
 
+    std::unordered_map<wasi_fd_t, std::shared_ptr<fd_inst>> fds;
     wasi_fd_t fd_free = 3;
+
     std::mutex events_cv_mtx;
     std::condition_variable events_cv;
-
     std::atomic<uint32_t> events = wasm_event_kind::ev_none;
 
 public:
     ppux ppux;
+
+    std::shared_ptr<net_sock> net;
 };
 
 extern std::vector<std::shared_ptr<module>> modules;

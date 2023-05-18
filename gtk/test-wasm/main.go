@@ -70,7 +70,7 @@ func main() {
 
 	var fEvents *os.File
 	fmt.Println("opening events")
-	fEvents, err = os.OpenFile("/tmp/snes/events", os.O_RDONLY, 0666)
+	fEvents, err = os.OpenFile("/tmp/events", os.O_RDONLY, 0666)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "open(events): %v\n", err)
 		return

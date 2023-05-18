@@ -73,7 +73,7 @@ public:
 // map of well-known absolute paths for virtual files:
 extern std::unordered_map<
     std::string,
-    std::function<std::shared_ptr<fd_inst>(std::weak_ptr<module>, std::string, wasi_fd_t)>
+    std::function<std::shared_ptr<fd_inst>(std::shared_ptr<module>, std::string, wasi_fd_t)>
 > file_exact_providers;
 
 #endif //SNES9X_WASM_VFS_H
