@@ -116,14 +116,13 @@ void net_queues_read_thread(std::shared_ptr<module> *m_p) {
             sock_data = net.sock[1];
         }
 
+        // accept incoming connection:
+        FD_SET(sock_accept, &readfds);
+        max_fd = sock_accept + 1;
         if (sock_data > 0) {
-            // only listen to data connection:
+            // listen to data connection:
             FD_SET(sock_data, &readfds);
             max_fd = sock_data + 1;
-        } else {
-            // accept incoming connection:
-            FD_SET(sock_accept, &readfds);
-            max_fd = sock_accept + 1;
         }
 
         // select on either socket for read/write:
@@ -138,12 +137,21 @@ void net_queues_read_thread(std::shared_ptr<module> *m_p) {
         }
 
         // accept only a single connection:
-        if ((sock_data <= 0) && FD_ISSET(sock_accept, &readfds)) {
+        if (FD_ISSET(sock_accept, &readfds)) {
             //printf("net_sock_reader: accept\n");
             int sock = accept(sock_accept, nullptr, nullptr);
             if (sock < 0) {
                 fprintf(stderr, "net_sock_reader: accept error %d\n", errno);
                 break;
+            }
+
+            if (sock_data > 0) {
+                printf("net_sock_reader: rejected tcp connection %d\n", sock);
+                if (close(sock) < 0) {
+                    fprintf(stderr, "net_sock_reader: close error %d\n", errno);
+                    break;
+                }
+                continue;
             }
 
             printf("net_sock_reader: accepted tcp connection %d\n", sock);
@@ -320,7 +328,7 @@ void net_sock::late_init(std::shared_ptr<module> m_p) {
         }
 
         //printf("net_sock: listen\n");
-        if (listen(s, 1) < 0) {
+        if (listen(s, 0) < 0) {
             fprintf(stderr, "net_sock: unable to listen on socket; error %d\n", errno);
             return;
         }
