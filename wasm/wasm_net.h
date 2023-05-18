@@ -64,6 +64,8 @@ public:
     std::mutex inbox_mtx;
     std::queue<net_msg> inbox;
 
+    std::mutex outbox_cv_mtx;
+    std::condition_variable outbox_cv;
     std::mutex outbox_mtx;
     std::queue<net_msg> outbox;
 };
