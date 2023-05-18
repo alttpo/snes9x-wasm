@@ -166,8 +166,9 @@ func main() {
 		if events == 0 {
 			continue
 		}
-		fmt.Printf("event(%08b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
+		//fmt.Printf("event(%08b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
 		lastEvent = nd
+		_ = lastEvent
 
 		// graceful exit condition:
 		if events&ev_shutdown != 0 {
@@ -211,7 +212,7 @@ func main() {
 
 		// read half of WRAM:
 		_, err = wramFile.ReadAt(wram[0x0:0x100], 0x0)
-		fmt.Printf("%02x\n", wram[0x1A])
+		//fmt.Printf("%02x\n", wram[0x1A])
 		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 	}
 

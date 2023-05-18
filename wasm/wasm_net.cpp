@@ -79,6 +79,8 @@ wasi_errno_t fd_net::write(const wasi_iovec &iov, uint32_t &nwritten) {
 }
 
 void net_queues_io_thread(std::shared_ptr<module> *m_p) {
+    printf("net_sock: thread\n");
+
     // downgrade to a weak_ptr so this thread isn't an owner:
     std::weak_ptr<module> m_w(*m_p);
     delete m_p;
@@ -95,7 +97,7 @@ void net_queues_io_thread(std::shared_ptr<module> *m_p) {
         FD_ZERO(&readfds);
         FD_ZERO(&writefds);
 
-        if (net.sock[1] != 0) {
+        if (net.sock[1] > 0) {
             // only listen to single connection:
             FD_SET(net.sock[1], &readfds);
             FD_SET(net.sock[1], &writefds);
@@ -109,15 +111,24 @@ void net_queues_io_thread(std::shared_ptr<module> *m_p) {
         // select on either socket for read/write:
         struct timeval timeout{};
         timeout.tv_sec = 0;
-        timeout.tv_usec = 1000;
-        int res = select(max_fd, &readfds, &writefds, nullptr, &timeout);
-        if (res <= 0) {
+        timeout.tv_usec = 500000;
+        printf("net_sock: select(%d)\n", max_fd);
+        int res = select(max_fd, &readfds, nullptr, nullptr, &timeout);
+        if (res < 0) {
+            fprintf(stderr, "net_sock: select error %d\n", errno);
             break;
         }
 
         // accept a new connection:
-        if ((net.sock[1] == 0) && FD_ISSET(net.sock[0], &readfds)) {
-            net.sock[1] = accept(net.sock[0], nullptr, nullptr);
+        if ((net.sock[1] < 0) && FD_ISSET(net.sock[0], &readfds)) {
+            printf("net_sock: accept\n");
+            int sock = accept(net.sock[0], nullptr, nullptr);
+            if (sock < 0) {
+                fprintf(stderr, "net_sock: accept error %d\n", errno);
+                break;
+            }
+
+            net.sock[1] = sock;
             continue;
         }
 
@@ -125,7 +136,22 @@ void net_queues_io_thread(std::shared_ptr<module> *m_p) {
         if ((net.sock[1] > 0) && FD_ISSET(net.sock[1], &readfds)) {
             // TODO: framing protocol at this layer?
             uint8_t buf[65536];
+            printf("net_sock: read\n");
             auto n = read(net.sock[1], buf, 65536);
+            if (n < 0) {
+                fprintf(stderr, "net_sock: read error %d\n", errno);
+                break;
+            }
+            if (n == 0) {
+                // EOF
+                printf("net_sock: close(%d)\n", net.sock[1]);
+                if (close(net.sock[1]) < 0) {
+                    fprintf(stderr, "net_sock: close error %d\n", errno);
+                    break;
+                }
+                net.sock[1] = -1;
+                continue;
+            }
 
             // construct message:
             net_msg msg;
@@ -145,15 +171,24 @@ void net_queues_io_thread(std::shared_ptr<module> *m_p) {
 
             if (!net.outbox.empty()) {
                 auto &msg = net.outbox.front();
-                write(net.sock[1], msg.bytes.data(), msg.bytes.size());
+                printf("net_sock: write\n");
+                auto n = write(net.sock[1], msg.bytes.data(), msg.bytes.size());
+                if (n < 0) {
+                    fprintf(stderr, "net_sock: write error %d\n", errno);
+                    break;
+                }
                 // TODO: confirm n written bytes
                 net.outbox.pop();
             }
         }
     }
+
+    printf("net_sock: ~thread\n");
 }
 
 net_sock::~net_sock() {
+    printf("~net_sock\n");
+
     std::unique_lock<std::mutex> lk(sock_mtx);
     if (sock[0] > 0) {
         close(sock[0]);
@@ -166,10 +201,11 @@ net_sock::~net_sock() {
 }
 
 void net_sock::late_init(std::shared_ptr<module> m_p) {
-    std::call_once(late_init_flag, [this, m_p]() {
+    std::call_once(late_init_flag, [this, &m_p]() {
+        printf("net_sock: socket\n");
         auto s = socket(AF_INET, SOCK_STREAM, 0);
         if (s < 0) {
-            fprintf(stderr, "wasm: unable to create network socket\n");
+            fprintf(stderr, "wasm: unable to create network socket; error %d\n", errno);
             return;
         }
 
@@ -183,19 +219,21 @@ void net_sock::late_init(std::shared_ptr<module> m_p) {
         // TODO: configurable port per module?
         address.sin_port = htons(25600);
 
+        printf("net_sock: bind\n");
         if (bind(s, (const sockaddr *) &address, sizeof(address)) < 0) {
-            fprintf(stderr, "wasm: unable to bind socket\n");
+            fprintf(stderr, "net_sock: unable to bind socket; error %d\n", errno);
             return;
         }
 
+        printf("net_sock: listen\n");
         if (listen(s, 1) < 0) {
-            fprintf(stderr, "wasm: unable to listen on socket\n");
+            fprintf(stderr, "net_sock: unable to listen on socket; error %d\n", errno);
             return;
         }
 
         // assign listen socket to instance:
         sock[0] = s;
-        sock[1] = 0;
+        sock[1] = -1;
 
         // spawn a network i/o thread:
         std::thread(
