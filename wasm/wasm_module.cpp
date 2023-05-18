@@ -5,7 +5,7 @@
 #include "thread_manager.h"
 
 module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p)
-    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), ppux() {
+    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), ppux(), net() {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
 

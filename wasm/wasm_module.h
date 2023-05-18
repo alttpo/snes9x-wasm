@@ -82,7 +82,7 @@ private:
 public:
     ppux ppux;
 
-    std::shared_ptr<net_sock> net;
+    net_sock net;
 };
 
 extern std::vector<std::shared_ptr<module>> modules;

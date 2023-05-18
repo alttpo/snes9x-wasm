@@ -2,28 +2,31 @@
 #include "wasm_module.h"
 #include "wasm_net.h"
 
-fd_net::fd_net(std::shared_ptr<net_sock> net_p, wasi_fd_t fd_p) : fd_inst(fd_p), net_w(net_p) {
-    net_p->late_init();
+#include <utility>
+
+fd_net::fd_net(std::shared_ptr<module> m_p, wasi_fd_t fd_p) : fd_inst(fd_p), m_w(m_p) {
+    m_p->net.late_init(m_p);
 }
 
 wasi_errno_t fd_net::read(const wasi_iovec &iov, uint32_t &nread) {
-    auto net = net_w.lock();
-    if (!net) {
+    auto m = m_w.lock();
+    if (!m) {
         return WASI_EBADF;
     }
+    auto &net = m->net;
 
     nread = 0;
     if (iov.empty()) {
         return WASI_EINVAL;
     }
 
-    std::unique_lock<std::mutex> lk(net->inbox_mtx);
-    if (net->inbox.empty()) {
+    std::unique_lock<std::mutex> lk(net.inbox_mtx);
+    if (net.inbox.empty()) {
         // EOF
         return 0;
     }
 
-    auto &msg = net->inbox.front();
+    auto &msg = net.inbox.front();
 
     // determine total size available to read into:
     size_t available = 0;
@@ -44,16 +47,17 @@ wasi_errno_t fd_net::read(const wasi_iovec &iov, uint32_t &nread) {
     }
 
     // pop message off the queue:
-    net->inbox.pop();
+    net.inbox.pop();
 
     return 0;
 }
 
 wasi_errno_t fd_net::write(const wasi_iovec &iov, uint32_t &nwritten) {
-    auto net = net_w.lock();
-    if (!net) {
+    auto m = m_w.lock();
+    if (!m) {
         return WASI_EBADF;
     }
+    auto &net = m->net;
 
     nwritten = 0;
     if (iov.empty()) {
@@ -68,21 +72,22 @@ wasi_errno_t fd_net::write(const wasi_iovec &iov, uint32_t &nwritten) {
     }
 
     // push the message to the outbox:
-    std::unique_lock<std::mutex> lk(net->outbox_mtx);
-    net->outbox.push(msg);
+    std::unique_lock<std::mutex> lk(net.outbox_mtx);
+    net.outbox.push(msg);
 
     return 0;
 }
 
-void net_queues_io_thread(std::shared_ptr<net_sock> *net_p) {
+void net_queues_io_thread(std::shared_ptr<module> *m_p) {
     // downgrade to a weak_ptr so this thread isn't an owner:
-    std::weak_ptr<net_sock> net_w(*net_p);
-    delete net_p;
+    std::weak_ptr<module> m_w(*m_p);
+    delete m_p;
 
-    while (!net_w.expired()) {
+    while (!m_w.expired()) {
         // take a temporary shared_ptr during each loop iteration:
-        auto net = net_w.lock();
-        std::unique_lock<std::mutex> lk(net->sock_mtx);
+        auto m = m_w.lock();
+        auto &net = m->net;
+        std::unique_lock<std::mutex> lk(net.sock_mtx);
 
         int max_fd = 0;
         fd_set readfds;
@@ -90,15 +95,15 @@ void net_queues_io_thread(std::shared_ptr<net_sock> *net_p) {
         FD_ZERO(&readfds);
         FD_ZERO(&writefds);
 
-        if (net->sock[1] != 0) {
+        if (net.sock[1] != 0) {
             // only listen to single connection:
-            FD_SET(net->sock[1], &readfds);
-            FD_SET(net->sock[1], &writefds);
-            max_fd = net->sock[1] + 1;
+            FD_SET(net.sock[1], &readfds);
+            FD_SET(net.sock[1], &writefds);
+            max_fd = net.sock[1] + 1;
         } else {
             // accept incoming connection:
-            FD_SET(net->sock[0], &readfds);
-            max_fd = net->sock[0] + 1;
+            FD_SET(net.sock[0], &readfds);
+            max_fd = net.sock[0] + 1;
         }
 
         // select on either socket for read/write:
@@ -111,35 +116,38 @@ void net_queues_io_thread(std::shared_ptr<net_sock> *net_p) {
         }
 
         // accept a new connection:
-        if ((net->sock[1] == 0) && FD_ISSET(net->sock[0], &readfds)) {
-            net->sock[1] = accept(net->sock[0], nullptr, nullptr);
+        if ((net.sock[1] == 0) && FD_ISSET(net.sock[0], &readfds)) {
+            net.sock[1] = accept(net.sock[0], nullptr, nullptr);
             continue;
         }
 
         // read incoming data:
-        if ((net->sock[1] > 0) && FD_ISSET(net->sock[1], &readfds)) {
+        if ((net.sock[1] > 0) && FD_ISSET(net.sock[1], &readfds)) {
             // TODO: framing protocol at this layer?
             uint8_t buf[65536];
-            auto n = read(net->sock[1], buf, 65536);
+            auto n = read(net.sock[1], buf, 65536);
 
             // construct message:
             net_msg msg;
             msg.bytes.insert(msg.bytes.end(), buf, buf + n);
 
             // push message to inbox:
-            std::unique_lock<std::mutex> inbox_lk(net->inbox_mtx);
-            net->inbox.push(msg);
+            std::unique_lock<std::mutex> inbox_lk(net.inbox_mtx);
+            net.inbox.push(msg);
+
+            // notify wasm module of message received:
+            m->notify_events(wasm_event_kind::ev_msg_received);
         }
 
         // write outgoing data:
-        if ((net->sock[1] > 0) && FD_ISSET(net->sock[1], &writefds)) {
-            std::unique_lock<std::mutex> outbox_lk(net->outbox_mtx);
+        if ((net.sock[1] > 0) && FD_ISSET(net.sock[1], &writefds)) {
+            std::unique_lock<std::mutex> outbox_lk(net.outbox_mtx);
 
-            if (!net->outbox.empty()) {
-                auto &msg = net->outbox.front();
-                write(net->sock[1], msg.bytes.data(), msg.bytes.size());
+            if (!net.outbox.empty()) {
+                auto &msg = net.outbox.front();
+                write(net.sock[1], msg.bytes.data(), msg.bytes.size());
                 // TODO: confirm n written bytes
-                net->outbox.pop();
+                net.outbox.pop();
             }
         }
     }
@@ -157,8 +165,8 @@ net_sock::~net_sock() {
     }
 }
 
-void net_sock::late_init() {
-    std::call_once(late_init_flag, [this]() {
+void net_sock::late_init(std::shared_ptr<module> m_p) {
+    std::call_once(late_init_flag, [this, m_p]() {
         auto s = socket(AF_INET, SOCK_STREAM, 0);
         if (s < 0) {
             fprintf(stderr, "wasm: unable to create network socket\n");
@@ -192,7 +200,7 @@ void net_sock::late_init() {
         // spawn a network i/o thread:
         std::thread(
             net_queues_io_thread,
-            new std::shared_ptr<net_sock>(this)
+            new std::shared_ptr<module>(m_p)
         ).detach();
     });
 }

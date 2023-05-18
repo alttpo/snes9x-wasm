@@ -49,10 +49,9 @@ struct net_msg {
 };
 
 struct net_sock {
-    explicit net_sock(uint16_t port_p);
     ~net_sock();
 
-    void late_init();
+    void late_init(std::shared_ptr<module> m_p);
 
     void send(net_msg &&msg);
 
@@ -71,13 +70,13 @@ public:
 
 class fd_net : public fd_inst {
 public:
-    explicit fd_net(std::shared_ptr<net_sock> net_p, wasi_fd_t fd_p);
+    explicit fd_net(std::shared_ptr<module> m_p, wasi_fd_t fd_p);
 
     wasi_errno_t read(const wasi_iovec &iov, uint32_t &nread) override;
 
     wasi_errno_t write(const wasi_iovec &iov, uint32_t &nwritten) override;
 
-    std::weak_ptr<net_sock> net_w;
+    std::weak_ptr<module> m_w;
 };
 
 #endif //SNES9X_WASM_NET_H

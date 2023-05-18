@@ -90,6 +90,15 @@ func main() {
 	fmt.Printf("fd: %d\n", fPPUX.Fd())
 	ppuxQueue = fPPUX
 
+	var fNet *os.File
+	fNet, err = os.OpenFile("/tmp/net", os.O_RDWR, 0666)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "open(net): %v\n", err)
+		return
+	}
+	defer fNet.Close()
+	fmt.Printf("fd: %d\n", fNet.Fd())
+
 	ppuxWrite := func(v []uint32) {
 		_, _ = ppuxQueue.Write(unsafe.Slice((*byte)(unsafe.Pointer(&v[0])), len(v)*4))
 	}

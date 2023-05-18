@@ -158,7 +158,7 @@ std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::shar
         {
             "/tmp/net",
             [](std::shared_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-                return std::make_shared<fd_net>(m->net, fd);
+                return std::make_shared<fd_net>(m, fd);
             }
         },
         // console ppux rendering extensions:
