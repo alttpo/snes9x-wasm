@@ -35,27 +35,8 @@ public:
     void thread_main();
 
     std::string name;
+
 public:
-    wasi_errno_t path_open(
-        wasi_fd_t dirfd,
-        wasi_lookupflags_t dirflags, const char *path, uint32_t path_len,
-        wasi_oflags_t oflags, wasi_rights_t fs_rights_base,
-        wasi_rights_t fs_rights_inheriting, wasi_fdflags_t fs_flags,
-        wasi_fd_t *fd_app
-    );
-
-    wasi_errno_t fd_close(wasi_fd_t fd);
-
-    wasi_errno_t fd_read(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, uint32_t *nread_app);
-
-    wasi_errno_t fd_write(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, uint32_t *nwritten_app);
-
-    wasi_errno_t
-    fd_pread(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, wasi_filesize_t offset,
-             uint32_t *nread_app);
-
-    wasi_errno_t fd_pwrite(wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, wasi_filesize_t offset,
-                           uint32_t *nwritten_app);
 
 public:
     bool wait_for_events(uint32_t &events_p);

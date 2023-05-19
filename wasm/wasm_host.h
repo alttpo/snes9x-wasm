@@ -11,7 +11,6 @@ enum wasm_event_kind : uint32_t {
     ev_ppu_frame_start = (1UL << 3),
     ev_ppu_frame_end = (1UL << 4),
 
-    ev_msg_received = (1UL << 30),
     ev_shutdown = (1UL << 31),
 };
 

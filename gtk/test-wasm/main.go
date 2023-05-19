@@ -2,24 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"os"
+	"math"
 	"strings"
 	"time"
-	"unsafe"
-)
-
-type ReaderWriterAt interface {
-	io.ReaderAt
-	io.WriterAt
-}
-
-var (
-	romFile    ReaderWriterAt
-	wramFile   ReaderWriterAt
-	vramFile   ReaderWriterAt
-	eventsFile io.Reader
-	ppuxQueue  io.Writer
 )
 
 const (
@@ -33,67 +18,6 @@ const (
 )
 
 func main() {
-	var err error
-
-	var fWRAM *os.File
-	fmt.Println("opening wram")
-	fWRAM, err = os.OpenFile("/tmp/snes/mem/wram", os.O_RDWR, 0666)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "open(wram): %v\n", err)
-		return
-	}
-	defer fWRAM.Close()
-	fmt.Printf("fd: %d\n", fWRAM.Fd())
-	wramFile = fWRAM
-
-	var fVRAM *os.File
-	fmt.Println("opening vram")
-	fVRAM, err = os.OpenFile("/tmp/snes/mem/vram", os.O_RDWR, 0666)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "open(vram): %v\n", err)
-		return
-	}
-	defer fVRAM.Close()
-	fmt.Printf("fd: %d\n", fVRAM.Fd())
-	vramFile = fVRAM
-
-	var fROM *os.File
-	fmt.Println("opening rom")
-	fROM, err = os.OpenFile("/tmp/snes/mem/rom", os.O_RDWR, 0666)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "open(rom): %v\n", err)
-		return
-	}
-	defer fROM.Close()
-	fmt.Printf("fd: %d\n", fROM.Fd())
-	romFile = fROM
-
-	var fEvents *os.File
-	fmt.Println("opening events")
-	fEvents, err = os.OpenFile("/tmp/snes/events", os.O_RDONLY, 0666)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "open(events): %v\n", err)
-		return
-	}
-	defer fEvents.Close()
-	fmt.Printf("fd: %d\n", fEvents.Fd())
-	eventsFile = fEvents
-
-	var fPPUX *os.File
-	fmt.Println("opening ppux")
-	fPPUX, err = os.OpenFile("/tmp/snes/ppux/cmd", os.O_RDONLY, 0666)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "open(ppux): %v\n", err)
-		return
-	}
-	defer fPPUX.Close()
-	fmt.Printf("fd: %d\n", fPPUX.Fd())
-	ppuxQueue = fPPUX
-
-	ppuxWrite := func(v []uint32) {
-		_, _ = ppuxQueue.Write(unsafe.Slice((*byte)(unsafe.Pointer(&v[0])), len(v)*4))
-	}
-
 	var wram [0x20000]byte
 	var events uint32
 
@@ -136,22 +60,13 @@ func main() {
 
 	// read rom header:
 	var romTitle [21]byte
-	_, err = romFile.ReadAt(romTitle[:], 0x7FC0)
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "read(rom): %v\n", err)
-		return
-	}
+	_ = ReadROM(romTitle[:], 0x7FC0)
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
 	lastEvent := time.Now()
 	for {
 		// poll for snes events:
-		eventsSlice := unsafe.Slice((*byte)(unsafe.Pointer(&events)), 4)
-		_, err = eventsFile.Read(eventsSlice)
-		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "read(events): %v\n", err)
-			continue
-		}
+		events = poll_events(math.MaxUint32)
 
 		nd := time.Now()
 		if events == 0 {
@@ -198,10 +113,10 @@ func main() {
 		}
 		// end of list:
 		cmd = append(cmd, 0b1000_0000_0000_0000_0000_0000_0000_0000)
-		ppuxWrite(cmd)
+		ppux_write(cmd)
 
 		// read half of WRAM:
-		_, err = wramFile.ReadAt(wram[0x0:0x100], 0x0)
+		wram_read(wram[0x0:0x100], 0x0)
 		fmt.Printf("%02x\n", wram[0x1A])
 		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 	}

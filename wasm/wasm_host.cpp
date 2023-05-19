@@ -15,7 +15,6 @@
 #include "snes9x.h"
 #include "memmap.h"
 
-// TODO: destructor of thread on exit() throws error
 std::vector<std::shared_ptr<module>> modules;
 
 bool wasm_host_init() {
@@ -28,114 +27,38 @@ bool wasm_host_init() {
 
     init.running_mode = Mode_Interp;
 
+    auto *natives = new std::vector<NativeSymbol>();
+    natives->push_back({
+        "rom_read",
+        (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) (
+            [](wasm_exec_env_t exec_env,
+               uint8_t *dest, uint32_t dest_len, uint32_t offset
+            ) -> int32_t {
+                auto &vec = Memory.ROMStorage;
+                if (offset >= vec.size()) {
+                    return false;
+                }
+                if (offset + dest_len > vec.size()) {
+                    return false;
+                }
+
+                memcpy(dest, vec.data() + offset, dest_len);
+
+                return true;
+            }
+        ),
+        "(*~i)i",
+        nullptr
+    });
+
+    init.n_native_symbols = natives->size();
+    init.native_symbols = natives->data();
     init.native_module_name = "snes";
-    init.n_native_symbols = 0;
-    init.native_symbols = {};
 
     if (!wasm_runtime_full_init(&init)) {
         fprintf(stderr, "wasm_runtime_full_init failed\n");
         return false;
     }
-
-    auto *wasi = new std::vector<NativeSymbol>();
-    wasi->push_back({
-        "path_open",
-        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t dirfd,
-                                   wasi_lookupflags_t dirflags, const char *path, uint32 path_len,
-                                   wasi_oflags_t oflags, wasi_rights_t fs_rights_base,
-                                   wasi_rights_t fs_rights_inheriting, wasi_fdflags_t fs_flags,
-                                   wasi_fd_t *fd_app)) (
-            [](wasm_exec_env_t exec_env,
-               wasi_fd_t dirfd,
-               wasi_lookupflags_t dirflags, const char *path, uint32 path_len,
-               wasi_oflags_t oflags, wasi_rights_t fs_rights_base,
-               wasi_rights_t fs_rights_inheriting, wasi_fdflags_t fs_flags,
-               wasi_fd_t *fd_app
-            ) -> wasi_errno_t {
-                auto m = static_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                return m->path_open(dirfd, dirflags, path, path_len, oflags, fs_rights_base, fs_rights_inheriting,
-                    fs_flags, fd_app);
-            }
-        ),
-        "(ii*~iIIi*)i",
-        nullptr
-    });
-    wasi->push_back({
-        "fd_read",
-        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, uint32 *)) (
-            [](wasm_exec_env_t exec_env,
-               wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, uint32 *nread_app
-            ) -> wasi_errno_t {
-                auto m = static_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                return m->fd_read(fd, iovec_app, iovs_len, nread_app);
-            }
-        ),
-        "(i*i*)i",
-        nullptr
-    });
-    wasi->push_back({
-        "fd_write",
-        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, uint32 *)) (
-            [](wasm_exec_env_t exec_env,
-               wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, uint32 *nwritten_app
-            ) -> wasi_errno_t {
-                auto m = static_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                return m->fd_write(fd, iovec_app, iovs_len, nwritten_app);
-            }
-        ),
-        "(i*i*)i",
-        nullptr
-    });
-    wasi->push_back({
-        "fd_pread",
-        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, wasi_filesize_t,
-                                   uint32 *)) (
-            [](wasm_exec_env_t exec_env,
-               wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, wasi_filesize_t offset, uint32 *nread_app
-            ) -> wasi_errno_t {
-                auto m = static_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                return m->fd_pread(fd, iovec_app, iovs_len, offset, nread_app);
-            }
-        ),
-        "(i*iI*)i",
-        nullptr
-    });
-    wasi->push_back({
-        "fd_pwrite",
-        (void *) (wasi_errno_t (*)(wasm_exec_env_t, wasi_fd_t, const iovec_app_t *, uint32, wasi_filesize_t,
-                                   uint32 *)) (
-            [](wasm_exec_env_t exec_env,
-               wasi_fd_t fd, const iovec_app_t *iovec_app, uint32 iovs_len, wasi_filesize_t offset, uint32 *nwritten_app
-            ) -> wasi_errno_t {
-                auto m = static_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                return m->fd_pwrite(fd, iovec_app, iovs_len, offset, nwritten_app);
-            }
-        ),
-        "(i*iI*)i",
-        nullptr
-    });
-    wasi->push_back({
-        "fd_close",
-        (void *) (wasi_errno_t (*)(wasm_exec_env_t exec_env, wasi_fd_t fd)) (
-            [](wasm_exec_env_t exec_env, wasi_fd_t fd) -> wasi_errno_t {
-                auto m = static_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                return m->fd_close(fd);
-            }
-        ),
-        "(i)i",
-        nullptr
-    });
-
-    if (!wasm_runtime_register_natives(
-        "wasi_snapshot_preview1",
-        wasi->data(),
-        wasi->size()
-    )) {
-        fprintf(stderr, "wasm_runtime_full_init failed\n");
-        return false;
-    }
-
-    // TODO: handle leaky `wasi` instance; delete on shutdown
 
     return true;
 }
