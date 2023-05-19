@@ -3,12 +3,42 @@
 #include "wasm_net.h"
 
 #include <utility>
+#include <sys/uio.h>
 
-fd_net::fd_net(std::shared_ptr<module> m_p, wasi_fd_t fd_p) : fd_inst(fd_p), m_w(m_p) {
-    m_p->net.late_init(m_p);
+fd_net_sock::fd_net_sock(std::shared_ptr<module> m_p, wasi_fd_t fd_p, int sock_index_p) : fd_inst(fd_p), m_w(m_p),
+    sock_index(sock_index_p) {
 }
 
-wasi_errno_t fd_net::read(const wasi_iovec &iov, uint32_t &nread) {
+wasi_errno_t fd_net_sock::close() {
+    auto m = m_w.lock();
+    if (!m) {
+        return WASI_EBADF;
+    }
+    auto &net = m->net;
+
+    wasi_errno_t retval = 0;
+
+    int sockfd;
+    {
+        std::unique_lock<std::mutex> lk(net.sock_mtx);
+        sockfd = net.sock[sock_index];
+    }
+
+    // close socket:
+    if (::close(sockfd) < 0) {
+        retval = posix_to_wasi_error(errno);
+    }
+
+    // clear out slot after closing:
+    {
+        std::unique_lock<std::mutex> lk(net.sock_mtx);
+        net.sock[sock_index] = -1;
+    }
+
+    return retval;
+}
+
+wasi_errno_t fd_net_sock::read(const wasi_iovec &iov, uint32_t &nread) {
     auto m = m_w.lock();
     if (!m) {
         return WASI_EBADF;
@@ -20,47 +50,24 @@ wasi_errno_t fd_net::read(const wasi_iovec &iov, uint32_t &nread) {
         return WASI_EINVAL;
     }
 
-    std::unique_lock<std::mutex> lk(net.inbox_mtx);
-    if (net.inbox.empty()) {
-        // EOF
-        return 0;
+    int sockfd;
+    {
+        std::unique_lock<std::mutex> lk(net.sock_mtx);
+        sockfd = net.sock[sock_index];
     }
 
-    auto &msg = net.inbox.front();
-
-    // determine total size available to read into:
-    size_t available = 0;
-    for (auto &io: iov) {
-        available += io.second;
+    printf("fd_net_sock(%d): read\n", sock_index);
+    auto n = ::readv(sockfd, reinterpret_cast<const iovec *>(iov.data()), (int)iov.size());
+    printf("fd_net_sock(%d): ~read\n", sock_index);
+    if (n < 0) {
+        return posix_to_wasi_error(errno);
     }
-    if (msg.bytes.size() > available) {
-        // not enough space given to read full message. we don't want to track partial read state.
-        return WASI_ERANGE;
-    }
-
-    // fill in buffers with the message:
-    uint8_t *p = msg.bytes.data();
-    uint32_t remaining = msg.bytes.size();
-    for (auto &io: iov) {
-        const uint32_t &n = std::min(remaining, io.second);
-        if (n == 0) {
-            break;
-        }
-
-        memcpy(io.first, p, n);
-
-        p += n;
-        nread += n;
-        remaining -= n;
-    }
-
-    // pop message off the queue:
-    net.inbox.pop();
+    nread = n;
 
     return 0;
 }
 
-wasi_errno_t fd_net::write(const wasi_iovec &iov, uint32_t &nwritten) {
+wasi_errno_t fd_net_sock::write(const wasi_iovec &iov, uint32_t &nwritten) {
     auto m = m_w.lock();
     if (!m) {
         return WASI_EBADF;
@@ -72,28 +79,26 @@ wasi_errno_t fd_net::write(const wasi_iovec &iov, uint32_t &nwritten) {
         return WASI_EINVAL;
     }
 
-    // construct a message from all the io buffers concatenated together:
-    net_msg msg;
-    for (const auto &io: iov) {
-        msg.bytes.insert(msg.bytes.end(), io.first, io.first + io.second);
-        nwritten += io.second;
-    }
-
-    // push the message to the outbox:
+    int sockfd;
     {
-        std::unique_lock<std::mutex> lk(net.outbox_mtx);
-        net.outbox.push(msg);
+        std::unique_lock<std::mutex> lk(net.sock_mtx);
+        sockfd = net.sock[sock_index];
     }
 
-    // notify write thread:
-    //printf("fd_net: write: notify\n");
-    net.outbox_cv.notify_one();
+    printf("fd_net_sock(%d): write\n", sock_index);
+    auto n = ::writev(sockfd, reinterpret_cast<const iovec *>(iov.data()), (int)iov.size());
+    printf("fd_net_sock(%d): ~write\n", sock_index);
+    if (n < 0) {
+        return posix_to_wasi_error(errno);
+    }
+
+    nwritten = n;
 
     return 0;
 }
 
-void net_queues_read_thread(std::shared_ptr<module> *m_p) {
-    //printf("net_sock_reader\n");
+void net_listener_thread(std::shared_ptr<module> *m_p) {
+    //printf("net_listener_thread\n");
 
     // downgrade to a weak_ptr so this thread isn't an owner:
     std::weak_ptr<module> m_w(*m_p);
@@ -109,202 +114,114 @@ void net_queues_read_thread(std::shared_ptr<module> *m_p) {
 
         int max_fd = 0;
         int sock_accept;
-        int sock_data;
+
         {
             std::unique_lock<std::mutex> lk(net.sock_mtx);
-            sock_accept = net.sock[0];
-            sock_data = net.sock[1];
-        }
 
-        // accept incoming connection:
-        FD_SET(sock_accept, &readfds);
-        max_fd = sock_accept + 1;
-        if (sock_data > 0) {
-            // listen to data connection:
-            FD_SET(sock_data, &readfds);
-            max_fd = sock_data + 1;
-        }
+            sock_accept = net.sock_accept;
+            FD_SET(sock_accept, &readfds);
+            max_fd = sock_accept + 1;
 
-        // select on either socket for read/write:
-        struct timeval timeout{};
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 500000;
-        //printf("net_sock_reader: select(%d)\n", max_fd);
-        int res = select(max_fd, &readfds, nullptr, nullptr, &timeout);
-        if (res < 0) {
-            fprintf(stderr, "net_sock_reader: select error %d\n", errno);
-            break;
-        }
-
-        // accept only a single connection:
-        if (FD_ISSET(sock_accept, &readfds)) {
-            //printf("net_sock_reader: accept\n");
-            int sock = accept(sock_accept, nullptr, nullptr);
-            if (sock < 0) {
-                fprintf(stderr, "net_sock_reader: accept error %d\n", errno);
-                break;
-            }
-
-            if (sock_data > 0) {
-                printf("net_sock_reader: rejected tcp connection %d\n", sock);
-                if (close(sock) < 0) {
-                    fprintf(stderr, "net_sock_reader: close error %d\n", errno);
-                    break;
-                }
-                continue;
-            }
-
-            printf("net_sock_reader: accepted tcp connection %d\n", sock);
-
-            std::unique_lock<std::mutex> lk(net.sock_mtx);
-            net.sock[1] = sock;
-            continue;
-        }
-
-        // read incoming data:
-        if ((sock_data > 0) && FD_ISSET(sock_data, &readfds)) {
-            // TODO: framing protocol at this layer?
-            uint8_t buf[65536];
-            //printf("net_sock_reader: read\n");
-            auto n = read(sock_data, buf, 65536);
-            if (n < 0) {
-                fprintf(stderr, "net_sock_reader: read error %d\n", errno);
-                break;
-            }
-            if (n == 0) {
-                // EOF
-                printf("net_sock_reader: eof; close(%d)\n", sock_data);
-                if (close(sock_data) < 0) {
-                    fprintf(stderr, "net_sock_reader: close error %d\n", errno);
-                    break;
-                }
-
-                std::unique_lock<std::mutex> lk(net.sock_mtx);
-                net.sock[1] = -1;
-                continue;
-            }
-
-            // construct message:
-            net_msg msg;
-            msg.bytes.insert(msg.bytes.end(), buf, buf + n);
-
-            // push message to inbox:
-            std::unique_lock<std::mutex> inbox_lk(net.inbox_mtx);
-            net.inbox.push(msg);
-
-            // notify wasm module of message received:
-            m->notify_events(wasm_event_kind::ev_msg_received);
-        }
-    }
-
-    //printf("!net_sock_reader\n");
-}
-
-void net_queues_write_thread(std::shared_ptr<module> *m_p) {
-    //printf("net_sock_writer\n");
-
-    // downgrade to a weak_ptr so this thread isn't an owner:
-    std::weak_ptr<module> m_w(*m_p);
-    delete m_p;
-
-    while (!m_w.expired()) {
-        // take a temporary shared_ptr during each loop iteration:
-        auto m = m_w.lock();
-        auto &net = m->net;
-
-        // wait for a condition that an outbox message is available:
-        {
-            std::unique_lock<std::mutex> outbox_lk(net.outbox_cv_mtx);
-            if (!net.outbox_cv.wait_for(
-                outbox_lk,
-                std::chrono::microseconds(1000),
-                [&net]() { return !net.outbox.empty(); }
-            )) {
-                continue;
-            }
-        }
-
-        //printf("net_sock_writer: notified\n");
-
-        fd_set writefds;
-        FD_ZERO(&writefds);
-
-        int sock_data;
-        {
-            std::unique_lock<std::mutex> lk(net.sock_mtx);
-            sock_data = net.sock[1];
-        }
-
-        int max_fd = 0;
-        if (sock_data > 0) {
-            // only listen to data connection:
-            FD_SET(sock_data, &writefds);
-            max_fd = sock_data + 1;
-        }
-
-        // select on either socket for read/write:
-        struct timeval timeout{};
-        timeout.tv_sec = 0;
-        timeout.tv_usec = 500000;
-        //printf("net_sock_writer: select(%d)\n", max_fd);
-        int res = select(max_fd, nullptr, &writefds, nullptr, &timeout);
-        if (res < 0) {
-            fprintf(stderr, "net_sock_writer: select error %d\n", errno);
-            break;
-        }
-
-        // write outgoing data:
-        if ((sock_data > 0) && FD_ISSET(sock_data, &writefds)) {
-            std::unique_lock<std::mutex> outbox_lk(net.outbox_mtx);
-
-            if (!net.outbox.empty()) {
-                auto &msg = net.outbox.front();
-
-                //printf("net_sock_writer: write\n");
-                auto n = write(sock_data, msg.bytes.data(), msg.bytes.size());
-                if (n < 0) {
-                    fprintf(stderr, "net_sock_writer: write error %d\n", errno);
-                    break;
-                }
-                if (n == 0) {
-                    // EOF:
-                    printf("net_sock_writer: eof; close(%d)\n", sock_data);
-                    if (close(sock_data) < 0) {
-                        fprintf(stderr, "net_sock_writer: close error %d\n", errno);
-                        break;
-                    }
-
-                    std::unique_lock<std::mutex> lk(net.sock_mtx);
-                    net.sock[1] = -1;
+            // check each available connection:
+            for (const auto &slot: net.sock) {
+                if (slot <= 0) {
                     continue;
                 }
 
-                // TODO: confirm n written bytes
-                net.outbox.pop();
+                FD_SET(slot, &readfds);
+                if (slot + 1 > max_fd) {
+                    max_fd = slot + 1;
+                }
+            }
+        }
+
+        // select on either socket for read/write:
+        struct timeval timeout{};
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 500000;
+        printf("net_listener_thread: select(%d)\n", max_fd);
+        int res = ::select(max_fd, &readfds, nullptr, nullptr, &timeout);
+        if (res < 0) {
+            fprintf(stderr, "net_listener_thread: select error %d\n", errno);
+            break;
+        }
+
+        // determine which socket slots have reads available:
+        uint32_t events = 0;
+        for (int i = 0; i < 8; i++) {
+            if (net.sock[i] <= 0) {
+                continue;
+            }
+
+            if (FD_ISSET(net.sock[i], &readfds)) {
+                events |= (1 << i);
+            }
+        }
+
+        // notify wasm module of sockets available to read:
+        m->notify_events(events);
+
+        // accept up to 8 connections:
+        if (FD_ISSET(sock_accept, &readfds)) {
+            //printf("net_listener_thread: accept\n");
+            int accepted = ::accept(sock_accept, nullptr, nullptr);
+            if (accepted < 0) {
+                fprintf(stderr, "net_listener_thread: accept error %d\n", errno);
+            } else {
+                printf("net_listener_thread: accepted tcp connection %d\n", accepted);
+
+                std::unique_lock<std::mutex> lk(net.sock_mtx);
+                bool set = false;
+                for (auto &slot: net.sock) {
+                    if (slot <= 0) {
+                        slot = accepted;
+                        set = true;
+                        break;
+                    }
+                }
+
+                // no room left for connection; close it:
+                if (!set) {
+                    fprintf(stderr,
+                        "net_listener_thread: no slot available for accepted tcp connection %d; closing\n",
+                        accepted
+                    );
+                    if (::close(sock_accept) < 0) {
+                        fprintf(stderr, "net_listener_thread: close error %d\n", errno);
+                    }
+                }
             }
         }
     }
 
-    //printf("~net_sock_writer\n");
+    //printf("~net_listener_thread\n");
 }
 
-net_sock::~net_sock() {
-    //printf("~net_sock\n");
+net_listener::~net_listener() {
+    //printf("net_listener\n");
 
     std::unique_lock<std::mutex> lk(sock_mtx);
-    if (sock[0] > 0) {
-        close(sock[0]);
-        sock[0] = 0;
+    if (sock_accept > 0) {
+        close(sock_accept);
+        sock_accept = 0;
     }
-    if (sock[1] > 0) {
-        close(sock[1]);
-        sock[1] = 0;
+
+    for (auto &s: sock) {
+        if (s > 0) {
+            close(s);
+            s = 0;
+        }
     }
 }
 
-void net_sock::late_init(std::shared_ptr<module> m_p) {
-    std::call_once(late_init_flag, [this, &m_p]() {
-        //printf("net_sock: socket\n");
+fd_net_listener::fd_net_listener(std::shared_ptr<module> m_p, wasi_fd_t fd_p, uint16_t port) : fd_inst(fd_p), m_w(m_p) {
+    // NOTE: this allows only one listener to be open at a time per module
+    m_p->net.late_init(m_p, port);
+}
+
+void net_listener::late_init(std::shared_ptr<module> m_p, uint16_t port) {
+    std::call_once(late_init_flag, [this, &m_p, port]() {
+        //printf("net_listener: socket\n");
         auto s = socket(AF_INET, SOCK_STREAM, 0);
         if (s < 0) {
             fprintf(stderr, "wasm: unable to create network socket; error %d\n", errno);
@@ -319,35 +236,28 @@ void net_sock::late_init(std::shared_ptr<module> m_p) {
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = htonl(INADDR_ANY);
         // TODO: configurable port per module?
-        address.sin_port = htons(25600);
+        address.sin_port = htons(port);
 
-        //printf("net_sock: bind\n");
+        //printf("net_listener: bind\n");
         if (bind(s, (const sockaddr *) &address, sizeof(address)) < 0) {
-            fprintf(stderr, "net_sock: unable to bind socket; error %d\n", errno);
+            fprintf(stderr, "net_listener: unable to bind socket; error %d\n", errno);
             return;
         }
 
-        //printf("net_sock: listen\n");
+        //printf("net_listener: listen\n");
         if (listen(s, 0) < 0) {
-            fprintf(stderr, "net_sock: unable to listen on socket; error %d\n", errno);
+            fprintf(stderr, "net_listener: unable to listen on socket; error %d\n", errno);
             return;
         }
 
-        printf("net_sock: listening on tcp port %d\n", ntohs(address.sin_port));
+        printf("net_listener: listening on tcp port %d\n", ntohs(address.sin_port));
 
         // assign listen socket to instance:
-        sock[0] = s;
-        sock[1] = -1;
+        sock_accept = s;
 
         // spawn a network i/o thread for reading:
         std::thread(
-            net_queues_read_thread,
-            new std::shared_ptr<module>(m_p)
-        ).detach();
-
-        // spawn a network i/o thread for writing:
-        std::thread(
-            net_queues_write_thread,
+            net_listener_thread,
             new std::shared_ptr<module>(m_p)
         ).detach();
     });

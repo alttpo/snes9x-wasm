@@ -6,12 +6,20 @@
 enum wasm_event_kind : uint32_t {
     ev_none = 0UL,
 
-    ev_snes_nmi = (1UL << 1),
-    ev_snes_irq = (1UL << 2),
-    ev_ppu_frame_start = (1UL << 3),
-    ev_ppu_frame_end = (1UL << 4),
+    // reserved up to 8 net sockets:
+    ev_net_received_0 = (1UL << 0),
+    ev_net_received_1 = (1UL << 1),
+    ev_net_received_2 = (1UL << 2),
+    ev_net_received_3 = (1UL << 3),
+    ev_net_received_4 = (1UL << 4),
+    ev_net_received_5 = (1UL << 5),
+    ev_net_received_6 = (1UL << 6),
+    ev_net_received_7 = (1UL << 7),
 
-    ev_msg_received = (1UL << 30),
+    ev_snes_irq = (1UL << 27),
+    ev_snes_nmi = (1UL << 28),
+    ev_ppu_frame_start = (1UL << 29),
+    ev_ppu_frame_end = (1UL << 30),
     ev_shutdown = (1UL << 31),
 };
 

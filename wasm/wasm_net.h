@@ -48,37 +48,38 @@ struct net_msg {
     std::vector<uint8_t> bytes;
 };
 
-struct net_sock {
-    ~net_sock();
+struct net_listener {
+    ~net_listener();
 
-    void late_init(std::shared_ptr<module> m_p);
-
-    void send(net_msg &&msg);
+    void late_init(std::shared_ptr<module> m_p, uint16_t port);
 
 public:
     std::mutex sock_mtx;
-    int sock[2];
+    int sock_accept {};
+    int sock[8] {};
 
     std::once_flag late_init_flag;
-
-    std::mutex inbox_mtx;
-    std::queue<net_msg> inbox;
-
-    std::mutex outbox_cv_mtx;
-    std::condition_variable outbox_cv;
-    std::mutex outbox_mtx;
-    std::queue<net_msg> outbox;
 };
 
-class fd_net : public fd_inst {
+class fd_net_listener : public fd_inst {
 public:
-    explicit fd_net(std::shared_ptr<module> m_p, wasi_fd_t fd_p);
+    explicit fd_net_listener(std::shared_ptr<module> m_p, wasi_fd_t fd_p, uint16_t port);
+
+    std::weak_ptr<module> m_w;
+};
+
+class fd_net_sock : public fd_inst {
+public:
+    explicit fd_net_sock(std::shared_ptr<module> m_p, wasi_fd_t fd_p, int sock_index_p);
+
+    wasi_errno_t close() override;
 
     wasi_errno_t read(const wasi_iovec &iov, uint32_t &nread) override;
 
     wasi_errno_t write(const wasi_iovec &iov, uint32_t &nwritten) override;
 
     std::weak_ptr<module> m_w;
+    int sock_index;
 };
 
 #endif //SNES9X_WASM_NET_H

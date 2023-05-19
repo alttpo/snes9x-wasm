@@ -3,6 +3,7 @@
 #define SNES9X_WASM_VFS_H
 
 #include <mutex>
+#include <regex>
 
 #include "wasi_types.h"
 
@@ -70,10 +71,11 @@ public:
     FILE *fout;
 };
 
+typedef std::function<std::shared_ptr<fd_inst>(std::shared_ptr<module>, std::string, wasi_fd_t)> fn_exact_open_path;
+typedef std::function<std::shared_ptr<fd_inst>(std::shared_ptr<module>, std::smatch, wasi_fd_t)> fn_regex_open_path;
+
 // map of well-known absolute paths for virtual files:
-extern std::unordered_map<
-    std::string,
-    std::function<std::shared_ptr<fd_inst>(std::shared_ptr<module>, std::string, wasi_fd_t)>
-> file_exact_providers;
+extern const std::unordered_map<std::string, fn_exact_open_path> file_exact_providers;
+extern const std::vector<std::pair<std::regex, fn_regex_open_path>> file_regex_providers;
 
 #endif //SNES9X_WASM_VFS_H

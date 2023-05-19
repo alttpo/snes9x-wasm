@@ -1,5 +1,6 @@
 
 #include <utility>
+#include <regex>
 
 #include "wasm_module.h"
 #include "wasm_vfs.h"
@@ -118,8 +119,7 @@ wasi_errno_t fd_file_out::write(const wasi_iovec &iov, uint32 &nwritten) {
 }
 
 // map of well-known absolute paths for virtual files:
-std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::shared_ptr<module>, std::string, wasi_fd_t)>>
-    file_exact_providers
+const std::unordered_map<std::string, fn_exact_open_path> file_exact_providers
     {
         // console memory:
         {
@@ -154,13 +154,6 @@ std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::shar
                 return std::make_shared<fd_events>(m, fd);
             }
         },
-        // network inbox/outbox subsystem:
-        {
-            "/tmp/net",
-            [](std::shared_ptr<module> m, std::string path, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
-                return std::make_shared<fd_net>(m, fd);
-            }
-        },
         // console ppux rendering extensions:
         {
             "/tmp/snes/ppux/cmd",
@@ -169,3 +162,26 @@ std::unordered_map<std::string, std::function<std::shared_ptr<fd_inst>(std::shar
             }
         },
     };
+
+// regex matchers by path:
+const std::vector<std::pair<std::regex, fn_regex_open_path>> file_regex_providers {
+    // network subsystem:
+    {
+        std::regex("/tmp/net/listen/([0-9]+)"),
+        [](std::shared_ptr<module> m, std::smatch match, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            auto port = std::stoi(match[1].str());
+            return std::make_shared<fd_net_listener>(m, fd, port);
+        }
+    },
+    {
+        std::regex("/tmp/net/slot/([0-9]+)"),
+        [](std::shared_ptr<module> m, std::smatch match, wasi_fd_t fd) -> std::shared_ptr<fd_inst> {
+            auto slot = std::stoi(match[1].str());
+            if (slot < 0 || slot > 7) {
+                return nullptr;
+            }
+
+            return std::make_shared<fd_net_sock>(m, fd, slot);
+        }
+    },
+};

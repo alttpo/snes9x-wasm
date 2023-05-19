@@ -3,6 +3,7 @@
 #define SNES9X_WASI_TYPES_H
 
 #include <cstdint>
+#include <cerrno>
 
 #define WASI_ESUCCESS        (0)
 #define WASI_E2BIG           (1)
@@ -82,7 +83,6 @@
 #define WASI_EXDEV           (75)
 #define WASI_ENOTCAPABLE     (76)
 
-
 typedef uint16_t wasi_errno_t;
 typedef uint32_t wasi_fd_t;
 typedef uint64_t wasi_filesize_t;
@@ -96,6 +96,102 @@ typedef struct iovec_app {
     uint32_t buf_len;
 } iovec_app_t;
 
-typedef std::vector<std::pair<uint8_t *, uint32_t>> wasi_iovec;
+typedef std::vector<std::pair<uint8_t *, size_t>> wasi_iovec;
+
+static wasi_errno_t posix_to_wasi_error(int e) {
+    static wasi_errno_t lkup[] = {
+#define X(code) [code] = WASI_##code
+        X(E2BIG),
+        X(EACCES),
+        X(EADDRINUSE),
+        X(EADDRNOTAVAIL),
+        X(EAFNOSUPPORT),
+        X(EAGAIN),
+        X(EALREADY),
+        X(EBADF),
+        X(EBADMSG),
+        X(EBUSY),
+        X(ECANCELED),
+        X(ECHILD),
+        X(ECONNABORTED),
+        X(ECONNREFUSED),
+        X(ECONNRESET),
+        X(EDEADLK),
+        X(EDESTADDRREQ),
+        X(EDOM),
+        X(EDQUOT),
+        X(EEXIST),
+        X(EFAULT),
+        X(EFBIG),
+        X(EHOSTUNREACH),
+        X(EIDRM),
+        X(EILSEQ),
+        X(EINPROGRESS),
+        X(EINTR),
+        X(EINVAL),
+        X(EIO),
+        X(EISCONN),
+        X(EISDIR),
+        X(ELOOP),
+        X(EMFILE),
+        X(EMLINK),
+        X(EMSGSIZE),
+        X(EMULTIHOP),
+        X(ENAMETOOLONG),
+        X(ENETDOWN),
+        X(ENETRESET),
+        X(ENETUNREACH),
+        X(ENFILE),
+        X(ENOBUFS),
+        X(ENODEV),
+        X(ENOENT),
+        X(ENOEXEC),
+        X(ENOLCK),
+        X(ENOLINK),
+        X(ENOMEM),
+        X(ENOMSG),
+        X(ENOPROTOOPT),
+        X(ENOSPC),
+        X(ENOSYS),
+        X(ENOTCONN),
+        X(ENOTDIR),
+        X(ENOTEMPTY),
+        X(ENOTRECOVERABLE),
+        X(ENOTSOCK),
+        X(ENOTSUP),
+        X(ENOTTY),
+        X(ENXIO),
+        X(EOVERFLOW),
+        X(EOWNERDEAD),
+        X(EPERM),
+        X(EPIPE),
+        X(EPROTO),
+        X(EPROTONOSUPPORT),
+        X(EPROTOTYPE),
+        X(ERANGE),
+        X(EROFS),
+        X(ESPIPE),
+        X(ESRCH),
+        X(ESTALE),
+        X(ETIMEDOUT),
+        X(ETXTBSY),
+        X(EXDEV),
+#ifdef ENOTCAPABLE
+        X(ENOTCAPABLE),
+#endif
+#undef X
+#if EOPNOTSUPP != ENOTSUP
+        [EOPNOTSUPP] = WASI_ENOTSUP,
+#endif
+#if EWOULDBLOCK != EAGAIN
+        [EWOULDBLOCK] = WASI_EAGAIN,
+#endif
+    };
+
+    if ((e < 0) || (e > sizeof(lkup) / sizeof(lkup[0])) || (lkup[e] == 0)) {
+        return WASI_ENOSYS;
+    }
+    return lkup[e];
+}
 
 #endif //SNES9X_WASI_TYPES_H

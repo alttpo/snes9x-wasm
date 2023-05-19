@@ -109,20 +109,48 @@ wasi_errno_t module::path_open(
     // we only know how to open a limited set of virtual files identified by absolute paths,
     // similar to the linux procfs:
     auto it = file_exact_providers.find(lpath);
-    if (it == file_exact_providers.end()) {
-        return WASI_ENOENT;
+    if (it != file_exact_providers.end()) {
+        auto fd = fd_free;
+
+        auto inst = it->second(shared_from_this(), lpath, fd);
+        if (!inst) {
+            return WASI_ENOENT;
+        }
+
+        fds.insert_or_assign(fd, std::move(inst));
+        *fd_app = fd;
+
+        // find the next free fd:
+        while (fds.find(++fd_free) != fds.end()) {}
+
+        return 0;
     }
 
-    // always succeed and create a new fd:
-    auto fd = fd_free;
+    // match path against regexes in order:
+    for (const auto &r: file_regex_providers) {
+        std::smatch match;
+        if (!std::regex_match(lpath, match, r.first)) {
+            continue;
+        }
 
-    fds.insert_or_assign(fd, (it->second)(shared_from_this(), lpath, fd));
-    *fd_app = fd;
+        auto fd = fd_free;
 
-    // find the next free fd:
-    while (fds.find(++fd_free) != fds.end()) {}
+        auto inst = r.second(shared_from_this(), match, fd);
+        if (!inst) {
+            return WASI_ENOENT;
+        }
 
-    return 0;
+        fds.insert_or_assign(fd, std::move(inst));
+        *fd_app = fd;
+
+        // find the next free fd:
+        while (fds.find(++fd_free) != fds.end()) {}
+
+        return 0;
+    }
+
+    // no path matches:
+    return WASI_ENOENT;
 }
 
 wasi_errno_t module::fd_close(wasi_fd_t fd) {

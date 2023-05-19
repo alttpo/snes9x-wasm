@@ -23,13 +23,22 @@ var (
 )
 
 const (
-	ev_snes_nmi = 1 << iota
-	ev_snes_irq
-	ev_ppu_frame_start
-	ev_ppu_frame_end
+	ev_none = 0
 
-	ev_msg_received = 1 << 30
-	ev_shutdown     = 1 << 31
+	ev_net_received_0 = 1 << 0
+	ev_net_received_1 = 1 << 1
+	ev_net_received_2 = 1 << 2
+	ev_net_received_3 = 1 << 3
+	ev_net_received_4 = 1 << 4
+	ev_net_received_5 = 1 << 5
+	ev_net_received_6 = 1 << 6
+	ev_net_received_7 = 1 << 7
+
+	ev_snes_irq        = 1 << 27
+	ev_snes_nmi        = 1 << 28
+	ev_ppu_frame_start = 1 << 29
+	ev_ppu_frame_end   = 1 << 30
+	ev_shutdown        = 1 << 31
 )
 
 func main() {
@@ -91,13 +100,15 @@ func main() {
 	ppuxQueue = fPPUX
 
 	var fNet *os.File
-	fNet, err = os.OpenFile("/tmp/net", os.O_RDWR, 0666)
+	fNet, err = os.OpenFile("/tmp/net/listen/25600", os.O_RDWR, 0666)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "open(net): %v\n", err)
 		return
 	}
 	defer fNet.Close()
 	fmt.Printf("fd: %d\n", fNet.Fd())
+
+	var socks [8]*os.File
 
 	ppuxWrite := func(v []uint32) {
 		_, _ = ppuxQueue.Write(unsafe.Slice((*byte)(unsafe.Pointer(&v[0])), len(v)*4))
@@ -175,18 +186,33 @@ func main() {
 			break
 		}
 
-		if events&ev_msg_received != 0 {
-			var msg [65536]byte
-			var n int
-			n, err = fNet.Read(msg[:])
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "read(net): %v\n", err)
-				continue
-			}
-			_, err = fNet.Write(msg[:n])
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "write(net): %v\n", err)
-				continue
+		// handle network messages:
+		for i := range socks {
+			if events&(1<<i) != 0 {
+				if socks[i] == nil {
+					socks[i], err = os.OpenFile(fmt.Sprintf("/tmp/net/slot/%d", i), os.O_RDWR, 0666)
+					if err != nil {
+						_, _ = fmt.Fprintf(os.Stderr, "open(/tmp/net/slot/%d): %v\n", i, err)
+						continue
+					}
+				}
+
+				var msg [65536]byte
+				var n int
+				n, err = socks[i].Read(msg[:])
+				if err != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "read(/tmp/net/slot/%d): %v\n", i, err)
+					socks[i].Close()
+					socks[i] = nil
+					continue
+				}
+				_, err = socks[i].Write(msg[:n])
+				if err != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "write(/tmp/net/slot/%d): %v\n", i, err)
+					socks[i].Close()
+					socks[i] = nil
+					continue
+				}
 			}
 		}
 
