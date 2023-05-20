@@ -165,6 +165,25 @@ bool wasm_host_init() {
         "(*~)i",
         nullptr
     });
+    // socket interface:
+    natives->push_back({
+        "net_tcp_listen",
+        (void *) (int32_t (*)(wasm_exec_env_t, uint32_t)) (
+            [](wasm_exec_env_t exec_env,
+               uint32_t port
+            ) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                return m->net.tcp_listen(port);
+            }
+        ),
+        "(i)i",
+        nullptr
+    });
+    // net_tcp_listen(uint32_t port) -> int32_t
+    // net_tcp_accept(int32_t socket) -> int32_t
+    // net_send(int32_t socket, uint8_t *data, uint32_t data_len) -> int32_t
+    // net_recv(int32_t socket, uint8_t *data, uint32_t data_len) -> int32_t
+    // net_close(int32_t socket) -> int32_t
 
     init.n_native_symbols = natives->size();
     init.native_symbols = natives->data();
