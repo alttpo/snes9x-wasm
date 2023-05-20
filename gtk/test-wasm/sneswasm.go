@@ -2,7 +2,6 @@ package main
 
 import (
 	"time"
-	"unsafe"
 )
 
 //go:wasm-module snes
@@ -22,11 +21,11 @@ func ppux_write(b *uint32, l uint32) bool
 func wait_for_events(mask uint32, timeout_usec uint32, o_events *uint32) bool
 
 func ReadROM(b []byte, offset uint32) bool {
-	return rom_read((*byte)(unsafe.Pointer(&b[0])), uint32(len(b)), offset)
+	return rom_read(&b[0], uint32(len(b)), offset)
 }
 
 func ReadWRAM(b []byte, offset uint32) bool {
-	return wram_read((*byte)(unsafe.Pointer(&b[0])), uint32(len(b)), offset)
+	return wram_read(&b[0], uint32(len(b)), offset)
 }
 
 func WaitForEvents(mask uint32, timeout time.Duration) (events uint32, ok bool) {
@@ -35,5 +34,5 @@ func WaitForEvents(mask uint32, timeout time.Duration) (events uint32, ok bool) 
 }
 
 func PPUXWrite(b []uint32) bool {
-	return ppux_write((*uint32)(unsafe.Pointer(&b[0])), uint32(len(b)))
+	return ppux_write(&b[0], uint32(len(b)))
 }

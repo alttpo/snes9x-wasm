@@ -511,3 +511,6 @@ profile
 
 # IDE directories
 .idea/
+
+# WebAssembly
+*.wasm

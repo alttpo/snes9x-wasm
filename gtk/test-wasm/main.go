@@ -72,7 +72,7 @@ func main() {
 		}
 
 		nd := time.Now()
-		fmt.Printf("event(%08b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
+		fmt.Printf("event(%032b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
 		lastEvent = nd
 
 		// graceful exit condition:
