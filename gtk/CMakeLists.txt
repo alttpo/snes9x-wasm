@@ -273,7 +273,6 @@ if(USE_WAMR)
     list(APPEND SOURCES
             ../wasm/wasm_host.cpp
             ../wasm/wasm_module.cpp
-            ../wasm/wasm_vfs.cpp
             ../wasm/wasm_ppux.cpp
             )
 endif()

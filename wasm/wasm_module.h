@@ -15,7 +15,6 @@
 #include "wasm_export.h"
 
 #include "wasi_types.h"
-#include "wasm_vfs.h"
 #include "wasm_ppux.h"
 #include "wasm_host.h"
 
@@ -39,21 +38,15 @@ public:
 public:
 
 public:
-    bool wait_for_events(uint32_t &events_p);
+    bool wait_for_events(uint32_t mask, uint32_t timeout_usec, uint32_t &o_events);
 
     void notify_events(uint32_t events_p);
 
 private:
-    wasi_iovec create_iovec(const iovec_app_t *iovec_app, uint32_t iovs_len);
-
-private:
     wasm_module_t mod;
     wasm_module_inst_t module_inst;
-
     wasm_exec_env_t exec_env;
-    std::unordered_map<wasi_fd_t, std::shared_ptr<fd_inst>> fds;
 
-    wasi_fd_t fd_free = 3;
     std::mutex events_cv_mtx;
     std::condition_variable events_cv;
 

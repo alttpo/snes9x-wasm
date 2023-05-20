@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"time"
 )
@@ -66,12 +65,13 @@ func main() {
 	lastEvent := time.Now()
 	for {
 		// poll for snes events:
-		events = poll_events(math.MaxUint32)
-
-		nd := time.Now()
-		if events == 0 {
+		var ok bool
+		events, ok = WaitForEvents(ev_shutdown|ev_ppu_frame_end, time.Microsecond*1000)
+		if !ok {
 			continue
 		}
+
+		nd := time.Now()
 		fmt.Printf("event(%08b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
 		lastEvent = nd
 
@@ -113,10 +113,10 @@ func main() {
 		}
 		// end of list:
 		cmd = append(cmd, 0b1000_0000_0000_0000_0000_0000_0000_0000)
-		ppux_write(cmd)
+		PPUXWrite(cmd)
 
 		// read half of WRAM:
-		wram_read(wram[0x0:0x100], 0x0)
+		ReadWRAM(wram[0x0:0x100], 0x0)
 		fmt.Printf("%02x\n", wram[0x1A])
 		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 	}

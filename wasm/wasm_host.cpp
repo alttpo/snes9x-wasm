@@ -29,6 +29,19 @@ bool wasm_host_init() {
 
     auto *natives = new std::vector<NativeSymbol>();
     natives->push_back({
+        "wait_for_events",
+        (void *) (int32_t (*)(wasm_exec_env_t, uint32_t, uint32_t, uint32_t *)) (
+            [](wasm_exec_env_t exec_env,
+               uint32_t mask, uint32_t timeout_usec, uint32_t *o_events
+            ) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                return m->wait_for_events(mask, timeout_usec, *o_events);
+            }
+        ),
+        "(ii*)i",
+        nullptr
+    });
+    natives->push_back({
         "rom_read",
         (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) (
             [](wasm_exec_env_t exec_env,
@@ -48,6 +61,40 @@ bool wasm_host_init() {
             }
         ),
         "(*~i)i",
+        nullptr
+    });
+    natives->push_back({
+        "wram_read",
+        (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) (
+            [](wasm_exec_env_t exec_env,
+               uint8_t *dest, uint32_t dest_len, uint32_t offset
+            ) -> int32_t {
+                if (offset >= sizeof(Memory.RAM)) {
+                    return false;
+                }
+                if (offset + dest_len > sizeof(Memory.RAM)) {
+                    return false;
+                }
+
+                memcpy(dest, Memory.RAM + offset, dest_len);
+
+                return true;
+            }
+        ),
+        "(*~i)i",
+        nullptr
+    });
+    natives->push_back({
+        "ppux_write",
+        (void *) (int32_t (*)(wasm_exec_env_t, uint32_t *, uint32_t)) (
+            [](wasm_exec_env_t exec_env,
+               uint32_t *data, uint32_t size
+            ) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                return m->ppux.write_cmd(data, size);
+            }
+        ),
+        "(*~)i",
         nullptr
     });
 

@@ -11,8 +11,8 @@ module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p,
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
 
     // hook up stdout and stderr:
-    fds.insert_or_assign(1, std::make_shared<fd_file_out>(1, stdout));
-    fds.insert_or_assign(2, std::make_shared<fd_file_out>(2, stderr));
+    //fds.insert_or_assign(1, std::make_shared<fd_file_out>(1, stdout));
+    //fds.insert_or_assign(2, std::make_shared<fd_file_out>(2, stderr));
 }
 
 module::~module() {
@@ -108,17 +108,16 @@ exec_main:
     }
 }
 
-bool module::wait_for_events(uint32_t &events_p) {
-    events_p = wasm_event_kind::ev_none;
-
+bool module::wait_for_events(uint32_t mask, uint32_t timeout_usec, uint32_t &o_events) {
     std::unique_lock<std::mutex> lk(events_cv_mtx);
-    events_cv.wait_for(lk, std::chrono::microseconds(400));
-    events_p = events;
+    auto status = events_cv.wait_for(lk, std::chrono::microseconds(timeout_usec));
 
-    // reset events signals:
-    events = wasm_event_kind::ev_none;
+    o_events = events & mask;
 
-    return events_p != 0;
+    // clear event signals according to the mask:
+    events &= ~mask;
+
+    return status == std::cv_status::no_timeout;
 }
 
 void module::notify_events(uint32_t events_p) {

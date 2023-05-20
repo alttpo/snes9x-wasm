@@ -1,6 +1,5 @@
 
 #include "wasm_module.h"
-#include "wasm_vfs.h"
 #include "wasm_ppux.h"
 
 #include "snes9x.h"
@@ -208,30 +207,11 @@ void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
     });
 }
 
-fd_ppux_cmd::fd_ppux_cmd(std::weak_ptr<module> m_p, wasi_fd_t fd_p)
-    : fd_inst(fd_p), m_w(std::move(m_p)) {}
+bool ppux::write_cmd(uint32_t *data, uint32_t size) {
+    // size is counted in uint32_t units.
 
-wasi_errno_t fd_ppux_cmd::write(const wasi_iovec &iov, uint32_t &nwritten) {
-    auto m = m_w.lock();
-    if (!m) {
-        return EBADF;
-    }
-
-    nwritten = 0;
-
-    ppux &ppux = m->ppux;
-    auto &cmdNext = ppux.cmdNext;
-    for (const auto &io: iov) {
-        if (io.second & 3) {
-            // size must be multiple of 4
-            return EINVAL;
-        }
-
-        // append the uint32_ts:
-        auto data = (uint32_t *) io.first;
-        auto size = io.second / 4;
-        cmdNext.insert(cmdNext.end(), data, data + size);
-    }
+    // append the uint32_ts:
+    cmdNext.insert(cmdNext.end(), data, data + size);
 
     // skip through opcode frames to find end-of-list:
     auto endit = cmdNext.end();
@@ -248,7 +228,7 @@ wasi_errno_t fd_ppux_cmd::write(const wasi_iovec &iov, uint32_t &nwritten) {
             // MSB must be 1 to indicate opcode/size start of frame:
             fprintf(stderr, "enqueued cmd list malformed at index %ld; opcode must have MSB set\n", it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
-            return EINVAL;
+            return false;
         }
 
         auto size = *it & 0xffff;
@@ -270,13 +250,13 @@ wasi_errno_t fd_ppux_cmd::write(const wasi_iovec &iov, uint32_t &nwritten) {
     // did we find the end?
     if (endit != cmdNext.end()) {
         // atomically copy cmdNext to cmd and clear cmdNext:
-        std::unique_lock<std::mutex> lk(ppux.cmd_m);
-        ppux.cmd = cmdNext;
+        std::unique_lock<std::mutex> lk(cmd_m);
+        cmd = cmdNext;
         cmdNext.erase(cmdNext.begin(), cmdNext.end());
-        return 0;
+        return true;
     }
 
-    return 0;
+    return false;
 }
 
 void ppux::render_cmd() {
