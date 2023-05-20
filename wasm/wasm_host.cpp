@@ -64,6 +64,50 @@ bool wasm_host_init() {
         nullptr
     });
     natives->push_back({
+        "sram_read",
+        (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) (
+            [](wasm_exec_env_t exec_env,
+               uint8_t *dest, uint32_t dest_len, uint32_t offset
+            ) -> int32_t {
+                auto &vec = Memory.SRAMStorage;
+                if (offset >= vec.size()) {
+                    return false;
+                }
+                if (offset + dest_len > vec.size()) {
+                    return false;
+                }
+
+                memcpy(dest, vec.data() + offset, dest_len);
+
+                return true;
+            }
+        ),
+        "(*~i)i",
+        nullptr
+    });
+    natives->push_back({
+        "sram_write",
+        (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) (
+            [](wasm_exec_env_t exec_env,
+               uint8_t *dest, uint32_t dest_len, uint32_t offset
+            ) -> int32_t {
+                auto &vec = Memory.SRAMStorage;
+                if (offset >= vec.size()) {
+                    return false;
+                }
+                if (offset + dest_len > vec.size()) {
+                    return false;
+                }
+
+                memcpy(vec.data() + offset, dest, dest_len);
+
+                return true;
+            }
+        ),
+        "(*~i)i",
+        nullptr
+    });
+    natives->push_back({
         "wram_read",
         (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) (
             [](wasm_exec_env_t exec_env,
@@ -77,6 +121,27 @@ bool wasm_host_init() {
                 }
 
                 memcpy(dest, Memory.RAM + offset, dest_len);
+
+                return true;
+            }
+        ),
+        "(*~i)i",
+        nullptr
+    });
+    natives->push_back({
+        "wram_write",
+        (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) (
+            [](wasm_exec_env_t exec_env,
+               uint8_t *dest, uint32_t dest_len, uint32_t offset
+            ) -> int32_t {
+                if (offset >= sizeof(Memory.RAM)) {
+                    return false;
+                }
+                if (offset + dest_len > sizeof(Memory.RAM)) {
+                    return false;
+                }
+
+                memcpy(Memory.RAM + offset, dest, dest_len);
 
                 return true;
             }
