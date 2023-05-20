@@ -28,6 +28,7 @@ bool wasm_host_init() {
     init.running_mode = Mode_Interp;
 
     auto *natives = new std::vector<NativeSymbol>();
+    // event subsystem (wait for irq, nmi, ppu frame start/end, shutdown, etc.):
     natives->push_back({
         "wait_for_events",
         (void *) (int32_t (*)(wasm_exec_env_t, uint32_t, uint32_t, uint32_t *)) (
@@ -41,6 +42,7 @@ bool wasm_host_init() {
         "(ii*)i",
         nullptr
     });
+    // memory access:
     natives->push_back({
         "rom_read",
         (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) (
@@ -149,6 +151,7 @@ bool wasm_host_init() {
         "(*~i)i",
         nullptr
     });
+    // ppux command queue:
     natives->push_back({
         "ppux_write",
         (void *) (int32_t (*)(wasm_exec_env_t, uint32_t *, uint32_t)) (
