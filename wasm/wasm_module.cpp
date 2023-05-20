@@ -9,10 +9,6 @@ module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p,
     : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), ppux() {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
-
-    // hook up stdout and stderr:
-    //fds.insert_or_assign(1, std::make_shared<fd_file_out>(1, stdout));
-    //fds.insert_or_assign(2, std::make_shared<fd_file_out>(2, stderr));
 }
 
 module::~module() {
@@ -110,20 +106,26 @@ exec_main:
 
 bool module::wait_for_events(uint32_t mask, uint32_t timeout_usec, uint32_t &o_events) {
     std::unique_lock<std::mutex> lk(events_cv_mtx);
-    auto status = events_cv.wait_for(lk, std::chrono::microseconds(timeout_usec));
+    if (events_cv.wait_for(
+        lk,
+        std::chrono::microseconds(timeout_usec),
+        [this]() { return events_changed; }
+    )) {
+        events_changed = false;
+        o_events = events & mask;
+        // clear event signals according to the mask:
+        events &= ~mask;
+        return true;
+    }
 
-    o_events = events & mask;
-
-    // clear event signals according to the mask:
-    events &= ~mask;
-
-    return status == std::cv_status::no_timeout;
+    return false;
 }
 
 void module::notify_events(uint32_t events_p) {
     {
         std::unique_lock<std::mutex> lk(events_cv_mtx);
         events |= events_p;
+        events_changed = true;
     }
     events_cv.notify_one();
 }

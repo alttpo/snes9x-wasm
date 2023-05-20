@@ -50,7 +50,8 @@ private:
     std::mutex events_cv_mtx;
     std::condition_variable events_cv;
 
-    std::atomic<uint32_t> events = wasm_event_kind::ev_none;
+    uint32_t events = wasm_event_kind::ev_none;
+    bool events_changed = false;
 
 public:
     ppux ppux;
