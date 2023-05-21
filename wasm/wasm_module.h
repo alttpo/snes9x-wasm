@@ -17,6 +17,7 @@
 #include "wasi_types.h"
 #include "wasm_ppux.h"
 #include "wasm_host.h"
+#include "wasm_net.h"
 
 class module : public std::enable_shared_from_this<module> {
 public:
@@ -55,6 +56,7 @@ private:
 
 public:
     ppux ppux;
+    net net;
 };
 
 extern std::vector<std::shared_ptr<module>> modules;

@@ -274,6 +274,7 @@ if(USE_WAMR)
             ../wasm/wasm_host.cpp
             ../wasm/wasm_module.cpp
             ../wasm/wasm_ppux.cpp
+            ../wasm/wasm_net.cpp
             )
 endif()
 

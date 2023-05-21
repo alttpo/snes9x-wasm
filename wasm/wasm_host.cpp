@@ -165,7 +165,8 @@ bool wasm_host_init() {
         "(*~)i",
         nullptr
     });
-    // socket interface:
+    // network interface:
+    // net_tcp_listen(uint32_t port) -> int32_t
     natives->push_back({
         "net_tcp_listen",
         (void *) (int32_t (*)(wasm_exec_env_t, uint32_t)) (
@@ -179,11 +180,76 @@ bool wasm_host_init() {
         "(i)i",
         nullptr
     });
-    // net_tcp_listen(uint32_t port) -> int32_t
-    // net_tcp_accept(int32_t socket) -> int32_t
-    // net_send(int32_t socket, uint8_t *data, uint32_t data_len) -> int32_t
-    // net_recv(int32_t socket, uint8_t *data, uint32_t data_len) -> int32_t
-    // net_close(int32_t socket) -> int32_t
+    // net_tcp_accept(int32_t fd) -> int32_t
+    natives->push_back({
+        "net_tcp_accept",
+        (void *) (int32_t (*)(wasm_exec_env_t, int32_t)) (
+            [](wasm_exec_env_t exec_env,
+               int32_t fd
+            ) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                return m->net.tcp_accept(fd);
+            }
+        ),
+        "(i)i",
+        nullptr
+    });
+    // net_poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t
+    natives->push_back({
+        "net_poll",
+        (void *) (int32_t (*)(wasm_exec_env_t, net_poll_slot *fds, uint32_t fds_len)) (
+            [](wasm_exec_env_t exec_env,
+               net_poll_slot *poll_slots, uint32_t poll_slots_len
+            ) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                return m->net.poll(poll_slots, poll_slots_len);
+            }
+        ),
+        "(*~)i",
+        nullptr
+    });
+    // net_send(int32_t fd, uint8_t *data, uint32_t data_len) -> int32_t
+    natives->push_back({
+        "net_send",
+        (void *) (int32_t (*)(wasm_exec_env_t, int32_t, uint8_t *data, uint32_t len)) (
+            [](wasm_exec_env_t exec_env,
+               int32_t fd, uint8_t *data, uint32_t len
+            ) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                return m->net.send(fd, data, len);
+            }
+        ),
+        "(i*~)i",
+        nullptr
+    });
+    // net_recv(int32_t fd, uint8_t *data, uint32_t data_len) -> int32_t
+    natives->push_back({
+        "net_recv",
+        (void *) (int32_t (*)(wasm_exec_env_t, int32_t, uint8_t *data, uint32_t len)) (
+            [](wasm_exec_env_t exec_env,
+               int32_t fd, uint8_t *data, uint32_t len
+            ) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                return m->net.recv(fd, data, len);
+            }
+        ),
+        "(i*~)i",
+        nullptr
+    });
+    // net_close(int32_t fd) -> int32_t
+    natives->push_back({
+        "net_close",
+        (void *) (int32_t (*)(wasm_exec_env_t, int32_t)) (
+            [](wasm_exec_env_t exec_env,
+               int32_t fd
+            ) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                return m->net.close(fd);
+            }
+        ),
+        "(i)i",
+        nullptr
+    });
 
     init.n_native_symbols = natives->size();
     init.native_symbols = natives->data();
