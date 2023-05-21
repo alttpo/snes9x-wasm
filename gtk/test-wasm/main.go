@@ -62,8 +62,47 @@ func main() {
 	_ = ReadROM(romTitle[:], 0x7FC0)
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
+	// listen on tcp port 25600
+	listenFd := NetTCPListen(25600)
+	if listenFd < 0 {
+		fmt.Printf("listen: %d\n", listenFd)
+	}
+	slots := make([]NetPollSlot, 0, 8)
+
 	lastEvent := time.Now()
 	for {
+		// poll for net i/o non-blocking:
+		{
+			acceptedFd := NetTCPAccept(listenFd)
+			if acceptedFd < 0 {
+				if acceptedFd != -35 { // EAGAIN
+					fmt.Printf("accept: error %d\n", acceptedFd)
+				}
+			} else {
+				slots = append(slots, NetPollSlot{
+					Slot:    acceptedFd,
+					Events:  0x01, // POLLIN
+					Revents: 0,
+				})
+			}
+
+			if len(slots) > 0 {
+				fmt.Printf("polling %d slots\n", len(slots))
+				n := NetPoll(slots)
+				if n < 0 {
+					fmt.Printf("poll: error %d\n", n)
+				} else {
+					fmt.Printf("poll: %d slots have events\n", n)
+					for i := range slots {
+						if slots[i].Revents != 0 {
+							fmt.Printf("poll: can read slot %d\n", slots[i].Slot)
+							//NetRead(slots[i].Slot)
+						}
+					}
+				}
+			}
+		}
+
 		// poll for snes events:
 		var ok bool
 		events, ok = WaitForEvents(ev_shutdown|ev_ppu_frame_end, time.Microsecond*1000)
@@ -120,6 +159,8 @@ func main() {
 		fmt.Printf("%02x\n", wram[0x1A])
 		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 	}
+
+	NetClose(listenFd)
 
 	fmt.Println("exit")
 }
