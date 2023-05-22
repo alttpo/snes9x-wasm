@@ -281,7 +281,7 @@ void ppux::render_cmd() {
         //   MSB                                             LSB
         //   1111 1111     1111 1111     0000 0000     0000 0000
         // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-        //   oooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
+        //   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
             fprintf(stderr, "cmd list malformed at index %ld; opcode must have MSB set\n", it - cmd.begin());
@@ -305,61 +305,165 @@ void ppux::render_cmd() {
         }
 
         if (o == 1) {
-            // draw horizontal runs of 16bpp pixels starting at x,y. wrap at
-            // width and proceed to next line until `size-2` pixels in total are
-            // drawn.
+            render_box_16bpp(it, opit);
+        }
+    }
+}
 
-            //   MSB                                             LSB
-            //   1111 1111     1111 1111     0000 0000     0000 0000
-            // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-            //   ---- ----     ---- slll     ---- --ww     wwww wwww
-            //                                                          w = width in pixels
-            //                                                          l = PPU layer
-            //                                                          s = main or sub screen; main=0, sub=1
+void ppux::render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit) {
+    // draw horizontal runs of 16bpp pixels starting at x,y. wrap at
+    // width and proceed to next line until `size-2` pixels in total are
+    // drawn.
 
-            // width up to 1024 where 0 represents 1024 and 1..1023 are normal:
-            auto width = *it & 0x03ff;
-            if (width == 0) { width = 1024; }
+    //   MSB                                             LSB
+    //   1111 1111     1111 1111     0000 0000     0000 0000
+    // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+    //   ---- ---o     ---- slll     ---- --ww     wwww wwww    o = per pixel, overlay = 0, replace = 1
+    //                                                          s = main or sub screen; main=0, sub=1
+    //                                                          l = PPU layer
+    //                                                          w = width in pixels
 
-            // which ppux layer to render to: (BG1..4, OBJ)
-            auto layer = (*it >> 16) & 7;
+    // width up to 1024 where 0 represents 1024 and 1..1023 are normal:
+    auto width = *it & 0x03ff;
+    if (width == 0) { width = 1024; }
 
-            // main or sub screen (main=0, sub=1):
-            auto is_sub = ((*it >> 16) >> 4) & 1;
+    // which ppux layer to render to: (BG1..4, OBJ)
+    auto layer = (*it >> 16) & 7;
 
-            //   MSB                                             LSB
-            //   1111 1111     1111 1111     0000 0000     0000 0000
-            // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-            //   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx
-            it++;
-            if (it == cmd.end()) break;
+    // main or sub screen (main=0, sub=1):
+    auto is_sub = ((*it >> 16) >> 4) & 1;
 
-            auto x0 = *it & 0x03ff;
-            auto y0 = (*it >> 16) & 0x03ff;
-            auto x1 = x0 + width;
+    // overlay pixels (0) or overwrite pixels (1) based on PX_ENABLE flag (1<<31) per pixel:
+    auto is_replace = ((*it >> 24) & 1);
 
-            it++;
+    //   MSB                                             LSB
+    //   1111 1111     1111 1111     0000 0000     0000 0000
+    // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+    //   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx
+    it++;
+    if (it == cmd.end()) return;
 
-            // copy pixels in:
-            // each pixel is represented by a 4-byte little-endian uint32:
-            //   MSB                                             LSB
-            //   1111 1111     1111 1111     0000 0000     0000 0000
-            // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-            //   ---- ----     ---- --pp     Errr rrgg     gggb bbbb    E = enable pixel
-            //                                                          r = red (5-bits)
-            //                                                          g = green (5-bits)
-            //                                                          b = blue (5-bits)
-            //                                                          p = priority [0..3] for OBJ, [0..1] for BG
-            auto offs = (y0 * pitch);
-            std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
-            for (uint32_t x = x0; it != opit && it != cmd.end(); it++) {
-                vec[offs + x] = *it;
-                // wrap at width and move down a line:
-                if (++x >= x1) {
-                    x = x0;
-                    offs += pitch;
-                }
+    auto x0 = *it & 0x03ff;
+    auto y0 = (*it >> 16) & 0x03ff;
+    auto x1 = x0 + width;
+
+    it++;
+
+    // copy pixels in; see comment in wasm_ppux.h for uint32_t bits representation:
+    auto offs = (y0 * pitch);
+    std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
+    for (uint32_t x = x0; it != opit && it != cmd.end(); it++) {
+        auto p = *it;
+        if (is_replace) {
+            // replace all pixels:
+            vec[offs + x] = p;
+        } else {
+            // overlay: only replace pixels where PX_ENABLE is set:
+            if ((p & PX_ENABLE) != 0) {
+                vec[offs + x] = p;
             }
+        }
+        // wrap at width and move down a line:
+        if (++x >= x1) {
+            x = x0;
+            offs += pitch;
+        }
+    }
+}
+
+template<unsigned bpp, bool hflip, bool vflip, typename PLOT>
+void draw_vram_tile(
+    int x0, int y0,
+    int w, int h,
+
+    uint16_t vram_addr,
+    uint8_t  palette,
+
+    uint8_t* vram,
+    uint8_t* cgram,
+
+    PLOT& plot
+) {
+    // draw tile:
+    unsigned sy = y0;
+    for (int ty = 0; ty < h; ty++, sy++) {
+        sy &= 255;
+
+        unsigned sx = x0;
+        unsigned y = !vflip ? (ty) : (h - 1 - ty);
+
+        for(int tx = 0; tx < w; tx++, sx++) {
+            sx &= 511;
+            if(sx >= 256) continue;
+
+            unsigned x = (!hflip ? tx : (w - 1 - tx));
+
+            uint8_t col, d0, d1, d2, d3, d4, d5, d6, d7;
+            uint8_t mask = 1 << (7-(x&7));
+            uint8_t *tile_ptr = vram + vram_addr;
+
+            switch (bpp) {
+                case 2:
+                    // 16 bytes per 8x8 tile
+                    tile_ptr += ((x >> 3) << 4);
+                    tile_ptr += ((y >> 3) << 8);
+                    tile_ptr += (y & 7) << 1;
+                    d0 = *(tile_ptr    );
+                    d1 = *(tile_ptr + 1);
+                    col  = !!(d0 & mask) << 0;
+                    col += !!(d1 & mask) << 1;
+                    break;
+                case 4:
+                    // 32 bytes per 8x8 tile
+                    tile_ptr += ((x >> 3) << 5);
+                    tile_ptr += ((y >> 3) << 9);
+                    tile_ptr += (y & 7) << 1;
+                    d0 = *(tile_ptr     );
+                    d1 = *(tile_ptr +  1);
+                    d2 = *(tile_ptr + 16);
+                    d3 = *(tile_ptr + 17);
+                    col  = !!(d0 & mask) << 0;
+                    col += !!(d1 & mask) << 1;
+                    col += !!(d2 & mask) << 2;
+                    col += !!(d3 & mask) << 3;
+                    break;
+                case 8:
+                    // 64 bytes per 8x8 tile
+                    tile_ptr += ((x >> 3) << 6);
+                    tile_ptr += ((y >> 3) << 10);
+                    tile_ptr += (y & 7) << 1;
+                    d0 = *(tile_ptr     );
+                    d1 = *(tile_ptr +  1);
+                    d2 = *(tile_ptr + 16);
+                    d3 = *(tile_ptr + 17);
+                    d4 = *(tile_ptr + 32);
+                    d5 = *(tile_ptr + 33);
+                    d6 = *(tile_ptr + 48);
+                    d7 = *(tile_ptr + 49);
+                    col  = !!(d0 & mask) << 0;
+                    col += !!(d1 & mask) << 1;
+                    col += !!(d2 & mask) << 2;
+                    col += !!(d3 & mask) << 3;
+                    col += !!(d4 & mask) << 4;
+                    col += !!(d5 & mask) << 5;
+                    col += !!(d6 & mask) << 6;
+                    col += !!(d7 & mask) << 7;
+                    break;
+                default:
+                    // TODO: warn
+                    break;
+            }
+
+            // color 0 is always transparent:
+            if (col == 0)
+                continue;
+
+            col += palette;
+
+            // look up color in cgram:
+            uint16_t bgr = *(cgram + (col<<1)) + (*(cgram + (col<<1) + 1) << 8);
+
+            plot(sx, sy, bgr);
         }
     }
 }

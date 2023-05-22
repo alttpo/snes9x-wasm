@@ -57,11 +57,11 @@ struct ppux {
     );
 
     void lines_sub(
-        int    left,
-        int    right,
-        uint8  layer,
+        int left,
+        int right,
+        uint8 layer,
         uint16 *c,
-        uint8  *d
+        uint8 *d
     );
 
     uint8_t priority_depth_map[4];
@@ -74,6 +74,9 @@ public:
     void render_line_main(layer layer);
 
     void render_line_sub(layer layer);
+
+private:
+    void render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
 };
 
 #endif //SNES9X_WASM_PPUX_H
