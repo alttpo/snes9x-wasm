@@ -220,7 +220,7 @@ bool wasm_host_init() {
 
     init.n_native_symbols = natives->size();
     init.native_symbols = natives->data();
-    init.native_module_name = "snes";
+    init.native_module_name = "rex";
 
     if (!wasm_runtime_full_init(&init)) {
         fprintf(stderr, "wasm_runtime_full_init failed\n");

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"main/rex"
 	"strings"
 	"time"
 )
@@ -59,27 +60,27 @@ func main() {
 
 	// read rom header:
 	var romTitle [21]byte
-	_ = ReadROM(romTitle[:], 0x7FC0)
+	_, _ = rex.ROM.ReadAt(romTitle[:], 0x7FC0)
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
 	// listen on tcp port 25600
-	listenFd := NetTCPListen(25600)
+	listenFd := rex.NetTCPListen(25600)
 	if listenFd < 0 {
 		fmt.Printf("listen: %d\n", listenFd)
 	}
-	slots := make([]NetPollSlot, 0, 8)
+	slots := make([]rex.NetPollSlot, 0, 8)
 
 	lastEvent := time.Now()
 	for {
 		// poll for net i/o non-blocking:
 		{
-			acceptedFd := NetTCPAccept(listenFd)
+			acceptedFd := rex.NetTCPAccept(listenFd)
 			if acceptedFd < 0 {
 				if acceptedFd != -35 { // EAGAIN
 					fmt.Printf("accept: error %d\n", acceptedFd)
 				}
 			} else {
-				slots = append(slots, NetPollSlot{
+				slots = append(slots, rex.NetPollSlot{
 					Slot:    acceptedFd,
 					Events:  0x0001, // POLLIN
 					Revents: 0,
@@ -92,7 +93,7 @@ func main() {
 					slots[i].Events = 0x0001
 					slots[i].Revents = 0
 				}
-				n := NetPoll(slots)
+				n := rex.NetPoll(slots)
 
 				if n < 0 {
 					fmt.Printf("poll: error %d\n", n)
@@ -102,7 +103,7 @@ func main() {
 					for i := range slots {
 						if slots[i].Revents != 0 {
 							fmt.Printf("poll: can read slot %d\n", slots[i].Slot)
-							NetRecv(slots[i].Slot, msg[:])
+							rex.NetRecv(slots[i].Slot, msg[:])
 						}
 					}
 				}
@@ -111,7 +112,7 @@ func main() {
 
 		// poll for snes events:
 		var ok bool
-		events, ok = WaitForEvents(ev_shutdown|ev_ppu_frame_end, time.Microsecond*1000)
+		events, ok = rex.WaitForEvents(ev_shutdown|ev_ppu_frame_end, time.Microsecond*1000)
 		if !ok {
 			continue
 		}
@@ -158,15 +159,15 @@ func main() {
 		}
 		// end of list:
 		cmd = append(cmd, 0b1000_0000_0000_0000_0000_0000_0000_0000)
-		PPUXWrite(cmd)
+		_ = rex.PPUX.Write(cmd)
 
-		// read half of WRAM:
-		ReadWRAM(wram[0x0:0x100], 0x0)
+		// read some WRAM:
+		_, _ = rex.WRAM.ReadAt(wram[0x0:0x100], 0x0)
 		fmt.Printf("%02x\n", wram[0x1A])
 		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 	}
 
-	NetClose(listenFd)
+	rex.NetClose(listenFd)
 
 	fmt.Println("exit")
 }
