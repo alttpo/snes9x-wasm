@@ -81,22 +81,28 @@ func main() {
 			} else {
 				slots = append(slots, NetPollSlot{
 					Slot:    acceptedFd,
-					Events:  0x01, // POLLIN
+					Events:  0x0001, // POLLIN
 					Revents: 0,
 				})
 			}
 
 			if len(slots) > 0 {
 				fmt.Printf("polling %d slots\n", len(slots))
+				for i := range slots {
+					slots[i].Events = 0x0001
+					slots[i].Revents = 0
+				}
 				n := NetPoll(slots)
+
 				if n < 0 {
 					fmt.Printf("poll: error %d\n", n)
 				} else {
+					var msg [65536]byte
 					fmt.Printf("poll: %d slots have events\n", n)
 					for i := range slots {
 						if slots[i].Revents != 0 {
 							fmt.Printf("poll: can read slot %d\n", slots[i].Slot)
-							//NetRead(slots[i].Slot)
+							NetRecv(slots[i].Slot, msg[:])
 						}
 					}
 				}

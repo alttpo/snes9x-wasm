@@ -102,15 +102,17 @@ auto net::tcp_accept(int32_t slot) -> int32_t {
 }
 
 auto net::poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t {
+    std::vector<pollfd> pollfds;
+    pollfds.reserve(poll_slots_len);
+
     // translate slots to real fds:
-    std::vector<pollfd> pollfds(poll_slots_len);
     for (int i = 0; i < poll_slots_len; i++) {
         auto ps = poll_slots[i];
         auto it = slots.find(ps.slot);
         if (it == slots.end()) {
             return -EBADF;
         }
-        pollfds.push_back({it->second, (short)ps.events, 0});
+        pollfds.push_back({it->second, (short)ps.events, (short)ps.revents});
     }
 
     auto n = ::poll(pollfds.data(), pollfds.size(), 0);
