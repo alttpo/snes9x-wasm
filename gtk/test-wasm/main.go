@@ -64,46 +64,56 @@ func main() {
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
 	// listen on tcp port 25600
-	listenFd := rex.NetTCPListen(25600)
-	if listenFd < 0 {
-		fmt.Printf("listen: %d\n", listenFd)
+	slots := make([]*rex.Socket, 1, 8)
+	var err error
+	slots[0], err = rex.TCPListen(25600)
+	if err != nil {
+		fmt.Printf("listen: %v\n", err)
 	}
-	slots := make([]rex.NetPollSlot, 0, 8)
 
 	lastEvent := time.Now()
 	for {
 		// poll for net i/o non-blocking:
-		{
-			acceptedFd := rex.NetTCPAccept(listenFd)
-			if acceptedFd < 0 {
-				if acceptedFd != -35 { // EAGAIN
-					fmt.Printf("accept: error %d\n", acceptedFd)
-				}
+		if len(slots) > 0 {
+			fmt.Printf("polling %d slots\n", len(slots))
+
+			var n int
+			pollStart := time.Now()
+			n, err = rex.NetPoll(slots)
+			pollEnd := time.Now()
+			fmt.Printf("poll took %d us\n", pollEnd.Sub(pollStart).Microseconds())
+			if err != nil {
+				fmt.Printf("poll: %v\n", err)
 			} else {
-				slots = append(slots, rex.NetPollSlot{
-					Slot:    acceptedFd,
-					Events:  0x0001, // POLLIN
-					Revents: 0,
-				})
-			}
-
-			if len(slots) > 0 {
-				fmt.Printf("polling %d slots\n", len(slots))
-				for i := range slots {
-					slots[i].Events = 0x0001
-					slots[i].Revents = 0
+				var msg [65536]byte
+				fmt.Printf("poll: %d slots have events\n", n)
+				for i := 1; i < len(slots); i++ {
+					fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[i].Slot, slots[i].Revents())
+					if slots[i].IsReadAvailable() {
+						n, err = slots[i].Read(msg[:])
+						if err != nil {
+							fmt.Printf("read: slot[%d]: %v\n", err)
+						} else {
+							slots[i].Write(msg[:n])
+						}
+					} else if slots[i].IsClosed() {
+						fmt.Printf("slot[%d]: closing\n", slots[i].Slot)
+						slots[i].Close()
+						slots = append(slots[0:i], slots[i+1:]...)
+						i--
+					}
 				}
-				n := rex.NetPoll(slots)
 
-				if n < 0 {
-					fmt.Printf("poll: error %d\n", n)
-				} else {
-					var msg [65536]byte
-					fmt.Printf("poll: %d slots have events\n", n)
-					for i := range slots {
-						if slots[i].Revents != 0 {
-							fmt.Printf("poll: can read slot %d\n", slots[i].Slot)
-							rex.NetRecv(slots[i].Slot, msg[:])
+				if len(slots) > 0 {
+					fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[0].Slot, slots[0].Revents())
+					if slots[0].IsReadAvailable() {
+						var accepted *rex.Socket
+						accepted, err = slots[0].TCPAccept()
+						if err != nil {
+							fmt.Printf("accept: %v\n", err)
+						} else {
+							fmt.Printf("accepted slot[%d]\n", accepted.Slot)
+							slots = append(slots, accepted)
 						}
 					}
 				}
@@ -167,7 +177,7 @@ func main() {
 		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
 	}
 
-	rex.NetClose(listenFd)
+	slots[0].Close()
 
 	fmt.Println("exit")
 }
