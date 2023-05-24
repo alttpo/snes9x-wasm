@@ -98,7 +98,7 @@ func (s *Socket) Read(b []byte) (n int, err error) {
 func (s *Socket) Write(b []byte) (n int, err error) {
 	res := net_send(s.Slot, &b[0], uint32(len(b)))
 	if res < 0 {
-		return 0, fmt.Errorf("error reading socket: %d", -res)
+		return 0, fmt.Errorf("error writing socket: %d", -res)
 	}
 	return int(res), nil
 }

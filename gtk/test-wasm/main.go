@@ -17,6 +17,8 @@ const (
 	ev_shutdown     = 1 << 31
 )
 
+var slots []*rex.Socket
+
 func main() {
 	var wram [0x20000]byte
 	var events uint32
@@ -64,7 +66,7 @@ func main() {
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
 	// listen on tcp port 25600
-	slots := make([]*rex.Socket, 1, 8)
+	slots = make([]*rex.Socket, 1, 8)
 	var err error
 	slots[0], err = rex.TCPListen(25600)
 	if err != nil {
@@ -73,57 +75,13 @@ func main() {
 
 	lastEvent := time.Now()
 	for {
-		// poll for net i/o non-blocking:
-		if len(slots) > 0 {
-			fmt.Printf("polling %d slots\n", len(slots))
-
-			var n int
-			pollStart := time.Now()
-			n, err = rex.NetPoll(slots)
-			pollEnd := time.Now()
-			fmt.Printf("poll took %d us\n", pollEnd.Sub(pollStart).Microseconds())
-			if err != nil {
-				fmt.Printf("poll: %v\n", err)
-			} else {
-				var msg [65536]byte
-				fmt.Printf("poll: %d slots have events\n", n)
-				for i := 1; i < len(slots); i++ {
-					fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[i].Slot, slots[i].Revents())
-					if slots[i].IsReadAvailable() {
-						n, err = slots[i].Read(msg[:])
-						if err != nil {
-							fmt.Printf("read: slot[%d]: %v\n", err)
-						} else {
-							slots[i].Write(msg[:n])
-						}
-					} else if slots[i].IsClosed() {
-						fmt.Printf("slot[%d]: closing\n", slots[i].Slot)
-						slots[i].Close()
-						slots = append(slots[0:i], slots[i+1:]...)
-						i--
-					}
-				}
-
-				if len(slots) > 0 {
-					fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[0].Slot, slots[0].Revents())
-					if slots[0].IsReadAvailable() {
-						var accepted *rex.Socket
-						accepted, err = slots[0].TCPAccept()
-						if err != nil {
-							fmt.Printf("accept: %v\n", err)
-						} else {
-							fmt.Printf("accepted slot[%d]\n", accepted.Slot)
-							slots = append(slots, accepted)
-						}
-					}
-				}
-			}
-		}
+		handleNetwork()
 
 		// poll for snes events:
 		var ok bool
 		events, ok = rex.WaitForEvents(ev_shutdown|ev_ppu_frame_end, time.Microsecond*1000)
 		if !ok {
+			fmt.Printf("wait_for_events: %d us\n", time.Now().Sub(lastEvent).Microseconds())
 			continue
 		}
 
@@ -180,4 +138,64 @@ func main() {
 	slots[0].Close()
 
 	fmt.Println("exit")
+}
+
+func handleNetwork() {
+	// poll for net i/o non-blocking:
+	if len(slots) == 0 {
+		return
+	}
+	//fmt.Printf("polling %d slots\n", len(slots))
+
+	var n int
+	var err error
+	n, err = rex.NetPoll(slots)
+	if err != nil {
+		fmt.Printf("poll: %v\n", err)
+		return
+	}
+
+	var msg [65536]byte
+	//fmt.Printf("poll: %d slots have events\n", n)
+	for i := 1; i < len(slots); i++ {
+		revents := slots[i].Revents()
+		if revents == 0 {
+			continue
+		}
+
+		fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[i].Slot, revents)
+		if slots[i].IsReadAvailable() {
+			n, err = slots[i].Read(msg[:])
+			if err != nil {
+				fmt.Printf("read: slot[%d]: %v\n", slots[i].Slot, err)
+			} else if n > 0 {
+				_, _ = slots[i].Write(msg[:n])
+			}
+		}
+		if slots[i].IsClosed() {
+			fmt.Printf("slot[%d]: closing\n", slots[i].Slot)
+			_ = slots[i].Close()
+			slots = append(slots[0:i], slots[i+1:]...)
+			i--
+		}
+	}
+
+	if len(slots) > 0 {
+		revents := slots[0].Revents()
+		if revents == 0 {
+			return
+		}
+
+		fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[0].Slot, revents)
+		if slots[0].IsReadAvailable() {
+			var accepted *rex.Socket
+			accepted, err = slots[0].TCPAccept()
+			if err != nil {
+				fmt.Printf("accept: %v\n", err)
+			} else {
+				fmt.Printf("accepted slot[%d]\n", accepted.Slot)
+				slots = append(slots, accepted)
+			}
+		}
+	}
 }
