@@ -7,6 +7,8 @@
 #ifndef _MEMMAP_H_
 #define _MEMMAP_H_
 
+#include <mutex>
+
 #define MEMMAP_BLOCK_SIZE	(0x1000)
 #define MEMMAP_NUM_BLOCKS	(0x1000000 / MEMMAP_BLOCK_SIZE)
 #define MEMMAP_SHIFT		(12)
@@ -56,6 +58,7 @@ struct CMemory
 	uint8	NSRTHeader[32];
 	int32	HeaderCount;
 
+    std::mutex  lock;
 	uint8	RAM[0x20000];
 	std::vector<uint8_t> ROMStorage;
 	uint8   *ROM;

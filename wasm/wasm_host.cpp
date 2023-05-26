@@ -53,6 +53,7 @@ bool wasm_host_init() {
             [](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
                 if (offset >= size) return false; \
                 if (offset + dest_len > size) return false; \
+                std::unique_lock<std::mutex> lk(Memory.lock); \
                 memcpy(dest, start + offset, dest_len); \
                 return true; \
             } \
@@ -62,6 +63,7 @@ bool wasm_host_init() {
             [](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
                 if (offset >= size) return false; \
                 if (offset + dest_len > size) return false; \
+                std::unique_lock<std::mutex> lk(Memory.lock); \
                 memcpy(start + offset, dest, dest_len); \
                 return true; \
             } \
