@@ -248,15 +248,18 @@ bool ppux::write_cmd(uint32_t *data, uint32_t size) {
     }
 
     // did we find the end?
-    if (endit != cmdNext.end()) {
-        // atomically copy cmdNext to cmd and clear cmdNext:
+    if (endit == cmdNext.end()) {
+        return false;
+    }
+
+    // atomically copy cmdNext to cmd and clear cmdNext:
+    {
         std::unique_lock<std::mutex> lk(cmd_m);
         cmd = cmdNext;
         cmdNext.erase(cmdNext.begin(), cmdNext.end());
-        return true;
     }
 
-    return false;
+    return true;
 }
 
 void ppux::render_cmd() {
