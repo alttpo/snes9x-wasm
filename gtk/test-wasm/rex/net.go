@@ -1,6 +1,8 @@
 package rex
 
-import "fmt"
+import (
+    "fmt"
+)
 
 type Socket struct {
 	Slot    int32

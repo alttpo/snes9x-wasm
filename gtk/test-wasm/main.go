@@ -18,6 +18,7 @@ const (
 )
 
 var slots []*rex.Socket
+var msg [65536]byte
 
 func main() {
 	var wram [0x20000]byte
@@ -81,7 +82,7 @@ func main() {
 		var ok bool
 		events, ok = rex.WaitForEvents(ev_shutdown|ev_ppu_frame_end, time.Microsecond*1000)
 		if !ok {
-			fmt.Printf("wait_for_events: %d us\n", time.Now().Sub(lastEvent).Microseconds())
+			//fmt.Printf("wait_for_events: %d us\n", time.Now().Sub(lastEvent).Microseconds())
 			continue
 		}
 
@@ -155,7 +156,6 @@ func handleNetwork() {
 		return
 	}
 
-	var msg [65536]byte
 	//fmt.Printf("poll: %d slots have events\n", n)
 	for i := 1; i < len(slots); i++ {
 		revents := slots[i].Revents()
