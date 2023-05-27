@@ -278,8 +278,8 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
 
     wasm_module_inst_t mi = wasm_runtime_instantiate(
         mod,
-        32768,
-        32768,
+        1024 * 1024 * 4,
+        1024 * 1024 * 64,
         wamrError,
         sizeof(wamrError)
     );
