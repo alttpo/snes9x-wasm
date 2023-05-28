@@ -65,6 +65,8 @@ struct ppux {
     );
 
     uint8_t priority_depth_map[4];
+    int dirty_top = 0;
+    int dirty_bottom = MAX_SNES_HEIGHT;
 
 public:
     bool write_cmd(uint32_t *data, uint32_t size);

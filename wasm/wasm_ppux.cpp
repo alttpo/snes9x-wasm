@@ -233,13 +233,21 @@ bool ppux::write_cmd(uint32_t *data, uint32_t size) {
 void ppux::render_cmd() {
     std::unique_lock<std::mutex> lk(cmd_m);
 
-    // clear all layers:
-    for (auto &layer: main) {
-        layer.assign(ppux::pitch * MAX_SNES_HEIGHT, 0);
+    if (dirty_bottom >= dirty_top) {
+        // clear all dirty lines in each layer:
+        for (auto &layer: main) {
+            std::fill_n(layer.begin() + dirty_top * ppux::pitch, (dirty_bottom - dirty_top + 1) * ppux::pitch, 0);
+            //layer.assign(ppux::pitch * MAX_SNES_HEIGHT, 0);
+        }
+        for (auto &layer: sub) {
+            std::fill_n(layer.begin() + dirty_top * ppux::pitch, (dirty_bottom - dirty_top + 1) * ppux::pitch, 0);
+            //layer.assign(ppux::pitch * MAX_SNES_HEIGHT, 0);
+        }
     }
-    for (auto &layer: sub) {
-        layer.assign(ppux::pitch * MAX_SNES_HEIGHT, 0);
-    }
+
+    // reset to clean state:
+    dirty_top = 0;
+    dirty_bottom = -1;
 
     // process draw commands:
     auto opit = cmd.begin();
@@ -323,22 +331,32 @@ void ppux::render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint
     // copy pixels in; see comment in wasm_ppux.h for uint32_t bits representation:
     auto offs = (y0 * pitch);
     std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
-    for (uint32_t x = x0; it != opit && it != cmd.end(); it++) {
+    auto y = y0;
+    bool dirty = false;
+    for (auto x = x0; it != opit && it != cmd.end(); it++) {
         auto p = *it;
         if (is_replace) {
             // replace all pixels:
             vec[offs + x] = p;
+            dirty = true;
         } else {
             // overlay: only replace pixels where PX_ENABLE is set:
             if ((p & PX_ENABLE) != 0) {
                 vec[offs + x] = p;
+                dirty = true;
             }
         }
         // wrap at width and move down a line:
         if (++x >= x1) {
             x = x0;
             offs += pitch;
+            y++;
         }
+    }
+
+    if (dirty) {
+        dirty_top = (int) y0;
+        dirty_bottom = (int) y;
     }
 }
 
