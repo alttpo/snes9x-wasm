@@ -297,7 +297,7 @@ void ppux::render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //   ---- ---o     ---- slll     ---- --ww     wwww wwww    o = per pixel, overlay = 0, replace = 1
+    //   ---o slll     ---- ----     ---- --ww     wwww wwww    o = per pixel, overlay = 0, replace = 1
     //                                                          s = main or sub screen; main=0, sub=1
     //                                                          l = PPU layer
     //                                                          w = width in pixels
@@ -307,13 +307,13 @@ void ppux::render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint
     if (width == 0) { width = 1024; }
 
     // which ppux layer to render to: (BG1..4, OBJ)
-    auto layer = (*it >> 16) & 7;
+    auto layer = (*it >> 24) & 7;
 
     // main or sub screen (main=0, sub=1):
-    auto is_sub = ((*it >> 16) >> 4) & 1;
+    auto is_sub = ((*it >> 24) >> 4) & 1;
 
     // overlay pixels (0) or overwrite pixels (1) based on PX_ENABLE flag (1<<31) per pixel:
-    auto is_replace = ((*it >> 24) & 1);
+    auto is_replace = (((*it >> 24) >> 5) & 1);
 
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
