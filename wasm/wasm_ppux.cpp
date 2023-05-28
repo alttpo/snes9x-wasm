@@ -175,38 +175,6 @@ void ppux::render_line_sub(ppux::layer layer) {
     }
 }
 
-void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart) {
-    for_each_module([=](std::shared_ptr<module> m) {
-        ppux &ppux = m->ppux;
-        ppux.priority_depth_map[0] = zstart;
-        ppux.priority_depth_map[1] = zstart + 4;
-        ppux.priority_depth_map[2] = zstart + 8;
-        ppux.priority_depth_map[3] = zstart + 12;
-
-        if (sub) {
-            ppux.render_line_sub(ppux::layer::OBJ);
-        } else {
-            ppux.render_line_main(ppux::layer::OBJ);
-        }
-    });
-}
-
-void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
-    for_each_module([=](std::shared_ptr<module> m) {
-        ppux &ppux = m->ppux;
-        ppux.priority_depth_map[0] = zl;
-        ppux.priority_depth_map[1] = zh;
-        ppux.priority_depth_map[2] = zl;
-        ppux.priority_depth_map[3] = zh;
-
-        if (sub) {
-            ppux.render_line_sub((ppux::layer) layer);
-        } else {
-            ppux.render_line_main((ppux::layer) layer);
-        }
-    });
-}
-
 bool ppux::write_cmd(uint32_t *data, uint32_t size) {
     // size is counted in uint32_t units.
 
@@ -469,4 +437,49 @@ void draw_vram_tile(
             plot(sx, sy, bgr);
         }
     }
+}
+
+void wasm_ppux_start_screen() {
+    for_each_module([=](std::shared_ptr<module> m) {
+        m->notify_events(wasm_event_kind::ev_ppu_frame_start);
+        m->ppux.render_cmd();
+    });
+}
+
+void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart) {
+    for_each_module([=](std::shared_ptr<module> m) {
+        ppux &ppux = m->ppux;
+        ppux.priority_depth_map[0] = zstart;
+        ppux.priority_depth_map[1] = zstart + 4;
+        ppux.priority_depth_map[2] = zstart + 8;
+        ppux.priority_depth_map[3] = zstart + 12;
+
+        if (sub) {
+            ppux.render_line_sub(ppux::layer::OBJ);
+        } else {
+            ppux.render_line_main(ppux::layer::OBJ);
+        }
+    });
+}
+
+void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
+    for_each_module([=](std::shared_ptr<module> m) {
+        ppux &ppux = m->ppux;
+        ppux.priority_depth_map[0] = zl;
+        ppux.priority_depth_map[1] = zh;
+        ppux.priority_depth_map[2] = zl;
+        ppux.priority_depth_map[3] = zh;
+
+        if (sub) {
+            ppux.render_line_sub((ppux::layer) layer);
+        } else {
+            ppux.render_line_main((ppux::layer) layer);
+        }
+    });
+}
+
+void wasm_ppux_end_screen() {
+    for_each_module([=](std::shared_ptr<module> m) {
+        m->notify_events(wasm_event_kind::ev_ppu_frame_end);
+    });
 }

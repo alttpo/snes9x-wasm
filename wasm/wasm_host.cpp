@@ -321,16 +321,3 @@ void wasm_host_notify_events(wasm_event_kind events) {
         m->notify_events(events);
     });
 }
-
-void wasm_ppux_start_screen() {
-    for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_events(wasm_event_kind::ev_ppu_frame_start);
-        m->ppux.render_cmd();
-    });
-}
-
-void wasm_ppux_end_screen() {
-    for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_events(wasm_event_kind::ev_ppu_frame_end);
-    });
-}
