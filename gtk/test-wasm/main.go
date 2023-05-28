@@ -18,7 +18,6 @@ const (
 )
 
 var slots []*rex.Socket
-var msg [65536]byte
 
 func main() {
 	var wram [0x20000]byte
@@ -165,6 +164,7 @@ func handleNetwork() {
 
 		fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[i].Slot, revents)
 		if slots[i].IsReadAvailable() {
+			var msg [65536]byte
 			n, err = slots[i].Read(msg[:])
 			if err != nil {
 				fmt.Printf("read: slot[%d]: %v\n", slots[i].Slot, err)
