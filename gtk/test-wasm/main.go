@@ -8,13 +8,11 @@ import (
 )
 
 const (
-	ev_snes_nmi = 1 << iota
-	ev_snes_irq
-	ev_ppu_frame_start
-	ev_ppu_frame_end
-
-	ev_msg_received = 1 << 30
-	ev_shutdown     = 1 << 31
+	ev_shutdown        = 1 << 0
+	ev_snes_nmi        = 1 << 1
+	ev_snes_irq        = 1 << 2
+	ev_ppu_frame_start = 1 << 3
+	ev_ppu_frame_end   = 1 << 4
 )
 
 var slots []*rex.Socket
@@ -73,7 +71,8 @@ func main() {
 		fmt.Printf("listen: %v\n", err)
 	}
 
-	lastEvent := time.Now()
+	//lastEvent := time.Now()
+	lastFrame := uint8(0)
 	for {
 		handleNetwork()
 
@@ -85,9 +84,9 @@ func main() {
 			continue
 		}
 
-		nd := time.Now()
-		fmt.Printf("event(%032b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
-		lastEvent = nd
+		//nd := time.Now()
+		//fmt.Printf("event(%032b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
+		//lastEvent = nd
 
 		// graceful exit condition:
 		if events&ev_shutdown != 0 {
@@ -131,8 +130,11 @@ func main() {
 
 		// read some WRAM:
 		_, _ = rex.WRAM.ReadAt(wram[0x0:0x100], 0x0)
-		fmt.Printf("%02x\n", wram[0x1A])
-		//fmt.Printf("wram[$10] = %02x\n", wram[0x10])
+		currFrame := wram[0x1A]
+		if uint8(currFrame-lastFrame) >= 2 {
+			fmt.Printf("%02x -> %02x\n", lastFrame, currFrame)
+		}
+		lastFrame = wram[0x1A]
 	}
 
 	slots[0].Close()

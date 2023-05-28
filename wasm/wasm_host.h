@@ -6,12 +6,11 @@
 enum wasm_event_kind : uint32_t {
     ev_none = 0UL,
 
+    ev_shutdown = (1UL << 0),
     ev_snes_nmi = (1UL << 1),
     ev_snes_irq = (1UL << 2),
     ev_ppu_frame_start = (1UL << 3),
     ev_ppu_frame_end = (1UL << 4),
-
-    ev_shutdown = (1UL << 31),
 };
 
 bool wasm_host_init();
