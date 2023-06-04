@@ -50,11 +50,11 @@ void ppux::lines_math_main(
 }
 
 void ppux::lines_sub(
-    int    left,
-    int    right,
-    uint8  layer,
+    int left,
+    int right,
+    uint8 layer,
     uint16 *c,
-    uint8  *d
+    uint8 *d
 ) {
     uint32_t *xp = sub[layer].data() + (GFX.StartY * pitch);
     for (uint32 l = GFX.StartY; l <= GFX.EndY; l++,
@@ -194,7 +194,8 @@ bool ppux::write_cmd(uint32_t *data, uint32_t size) {
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
             // MSB must be 1 to indicate opcode/size start of frame:
-            fprintf(stderr, "enqueued cmd list malformed at index %ld; opcode must have MSB set\n", it - cmdNext.begin());
+            fprintf(stderr, "enqueued cmd list malformed at index %ld; opcode must have MSB set\n",
+                it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
             return false;
         }
@@ -246,7 +247,7 @@ void ppux::render_cmd() {
     }
 
     // reset to clean state:
-    dirty_top = 0;
+    dirty_top = MAX_SNES_HEIGHT;
     dirty_bottom = -1;
 
     // process draw commands:
@@ -283,9 +284,11 @@ void ppux::render_cmd() {
             opit = cmd.end();
         }
 
-        if (o == 1) {
-            render_box_16bpp(it, opit);
+        // execute opcode handler if in range:
+        if (o >= sizeof(opcode_handlers) / sizeof(opcode_handlers[0])) {
+            continue;
         }
+        std::invoke(opcode_handlers[o], this, it, opit);
     }
 }
 
@@ -355,8 +358,12 @@ void ppux::render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint
     }
 
     if (dirty) {
-        dirty_top = (int) y0;
-        dirty_bottom = (int) y;
+        if (dirty_top > (int) y0) {
+            dirty_top = (int) y0;
+        }
+        if (dirty_bottom < (int) y) {
+            dirty_bottom = (int) y;
+        }
     }
 }
 
@@ -366,12 +373,12 @@ void draw_vram_tile(
     int w, int h,
 
     uint16_t vram_addr,
-    uint8_t  palette,
+    uint8_t palette,
 
-    uint8_t* vram,
-    uint8_t* cgram,
+    uint8_t *vram,
+    uint8_t *cgram,
 
-    PLOT& plot
+    PLOT &plot
 ) {
     // draw tile:
     unsigned sy = y0;
@@ -381,14 +388,14 @@ void draw_vram_tile(
         unsigned sx = x0;
         unsigned y = !vflip ? (ty) : (h - 1 - ty);
 
-        for(int tx = 0; tx < w; tx++, sx++) {
+        for (int tx = 0; tx < w; tx++, sx++) {
             sx &= 511;
-            if(sx >= 256) continue;
+            if (sx >= 256) continue;
 
             unsigned x = (!hflip ? tx : (w - 1 - tx));
 
             uint8_t col, d0, d1, d2, d3, d4, d5, d6, d7;
-            uint8_t mask = 1 << (7-(x&7));
+            uint8_t mask = 1 << (7 - (x & 7));
             uint8_t *tile_ptr = vram + vram_addr;
 
             switch (bpp) {
@@ -397,9 +404,9 @@ void draw_vram_tile(
                     tile_ptr += ((x >> 3) << 4);
                     tile_ptr += ((y >> 3) << 8);
                     tile_ptr += (y & 7) << 1;
-                    d0 = *(tile_ptr    );
+                    d0 = *(tile_ptr);
                     d1 = *(tile_ptr + 1);
-                    col  = !!(d0 & mask) << 0;
+                    col = !!(d0 & mask) << 0;
                     col += !!(d1 & mask) << 1;
                     break;
                 case 4:
@@ -407,11 +414,11 @@ void draw_vram_tile(
                     tile_ptr += ((x >> 3) << 5);
                     tile_ptr += ((y >> 3) << 9);
                     tile_ptr += (y & 7) << 1;
-                    d0 = *(tile_ptr     );
-                    d1 = *(tile_ptr +  1);
+                    d0 = *(tile_ptr);
+                    d1 = *(tile_ptr + 1);
                     d2 = *(tile_ptr + 16);
                     d3 = *(tile_ptr + 17);
-                    col  = !!(d0 & mask) << 0;
+                    col = !!(d0 & mask) << 0;
                     col += !!(d1 & mask) << 1;
                     col += !!(d2 & mask) << 2;
                     col += !!(d3 & mask) << 3;
@@ -421,15 +428,15 @@ void draw_vram_tile(
                     tile_ptr += ((x >> 3) << 6);
                     tile_ptr += ((y >> 3) << 10);
                     tile_ptr += (y & 7) << 1;
-                    d0 = *(tile_ptr     );
-                    d1 = *(tile_ptr +  1);
+                    d0 = *(tile_ptr);
+                    d1 = *(tile_ptr + 1);
                     d2 = *(tile_ptr + 16);
                     d3 = *(tile_ptr + 17);
                     d4 = *(tile_ptr + 32);
                     d5 = *(tile_ptr + 33);
                     d6 = *(tile_ptr + 48);
                     d7 = *(tile_ptr + 49);
-                    col  = !!(d0 & mask) << 0;
+                    col = !!(d0 & mask) << 0;
                     col += !!(d1 & mask) << 1;
                     col += !!(d2 & mask) << 2;
                     col += !!(d3 & mask) << 3;
@@ -450,7 +457,7 @@ void draw_vram_tile(
             col += palette;
 
             // look up color in cgram:
-            uint16_t bgr = *(cgram + (col<<1)) + (*(cgram + (col<<1) + 1) << 8);
+            uint16_t bgr = *(cgram + (col << 1)) + (*(cgram + (col << 1) + 1) << 8);
 
             plot(sx, sy, bgr);
         }

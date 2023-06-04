@@ -79,6 +79,13 @@ public:
 
 private:
     void render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
+
+    typedef void (ppux::*opcode_handler)(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
+
+    opcode_handler opcode_handlers[2] = {
+        nullptr,
+        &ppux::render_box_16bpp,
+    };
 };
 
 #endif //SNES9X_WASM_PPUX_H
