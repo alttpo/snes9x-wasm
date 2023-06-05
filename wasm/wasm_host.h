@@ -11,6 +11,7 @@ enum wasm_event_kind : uint32_t {
     ev_snes_irq,
     ev_ppu_frame_start,
     ev_ppu_frame_end,
+    ev_ppu_frame_skip,
 };
 
 bool wasm_host_init();
@@ -23,7 +24,8 @@ void wasm_host_notify_events(wasm_event_kind events);
 void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart);
 void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl);
 
-void wasm_ppux_start_screen();
-void wasm_ppux_end_screen();
+void wasm_host_frame_start();
+void wasm_host_frame_end();
+void wasm_host_frame_skip();
 
 #endif //SNES9X_WASM_HOST_H

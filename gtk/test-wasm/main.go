@@ -14,6 +14,7 @@ const (
 	ev_snes_irq
 	ev_ppu_frame_start
 	ev_ppu_frame_end
+	ev_ppu_frame_skip
 )
 
 var slots []*rex.Socket
@@ -94,7 +95,20 @@ func main() {
 			break
 		}
 
-		if event != ev_ppu_frame_end {
+		if event == ev_ppu_frame_skip {
+			// read some WRAM:
+			_, _ = rex.WRAM.ReadAt(wram[0x0:0x100], 0x0)
+			rex.AcknowledgeLastEvent()
+
+			currFrame := wram[0x1A]
+			if uint8(currFrame-lastFrame) >= 2 {
+				fmt.Printf("%02x -> %02x\n", lastFrame, currFrame)
+			}
+			lastFrame = wram[0x1A]
+			continue
+		}
+
+		if event != ev_ppu_frame_start {
 			rex.AcknowledgeLastEvent()
 			//fmt.Printf("events timeout: %d us\n", nd.Sub(st).Microseconds())
 			continue

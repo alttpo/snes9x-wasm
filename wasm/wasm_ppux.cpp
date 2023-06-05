@@ -464,7 +464,7 @@ void draw_vram_tile(
     }
 }
 
-void wasm_ppux_start_screen() {
+void wasm_host_frame_start() {
     for_each_module([=](std::shared_ptr<module> m) {
         m->notify_event(wasm_event_kind::ev_ppu_frame_start);
         m->ppux.render_cmd();
@@ -503,8 +503,14 @@ void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
     });
 }
 
-void wasm_ppux_end_screen() {
+void wasm_host_frame_end() {
     for_each_module([=](std::shared_ptr<module> m) {
         m->notify_event(wasm_event_kind::ev_ppu_frame_end);
+    });
+}
+
+void wasm_host_frame_skip() {
+    for_each_module([=](std::shared_ptr<module> m) {
+        m->notify_event(wasm_event_kind::ev_ppu_frame_skip);
     });
 }
