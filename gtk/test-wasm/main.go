@@ -8,18 +8,19 @@ import (
 )
 
 const (
-	ev_shutdown        = 1 << 0
-	ev_snes_nmi        = 1 << 1
-	ev_snes_irq        = 1 << 2
-	ev_ppu_frame_start = 1 << 3
-	ev_ppu_frame_end   = 1 << 4
+	ev_none = iota
+	ev_shutdown
+	ev_snes_nmi
+	ev_snes_irq
+	ev_ppu_frame_start
+	ev_ppu_frame_end
 )
 
 var slots []*rex.Socket
 
 func main() {
 	var wram [0x20000]byte
-	var events uint32
+	var event uint32
 
 	// each pixel is represented by a 4-byte little-endian uint32:
 	//   MSB                                             LSB
@@ -78,9 +79,9 @@ func main() {
 
 		// poll for snes events:
 		var ok bool
-		events, ok = rex.WaitForEvents(ev_shutdown|ev_ppu_frame_end, time.Microsecond*1000)
+		event, ok = rex.WaitForEvent(time.Microsecond * 1000)
 		if !ok {
-			//fmt.Printf("wait_for_events: %d us\n", time.Now().Sub(lastEvent).Microseconds())
+			//fmt.Printf("wait_for_event: %d us\n", time.Now().Sub(lastEvent).Microseconds())
 			continue
 		}
 
@@ -89,11 +90,12 @@ func main() {
 		//lastEvent = nd
 
 		// graceful exit condition:
-		if events&ev_shutdown != 0 {
+		if event == ev_shutdown {
 			break
 		}
 
-		if events&ev_ppu_frame_end == 0 {
+		if event != ev_ppu_frame_end {
+			rex.AcknowledgeLastEvent()
 			//fmt.Printf("events timeout: %d us\n", nd.Sub(st).Microseconds())
 			continue
 		}
@@ -135,6 +137,9 @@ func main() {
 			fmt.Printf("%02x -> %02x\n", lastFrame, currFrame)
 		}
 		lastFrame = wram[0x1A]
+
+		// unblock emulator:
+		rex.AcknowledgeLastEvent()
 	}
 
 	slots[0].Close()

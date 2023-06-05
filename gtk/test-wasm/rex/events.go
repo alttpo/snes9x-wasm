@@ -3,10 +3,23 @@ package rex
 import "time"
 
 //go:wasm-module rex
-//export wait_for_events
-func wait_for_events(mask uint32, timeout_usec uint32, o_events *uint32) bool
+//export wait_for_event
+func wait_for_event(timeout_usec uint32, o_event *uint32) bool
 
-func WaitForEvents(mask uint32, timeout time.Duration) (events uint32, ok bool) {
-	ok = wait_for_events(mask, uint32(timeout.Microseconds()), &events)
+// Acknowledge the last event to unblock the emulator.
+//
+//go:wasm-module rex
+//export ack_last_event
+func ack_last_event()
+
+// WaitForEvent blocks the wasm thread for timeout_usec microseconds until an
+// emulator event occurs. The emulator is then blocked until AcknowledgeLastEvent
+// is called.
+func WaitForEvent(timeout time.Duration) (event uint32, ok bool) {
+	ok = wait_for_event(uint32(timeout.Microseconds()), &event)
 	return
+}
+
+func AcknowledgeLastEvent() {
+	ack_last_event()
 }

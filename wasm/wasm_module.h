@@ -39,20 +39,23 @@ public:
 public:
 
 public:
-    bool wait_for_events(uint32_t mask, uint32_t timeout_usec, uint32_t &o_events);
+    bool wait_for_event(uint32_t timeout_usec, uint32_t &o_event);
 
-    void notify_events(uint32_t events_p);
+    void ack_last_event();
+
+    void notify_event(uint32_t event_p);
 
 private:
     wasm_module_t mod;
     wasm_module_inst_t module_inst;
     wasm_exec_env_t exec_env;
 
-    std::mutex events_cv_mtx;
-    std::condition_variable events_cv;
+    std::mutex event_mtx;
+    std::condition_variable event_notify_cv;
+    std::condition_variable event_ack_cv;
 
-    uint32_t events = wasm_event_kind::ev_none;
-    bool events_changed = false;
+    uint32_t event = wasm_event_kind::ev_none;
+    bool event_triggered = false;
 
 public:
     ppux ppux;

@@ -51,16 +51,27 @@ bool wasm_host_init() {
     // event subsystem (wait for irq, nmi, ppu frame start/end, shutdown, etc.):
     {
         natives->push_back({
-            "wait_for_events",
-            (void *) (int32_t (*)(wasm_exec_env_t, uint32_t, uint32_t, uint32_t *)) (
+            "wait_for_event",
+            (void *) (int32_t (*)(wasm_exec_env_t, uint32_t, uint32_t *)) (
                 [](wasm_exec_env_t exec_env,
-                   uint32_t mask, uint32_t timeout_usec, uint32_t *o_events
+                   uint32_t timeout_usec, uint32_t *o_events
                 ) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("wait_for_events", m->wait_for_events(mask, timeout_usec, *o_events));
+                    MEASURE_TIMING_RETURN("wait_for_event", m->wait_for_event(timeout_usec, *o_events));
                 }
             ),
-            "(ii*)i",
+            "(i*)i",
+            nullptr
+        });
+        natives->push_back({
+            "ack_last_event",
+            (void *) (void (*)(wasm_exec_env_t)) (
+                [](wasm_exec_env_t exec_env) -> void {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_DO("ack_last_event", m->ack_last_event());
+                }
+            ),
+            "()",
             nullptr
         });
     }
@@ -251,7 +262,7 @@ bool wasm_host_init() {
 
 void module_shutdown(std::shared_ptr<module> &m) {
     // notify module for termination:
-    m->notify_events(wasm_event_kind::ev_shutdown);
+    m->notify_event(wasm_event_kind::ev_shutdown);
     // TODO: allow a grace period and then forcefully shut down with m->cancel_thread()
     m.reset();
 }
@@ -318,6 +329,6 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
 
 void wasm_host_notify_events(wasm_event_kind events) {
     for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_events(events);
+        m->notify_event(events);
     });
 }

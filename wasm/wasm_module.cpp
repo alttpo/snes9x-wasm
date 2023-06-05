@@ -94,38 +94,55 @@ void module::thread_main() {
         "_main, __main_argc_argv) failed"
     );
 #endif
-fail:
+    fail:
     fprintf(stderr, "wasm exception: %s\n", wasm_runtime_get_exception(module_inst));
     return;
 
-exec_main:
+    exec_main:
     if (!wasm_runtime_call_wasm(exec_env, func, 0, nullptr)) {
         goto fail;
     }
 }
 
-bool module::wait_for_events(uint32_t mask, uint32_t timeout_usec, uint32_t &o_events) {
-    std::unique_lock<std::mutex> lk(events_cv_mtx);
-    if (events_cv.wait_for(
+bool module::wait_for_event(uint32_t timeout_usec, uint32_t &o_event) {
+    std::unique_lock<std::mutex> lk(event_mtx);
+    if (event_notify_cv.wait_for(
         lk,
         std::chrono::microseconds(timeout_usec),
-        [this]() { return events_changed; }
+        [this]() { return event_triggered; }
     )) {
-        events_changed = false;
-        o_events = events & mask;
-        // clear event signals according to the mask:
-        events &= ~mask;
+        event_triggered = false;
+        o_event = event;
         return true;
     }
 
     return false;
 }
 
-void module::notify_events(uint32_t events_p) {
+void module::ack_last_event() {
     {
-        std::unique_lock<std::mutex> lk(events_cv_mtx);
-        events |= events_p;
-        events_changed = true;
+        std::unique_lock<std::mutex> lk(event_mtx);
+        event = 0;
+        event_triggered = false;
     }
-    events_cv.notify_one();
+    event_ack_cv.notify_one();
+}
+
+void module::notify_event(uint32_t event_p) {
+    {
+        std::unique_lock<std::mutex> lk(event_mtx);
+        event = event_p;
+        event_triggered = true;
+    }
+    event_notify_cv.notify_one();
+
+    // wait for ack_last_event call:
+    {
+        std::unique_lock<std::mutex> lk(event_mtx);
+        event_ack_cv.wait_for(
+            lk,
+            std::chrono::microseconds(4000),
+            [this]() { return !event_triggered; }
+        );
+    }
 }

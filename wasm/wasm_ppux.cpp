@@ -466,7 +466,7 @@ void draw_vram_tile(
 
 void wasm_ppux_start_screen() {
     for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_events(wasm_event_kind::ev_ppu_frame_start);
+        m->notify_event(wasm_event_kind::ev_ppu_frame_start);
         m->ppux.render_cmd();
     });
 }
@@ -505,6 +505,6 @@ void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
 
 void wasm_ppux_end_screen() {
     for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_events(wasm_event_kind::ev_ppu_frame_end);
+        m->notify_event(wasm_event_kind::ev_ppu_frame_end);
     });
 }
