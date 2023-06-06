@@ -12,7 +12,6 @@
 #include "wasm_module.h"
 
 // snes9x:
-#include "snes9x.h"
 #include "memmap.h"
 
 std::vector<std::shared_ptr<module>> modules;
@@ -52,7 +51,7 @@ bool wasm_host_init() {
     {
         natives->push_back({
             "wait_for_event",
-            (void *) (int32_t (*)(wasm_exec_env_t, uint32_t, uint32_t *)) (
+            (void *) + (
                 [](wasm_exec_env_t exec_env,
                    uint32_t timeout_usec, uint32_t *o_events
                 ) -> int32_t {
@@ -65,7 +64,7 @@ bool wasm_host_init() {
         });
         natives->push_back({
             "ack_last_event",
-            (void *) (void (*)(wasm_exec_env_t)) (
+            (void *) + (
                 [](wasm_exec_env_t exec_env) -> void {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
                     MEASURE_TIMING_DO("ack_last_event", m->ack_last_event());
@@ -79,7 +78,7 @@ bool wasm_host_init() {
     // memory access:
     {
 #define FUNC_READ(start, size) \
-        (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) ( \
+        (void *) + ( \
             [](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
                 if (offset >= size) return false; \
                 if (offset + dest_len > size) return false; \
@@ -88,7 +87,7 @@ bool wasm_host_init() {
             } \
         )
 #define FUNC_WRITE(start, size) \
-        (void *) (int32_t (*)(wasm_exec_env_t, uint8_t *, uint32_t, uint32_t)) ( \
+        (void *) + ( \
             [](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
                 if (offset >= size) return false; \
                 if (offset + dest_len > size) return false; \
@@ -147,7 +146,7 @@ bool wasm_host_init() {
     {
         natives->push_back({
             "ppux_write",
-            (void *) (int32_t (*)(wasm_exec_env_t, uint32_t *, uint32_t)) (
+            (void *) + (
                 [](wasm_exec_env_t exec_env,
                    uint32_t *data, uint32_t size
                 ) -> int32_t {
@@ -165,7 +164,7 @@ bool wasm_host_init() {
         // net_tcp_listen(uint32_t port) -> int32_t
         natives->push_back({
             "net_tcp_listen",
-            (void *) (int32_t (*)(wasm_exec_env_t, uint32_t)) (
+            (void *) + (
                 [](wasm_exec_env_t exec_env,
                    uint32_t port
                 ) -> int32_t {
@@ -179,7 +178,7 @@ bool wasm_host_init() {
         // net_tcp_accept(int32_t fd) -> int32_t
         natives->push_back({
             "net_tcp_accept",
-            (void *) (int32_t (*)(wasm_exec_env_t, int32_t)) (
+            (void *) + (
                 [](wasm_exec_env_t exec_env,
                    int32_t fd
                 ) -> int32_t {
@@ -193,7 +192,7 @@ bool wasm_host_init() {
         // net_poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t
         natives->push_back({
             "net_poll",
-            (void *) (int32_t (*)(wasm_exec_env_t, net_poll_slot *fds, uint32_t fds_len)) (
+            (void *) + (
                 [](wasm_exec_env_t exec_env,
                    net_poll_slot *poll_slots, uint32_t poll_slots_len
                 ) -> int32_t {
@@ -207,7 +206,7 @@ bool wasm_host_init() {
         // net_send(int32_t fd, uint8_t *data, uint32_t data_len) -> int32_t
         natives->push_back({
             "net_send",
-            (void *) (int32_t (*)(wasm_exec_env_t, int32_t, uint8_t *data, uint32_t len)) (
+            (void *) + (
                 [](wasm_exec_env_t exec_env,
                    int32_t fd, uint8_t *data, uint32_t len
                 ) -> int32_t {
@@ -221,7 +220,7 @@ bool wasm_host_init() {
         // net_recv(int32_t fd, uint8_t *data, uint32_t data_len) -> int32_t
         natives->push_back({
             "net_recv",
-            (void *) (int32_t (*)(wasm_exec_env_t, int32_t, uint8_t *data, uint32_t len)) (
+            (void *) + (
                 [](wasm_exec_env_t exec_env,
                    int32_t fd, uint8_t *data, uint32_t len
                 ) -> int32_t {
@@ -235,7 +234,7 @@ bool wasm_host_init() {
         // net_close(int32_t fd) -> int32_t
         natives->push_back({
             "net_close",
-            (void *) (int32_t (*)(wasm_exec_env_t, int32_t)) (
+            (void *) + (
                 [](wasm_exec_env_t exec_env,
                    int32_t fd
                 ) -> int32_t {

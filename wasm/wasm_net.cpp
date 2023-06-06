@@ -1,36 +1,36 @@
 
-#include <vector>
-#include "wasm_net.h"
-
 #ifdef __WIN32__
-#  include <winsock.h>
+#  include <winsock2.h>
 #  include <process.h>
-
-#  define ioctl ioctlsocket
-#  define close(h) if(h){closesocket(h);}
-#  define read(a,b,c) recv(a, b, c, 0)
-#  define write(a,b,c) send(a, b, c, 0)
 #else
 #  include <unistd.h>
 #  include <sys/types.h>
 
 #  include <arpa/inet.h>
-#include <sys/fcntl.h>
-#include <netinet/tcp.h>
-#include <sys/poll.h>
+#  include <sys/fcntl.h>
+#  include <netinet/tcp.h>
+#  include <sys/poll.h>
 
 #  ifdef __SVR4
 #    include <sys/stropts.h>
 #  endif
 #endif
 
+#include "wasm_net.h"
+
+#include <vector>
+
 net::~net() {
     for (auto &slot: slots) {
+#ifdef __WIN32__
+        ::closesocket(slot.second);
+#else
         ::close(slot.second);
+#endif
     }
 }
 
-auto net::allocate_slot(int fd) -> int32_t {
+auto net::allocate_slot(native_socket fd) -> int32_t {
     auto slot = free_slot++;
     slots.insert_or_assign(slot, fd);
     return slot;
@@ -44,7 +44,7 @@ auto net::tcp_listen(uint32_t port) -> int32_t {
     }
 
 #ifdef __WIN32__
-    int flags = 1;
+    unsigned long flags = 1;
     int res = ioctlsocket(fd, FIONBIO, &flags);
     if (res != NO_ERROR) {
         return -res;
@@ -60,7 +60,11 @@ auto net::tcp_listen(uint32_t port) -> int32_t {
 
     // set TCP_NODELAY:
     flags = 1;
+#ifdef __WIN32__
+    if (setsockopt(fd, SOL_SOCKET, TCP_NODELAY, (const char *)&flags, sizeof(flags)) < 0) {
+#else
     if (setsockopt(fd, SOL_SOCKET, TCP_NODELAY, (void *)&flags, sizeof(flags)) < 0) {
+#endif
         // TODO: translate to wasi error?
         return -errno;
     }
@@ -102,7 +106,11 @@ auto net::tcp_accept(int32_t slot) -> int32_t {
 }
 
 auto net::poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t {
+#ifdef __WIN32__
+    std::vector<WSAPOLLFD> pollfds;
+#else
     std::vector<pollfd> pollfds;
+#endif
     pollfds.reserve(poll_slots_len);
 
     // translate slots to real fds:
@@ -115,7 +123,11 @@ auto net::poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t {
         pollfds.push_back({it->second, (short)ps.events, (short)ps.revents});
     }
 
+#ifdef __WIN32__
+    auto n = ::WSAPoll(pollfds.data(), pollfds.size(), 0);
+#else
     auto n = ::poll(pollfds.data(), pollfds.size(), 0);
+#endif
     if (n < 0) {
         return -errno;
     }
@@ -134,7 +146,11 @@ auto net::send(int32_t slot, uint8_t *data, uint32_t len) -> int32_t {
     }
 
     auto fd = it->second;
+#ifdef __WIN32__
+    auto n = ::send(fd, (const char *)data, len, 0);
+#else
     auto n = ::send(fd, data, len, 0);
+#endif
     if (n < 0) {
         return -errno;
     }
@@ -149,7 +165,11 @@ auto net::recv(int32_t slot, uint8_t *data, uint32_t len) -> int32_t {
     }
 
     auto fd = it->second;
+#ifdef __WIN32__
+    auto n = ::recv(fd, (char*)data, len, 0);
+#else
     auto n = ::recv(fd, data, len, 0);
+#endif
     if (n < 0) {
         return -errno;
     }
@@ -165,7 +185,12 @@ auto net::close(int32_t slot) -> int32_t {
 
     auto fd = it->second;
     slots.erase(it);
-    if (::close(fd) < 0) {
+#ifdef __WIN32__
+    auto n = ::closesocket(fd);
+#else
+    auto n = ::close(fd);
+#endif
+    if (n < 0) {
         return -errno;
     }
 

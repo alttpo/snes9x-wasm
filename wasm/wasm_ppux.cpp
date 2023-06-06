@@ -5,6 +5,7 @@
 #include "snes9x.h"
 #include "gfx.h"
 #include "tileimpl.h"
+#include <cassert>
 
 ppux::ppux() {
     // initialize ppux layers:
@@ -194,7 +195,7 @@ bool ppux::write_cmd(uint32_t *data, uint32_t size) {
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
             // MSB must be 1 to indicate opcode/size start of frame:
-            fprintf(stderr, "enqueued cmd list malformed at index %ld; opcode must have MSB set\n",
+            fprintf(stderr, "enqueued cmd list malformed at index %lld; opcode must have MSB set\n",
                 it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
             return false;
@@ -264,7 +265,7 @@ void ppux::render_cmd() {
         //   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
-            fprintf(stderr, "cmd list malformed at index %ld; opcode must have MSB set\n", it - cmd.begin());
+            fprintf(stderr, "cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.begin());
             cmd.erase(cmd.begin(), cmd.end());
             return;
         }

@@ -2,7 +2,7 @@
 #include <utility>
 
 #include "wasm_module.h"
-#include "thread_manager.h"
+//#include "thread_manager.h"
 #include "memmap.h"
 
 module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p)
@@ -51,7 +51,7 @@ void module::start_thread() {
 }
 
 void module::cancel_thread() {
-    wasm_cluster_cancel_thread(exec_env);
+    //wasm_cluster_cancel_thread(exec_env);
 }
 
 void module::thread_main() {
