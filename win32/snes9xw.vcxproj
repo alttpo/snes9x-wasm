@@ -118,7 +118,7 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\;$(ProjectDir)..\..\;$(ProjectDir)zlib\src;$(ProjectDir)..\unzip;$(ProjectDir)libpng\src;$(ProjectDir)..\apu\bapu;$(ProjectDir)..\external\glslang;$(ProjectDir)..\external\stb;$(ProjectDir)..\external\vulkan-headers\include;$(ProjectDir)..\external\VulkanMemoryAllocator-Hpp\include;$(ProjectDir)..\external\fmt\include;$(ProjectDir)..\wasm;$(ProjectDir)..\external\wamr\core\iwasm\include;$(ProjectDir)..\external\wamr\core\iwasm\libraries\thread-mgr</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_DEBUG;USE_WASM;WASM_RUNTIME=WAMR;ALLOW_CPU_OVERCLOCK;HAVE_LIBPNG;JMA_SUPPORT;ZLIB;UNZIP_SUPPORT;__WIN32__;NETPLAY_SUPPORT;D3D_DEBUG_INFO;DIRECTDRAW_SUPPORT;USE_SLANG;%(PreprocessorDefinitions);VK_USE_PLATFORM_WIN32_KHR;VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1;VMA_DYNAMIC_VULKAN_FUNCTIONS=1;VMA_STATIC_VULKAN_FUNCTIONS=0;VMA_USE_STL_SHARED_MUTEX=0</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;USE_WASM;ALLOW_CPU_OVERCLOCK;HAVE_LIBPNG;JMA_SUPPORT;ZLIB;UNZIP_SUPPORT;__WIN32__;NETPLAY_SUPPORT;D3D_DEBUG_INFO;DIRECTDRAW_SUPPORT;USE_SLANG;%(PreprocessorDefinitions);VK_USE_PLATFORM_WIN32_KHR;VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1;VMA_DYNAMIC_VULKAN_FUNCTIONS=1;VMA_STATIC_VULKAN_FUNCTIONS=0;VMA_USE_STL_SHARED_MUTEX=0</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <StructMemberAlignment>Default</StructMemberAlignment>
       <PrecompiledHeader />
@@ -170,7 +170,7 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\;$(ProjectDir)..\..\;$(ProjectDir)zlib\src;$(ProjectDir)..\unzip;$(ProjectDir)libpng\src;$(ProjectDir)..\apu\bapu;$(ProjectDir)..\external\glslang;$(ProjectDir)..\external\stb;$(ProjectDir)..\external\vulkan-headers\include;$(ProjectDir)..\external\VulkanMemoryAllocator-Hpp\include;$(ProjectDir)..\external\fmt\include;$(ProjectDir)..\wasm;$(ProjectDir)..\external\wamr\core\iwasm\include;$(ProjectDir)..\external\wamr\core\iwasm\libraries\thread-mgr</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_DEBUG;USE_WASM;WASM_RUNTIME=WAMR;ALLOW_CPU_OVERCLOCK;HAVE_LIBPNG;JMA_SUPPORT;ZLIB;UNZIP_SUPPORT;__WIN32__;NETPLAY_SUPPORT;D3D_DEBUG_INFO;DIRECTDRAW_SUPPORT;USE_SLANG;%(PreprocessorDefinitions);VK_USE_PLATFORM_WIN32_KHR;VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1;VMA_DYNAMIC_VULKAN_FUNCTIONS=1;VMA_STATIC_VULKAN_FUNCTIONS=0;VMA_USE_STL_SHARED_MUTEX=0</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;USE_WASM;ALLOW_CPU_OVERCLOCK;HAVE_LIBPNG;JMA_SUPPORT;ZLIB;UNZIP_SUPPORT;__WIN32__;NETPLAY_SUPPORT;D3D_DEBUG_INFO;DIRECTDRAW_SUPPORT;USE_SLANG;%(PreprocessorDefinitions);VK_USE_PLATFORM_WIN32_KHR;VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1;VMA_DYNAMIC_VULKAN_FUNCTIONS=1;VMA_STATIC_VULKAN_FUNCTIONS=0;VMA_USE_STL_SHARED_MUTEX=0</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <StructMemberAlignment>Default</StructMemberAlignment>
       <PrecompiledHeader />

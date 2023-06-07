@@ -256,7 +256,7 @@ if(USE_WAMR)
     #set (WAMR_BUILD_JIT 1) # need LLVM
     #set (WAMR_BUILD_AOT 1)
     set (WAMR_BUILD_LIBC_BUILTIN 1)
-    set (WAMR_BUILD_LIBC_WASI 1)
+    #set (WAMR_BUILD_LIBC_WASI 1)
     set (WAMR_BUILD_SIMD 1)
     set (WAMR_BUILD_THREAD_MGR 1)
     #set (WAMR_BUILD_LIB_WASI_THREADS 1)
@@ -267,7 +267,6 @@ if(USE_WAMR)
     list (APPEND LIBS vmlib)
 
     list (APPEND DEFINES USE_WASM)
-    list (APPEND DEFINES WASM_RUNTIME=WAMR)
 
     list(APPEND INCLUDES ../wasm)
     list(APPEND SOURCES
