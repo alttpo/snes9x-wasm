@@ -41,7 +41,7 @@ add_compile_definitions(HAVE_LIBPNG
                         DATADIR=\"${DATADIR}\"
                         SNES9XLOCALEDIR=\"${LOCALEDIR}\")
 set(INCLUDES ../apu/bapu ../ src)
-set(SOURCES)
+set(SOURCES ../wasm/wasi_impl.cpp ../wasm/wasi_impl.h)
 set(ARGS -Wall -Wno-unused-parameter)
 set(LIBS)
 SET(LINKARGS)
@@ -271,6 +271,7 @@ if(USE_WAMR)
     list(APPEND INCLUDES ../wasm)
     list(APPEND SOURCES
             ../wasm/wasm_host.cpp
+            ../wasm/wasi_impl.cpp
             ../wasm/wasm_module.cpp
             ../wasm/wasm_ppux.cpp
             ../wasm/wasm_net.cpp
