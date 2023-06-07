@@ -56,6 +56,10 @@
 #include "../debug.h"
 #endif
 
+#ifdef USE_WASM
+#include "wasm_host.h"
+#endif
+
 #if (((defined(_MSC_VER) && _MSC_VER >= 1300)) || defined(__MINGW32__))
 	// both MINGW and VS.NET use fstream instead of fstream.h which is deprecated
 	#include <fstream>
@@ -3298,6 +3302,11 @@ int WINAPI WinMain(
 	void InitSnes9x (void);
 	InitSnes9x ();
 
+#ifdef USE_WASM
+	// initialize wasm runtime:
+	wasm_host_init();
+#endif
+
 	if(GUI.FullScreen) {
 		GUI.FullScreen = false;
 		ToggleFullScreen();
@@ -3957,6 +3966,10 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 		S9xSaveCheatFile (S9xGetFilename (".cht", CHEAT_DIR).c_str());
 	}
 
+#ifdef USE_WASM
+	wasm_host_unload_all_modules();
+#endif
+
 	if(filename2)
 		Settings.StopEmulation = !LoadROMMulti(filename, filename2);
 	else
@@ -3984,6 +3997,33 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
             stateMan.init(GUI.rewindBufferSize * 1024 * 1024);
 		}
 	}
+
+#ifdef USE_WASM
+	// unload existing modules first:
+	wasm_host_unload_all_modules();
+
+	{
+		auto wasm_filename = S9xGetFilename(".wasm", ROMFILENAME_DIR);
+
+		STREAM fp = OPEN_STREAM(wasm_filename.c_str(), "rb");
+		if (fp) {
+			uint8_t* module_binary;
+			uint32_t module_size;
+
+			module_size = 1048576 * 100;
+			module_binary = new uint8_t[module_size];
+
+			module_size = READ_STREAM(module_binary, module_size, fp);
+
+			CLOSE_STREAM(fp);
+
+			wasm_host_load_module(wasm_filename, module_binary, module_size);
+		}
+		else {
+			fprintf(stderr, "wasm: unable to load `%s`\n", wasm_filename.c_str());
+		}
+	}
+#endif
 
 	if(GUI.ControllerOption == SNES_SUPERSCOPE || GUI.ControllerOption == SNES_MACSRIFLE)
 		SetCursor (GUI.GunSight);
