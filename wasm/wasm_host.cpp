@@ -51,25 +51,19 @@ bool wasm_host_init() {
     {
         natives->push_back({
             "wait_for_event",
-            (void *) + (
-                [](wasm_exec_env_t exec_env,
-                   uint32_t timeout_usec, uint32_t *o_events
-                ) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("wait_for_event", m->wait_for_event(timeout_usec, *o_events));
-                }
-            ),
+            (void *)(+[](wasm_exec_env_t exec_env, uint32_t timeout_usec, uint32_t *o_events) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                MEASURE_TIMING_RETURN("wait_for_event", m->wait_for_event(timeout_usec, *o_events));
+            }),
             "(i*)i",
             nullptr
         });
         natives->push_back({
             "ack_last_event",
-            (void *) + (
-                [](wasm_exec_env_t exec_env) -> void {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_DO("ack_last_event", m->ack_last_event());
-                }
-            ),
+            (void *)(+[](wasm_exec_env_t exec_env) -> void {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                MEASURE_TIMING_DO("ack_last_event", m->ack_last_event());
+            }),
             "()",
             nullptr
         });
@@ -78,23 +72,19 @@ bool wasm_host_init() {
     // memory access:
     {
 #define FUNC_READ(start, size) \
-        (void *) + ( \
-            [](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
-                if (offset >= size) return false; \
-                if (offset + dest_len > size) return false; \
-                MEASURE_TIMING_DO("mem_read", { std::unique_lock<std::mutex> lk(Memory.lock); memcpy(dest, start + offset, dest_len); }); \
-                return true; \
-            } \
-        )
+        ((void *)(+[](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
+            if (offset >= size) return false; \
+            if (offset + dest_len > size) return false; \
+            MEASURE_TIMING_DO("mem_read", { std::unique_lock<std::mutex> lk(Memory.lock); memcpy(dest, start + offset, dest_len); }); \
+            return true; \
+        }))
 #define FUNC_WRITE(start, size) \
-        (void *) + ( \
-            [](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
-                if (offset >= size) return false; \
-                if (offset + dest_len > size) return false; \
-                MEASURE_TIMING_DO("mem_write", { std::unique_lock<std::mutex> lk(Memory.lock); memcpy(start + offset, dest, dest_len); }); \
-                return true; \
-            } \
-        )
+        ((void *)(+[](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
+            if (offset >= size) return false; \
+            if (offset + dest_len > size) return false; \
+            MEASURE_TIMING_DO("mem_write", { std::unique_lock<std::mutex> lk(Memory.lock); memcpy(start + offset, dest, dest_len); }); \
+            return true; \
+        }))
 
         natives->push_back({
             "rom_read",
@@ -146,14 +136,10 @@ bool wasm_host_init() {
     {
         natives->push_back({
             "ppux_write",
-            (void *) + (
-                [](wasm_exec_env_t exec_env,
-                   uint32_t *data, uint32_t size
-                ) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("ppux_write", m->ppux.write_cmd(data, size));
-                }
-            ),
+            (void *)(+[](wasm_exec_env_t exec_env, uint32_t *data, uint32_t size) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                MEASURE_TIMING_RETURN("ppux_write", m->ppux.write_cmd(data, size));
+            }),
             "(*~)i",
             nullptr
         });
@@ -164,84 +150,60 @@ bool wasm_host_init() {
         // net_tcp_listen(uint32_t port) -> int32_t
         natives->push_back({
             "net_tcp_listen",
-            (void *) + (
-                [](wasm_exec_env_t exec_env,
-                   uint32_t port
-                ) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_tcp_listen", m->net.tcp_listen(port));
-                }
-            ),
+            (void *)(+[](wasm_exec_env_t exec_env, uint32_t port) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                MEASURE_TIMING_RETURN("net_tcp_listen", m->net.tcp_listen(port));
+            }),
             "(i)i",
             nullptr
         });
         // net_tcp_accept(int32_t fd) -> int32_t
         natives->push_back({
             "net_tcp_accept",
-            (void *) + (
-                [](wasm_exec_env_t exec_env,
-                   int32_t fd
-                ) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_tcp_accept", m->net.tcp_accept(fd));
-                }
-            ),
+            (void *)(+[](wasm_exec_env_t exec_env, int32_t fd) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                MEASURE_TIMING_RETURN("net_tcp_accept", m->net.tcp_accept(fd));
+            }),
             "(i)i",
             nullptr
         });
         // net_poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t
         natives->push_back({
             "net_poll",
-            (void *) + (
-                [](wasm_exec_env_t exec_env,
-                   net_poll_slot *poll_slots, uint32_t poll_slots_len
-                ) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_poll", m->net.poll(poll_slots, poll_slots_len));
-                }
-            ),
+            (void *)(+[](wasm_exec_env_t exec_env, net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                MEASURE_TIMING_RETURN("net_poll", m->net.poll(poll_slots, poll_slots_len));
+            }),
             "(*~)i",
             nullptr
         });
         // net_send(int32_t fd, uint8_t *data, uint32_t data_len) -> int32_t
         natives->push_back({
             "net_send",
-            (void *) + (
-                [](wasm_exec_env_t exec_env,
-                   int32_t fd, uint8_t *data, uint32_t len
-                ) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_send", m->net.send(fd, data, len));
-                }
-            ),
+            (void *)(+[](wasm_exec_env_t exec_env, int32_t fd, uint8_t *data, uint32_t len) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                MEASURE_TIMING_RETURN("net_send", m->net.send(fd, data, len));
+            }),
             "(i*~)i",
             nullptr
         });
         // net_recv(int32_t fd, uint8_t *data, uint32_t data_len) -> int32_t
         natives->push_back({
             "net_recv",
-            (void *) + (
-                [](wasm_exec_env_t exec_env,
-                   int32_t fd, uint8_t *data, uint32_t len
-                ) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_recv", m->net.recv(fd, data, len));
-                }
-            ),
+            (void *)(+[](wasm_exec_env_t exec_env, int32_t fd, uint8_t *data, uint32_t len) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                MEASURE_TIMING_RETURN("net_recv", m->net.recv(fd, data, len));
+            }),
             "(i*~)i",
             nullptr
         });
         // net_close(int32_t fd) -> int32_t
         natives->push_back({
             "net_close",
-            (void *) + (
-                [](wasm_exec_env_t exec_env,
-                   int32_t fd
-                ) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_close", m->net.close(fd));
-                }
-            ),
+            (void *)(+[](wasm_exec_env_t exec_env, int32_t fd) -> int32_t {
+                auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                MEASURE_TIMING_RETURN("net_close", m->net.close(fd));
+            }),
             "(i)i",
             nullptr
         });
