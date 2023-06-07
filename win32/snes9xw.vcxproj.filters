@@ -46,6 +46,9 @@
     <Filter Include="GUI\VideoDriver\Vulkan">
       <UniqueIdentifier>{33cdb579-8582-4adc-91d3-c6624af3ad94}</UniqueIdentifier>
     </Filter>
+    <Filter Include="wasm">
+      <UniqueIdentifier>{c369d6e8-feab-47f9-81e9-4b0f8e82b47c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\statemanager.h">
@@ -329,6 +332,21 @@
     </ClInclude>
     <ClInclude Include="..\vulkan\vulkan_simple_output.hpp">
       <Filter>GUI\VideoDriver\Vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="..\wasm\wasi_types.h">
+      <Filter>wasm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\wasm\wasm_host.h">
+      <Filter>wasm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\wasm\wasm_module.h">
+      <Filter>wasm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\wasm\wasm_net.h">
+      <Filter>wasm</Filter>
+    </ClInclude>
+    <ClInclude Include="..\wasm\wasm_ppux.h">
+      <Filter>wasm</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -724,6 +742,18 @@
     </ClCompile>
     <ClCompile Include="..\vulkan\vulkan_simple_output.cpp">
       <Filter>GUI\VideoDriver\Vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="..\wasm\wasm_host.cpp">
+      <Filter>wasm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\wasm\wasm_module.cpp">
+      <Filter>wasm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\wasm\wasm_net.cpp">
+      <Filter>wasm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\wasm\wasm_ppux.cpp">
+      <Filter>wasm</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
