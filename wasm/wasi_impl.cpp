@@ -132,12 +132,6 @@ void wasm_host_register_wasi() {
     // (sock_shutdown, "(ii)i"),
     // (sched_yield, "()i"),
 
-    typedef uint8_t wasi_preopentype_t;
-    typedef struct wasi_prestat_app {
-        wasi_preopentype_t pr_type;
-        uint32 pr_name_len;
-    } wasi_prestat_app_t;
-
     natives->push_back({
         "fd_prestat_get",
         (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, wasi_prestat_app_t *prestat_app) -> int32_t {
@@ -173,12 +167,6 @@ void wasm_host_register_wasi() {
         nullptr
     });
 
-#define WASI_CLOCK_REALTIME           (0)
-#define WASI_CLOCK_MONOTONIC          (1)
-#define WASI_CLOCK_PROCESS_CPUTIME_ID (2)
-#define WASI_CLOCK_THREAD_CPUTIME_ID  (3)
-    typedef uint32_t wasi_clockid_t;
-    typedef uint64_t wasi_timestamp_t;
     natives->push_back({
         "clock_time_get",
         (void *) (+[](wasm_exec_env_t exec_env, wasi_clockid_t clock_id, wasi_timestamp_t precision, wasi_timestamp_t *time) -> int32_t {
@@ -198,7 +186,6 @@ void wasm_host_register_wasi() {
         nullptr
     });
 
-    typedef uint32_t wasi_exitcode_t;
     natives->push_back({
         "proc_exit",
         (void *) (+[](wasm_exec_env_t exec_env, wasi_exitcode_t exitcode) -> void {

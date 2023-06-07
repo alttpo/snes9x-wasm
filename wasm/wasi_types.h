@@ -98,4 +98,20 @@ typedef struct iovec_app {
 
 typedef std::vector<std::pair<uint8_t *, uint32_t>> wasi_iovec;
 
+typedef uint8_t wasi_preopentype_t;
+typedef struct wasi_prestat_app {
+    wasi_preopentype_t pr_type;
+    uint32_t pr_name_len;
+} wasi_prestat_app_t;
+
+typedef uint32_t wasi_clockid_t;
+#define WASI_CLOCK_REALTIME           (0)
+#define WASI_CLOCK_MONOTONIC          (1)
+#define WASI_CLOCK_PROCESS_CPUTIME_ID (2)
+#define WASI_CLOCK_THREAD_CPUTIME_ID  (3)
+
+typedef uint64_t wasi_timestamp_t;
+
+typedef uint32_t wasi_exitcode_t;
+
 #endif //SNES9X_WASI_TYPES_H
