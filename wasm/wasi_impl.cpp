@@ -161,6 +161,43 @@ void wasm_host_register_wasi() {
         nullptr
     });
 
+    natives->push_back({
+        "args_sizes_get",
+        (void *) (+[](wasm_exec_env_t exec_env, uint32_t *argc_app, uint32_t *argv_buf_size_app) -> int32_t {
+            auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+            *argc_app = 0;
+            *argv_buf_size_app = 0;
+            return 0;
+        }),
+        "(**)i",
+        nullptr
+    });
+
+#define WASI_CLOCK_REALTIME           (0)
+#define WASI_CLOCK_MONOTONIC          (1)
+#define WASI_CLOCK_PROCESS_CPUTIME_ID (2)
+#define WASI_CLOCK_THREAD_CPUTIME_ID  (3)
+    typedef uint32_t wasi_clockid_t;
+    typedef uint64_t wasi_timestamp_t;
+    natives->push_back({
+        "clock_time_get",
+        (void *) (+[](wasm_exec_env_t exec_env, wasi_clockid_t clock_id, wasi_timestamp_t precision, wasi_timestamp_t *time) -> int32_t {
+            auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+            switch (clock_id) {
+                case WASI_CLOCK_REALTIME:
+                    *time = std::chrono::system_clock::now().time_since_epoch().count();
+                    return 0;
+                case WASI_CLOCK_MONOTONIC:
+                    *time = std::chrono::steady_clock::now().time_since_epoch().count();
+                    return 0;
+                default:
+                    return 0;
+            }
+        }),
+        "(iI*)i",
+        nullptr
+    });
+
     typedef uint32_t wasi_exitcode_t;
     natives->push_back({
         "proc_exit",
