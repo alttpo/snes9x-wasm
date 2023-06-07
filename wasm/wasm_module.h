@@ -9,7 +9,9 @@
 #include <vector>
 #include <string>
 
+#ifdef __WIN32__
 #include <winsock2.h>
+#endif
 #include "snes9x.h"
 
 // WAMR:
