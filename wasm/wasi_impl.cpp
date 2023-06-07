@@ -135,7 +135,7 @@ void wasm_host_register_wasi() {
     natives->push_back({
         "fd_prestat_get",
         (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, wasi_prestat_app_t *prestat_app) -> int32_t {
-            auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+            //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
             if (fd >= 3) {
                 return WASI_EBADF;
             }
@@ -147,18 +147,72 @@ void wasm_host_register_wasi() {
 
     natives->push_back({
         "fd_prestat_dir_name",
-        (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, char *path, size_t path_len) -> int32_t {
-            auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+        (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, char *path, uint32_t path_len) -> int32_t {
+            //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
             return 0;
         }),
         "(i*~)i",
         nullptr
     });
 
+    static FILE *fdFiles[3] = {
+        stdin,
+        stdout,
+        stderr
+    };
+    natives->push_back({
+        "fd_write",
+        (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, uint32 *nwritten_app) -> int32_t {
+            //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+            auto module_inst = wasm_runtime_get_module_inst(exec_env);
+
+            if (fd >= 3) {
+                return WASI_EBADF;
+            }
+            FILE *f = fdFiles[fd];
+
+            uint32_t written = 0;
+            for (uint32_t i = 0; i < iovs_len; i++) {
+                auto ptr = wasm_runtime_addr_app_to_native(module_inst, iovec_app[i].buf_offset);
+                auto len = iovec_app[i].buf_len;
+                written += fwrite(ptr, len, 1, f);
+            }
+
+            *nwritten_app = written;
+            return 0;
+        }),
+        "(i*i*)i",
+        nullptr
+    });
+    natives->push_back({
+        "fd_read",
+        (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, uint32 *nread_app) -> int32_t {
+            //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+            auto module_inst = wasm_runtime_get_module_inst(exec_env);
+
+            if (fd >= 3) {
+                return WASI_EBADF;
+            }
+            FILE *f = fdFiles[fd];
+
+            uint32_t nread = 0;
+            for (uint32_t i = 0; i < iovs_len; i++) {
+                auto ptr = wasm_runtime_addr_app_to_native(module_inst, iovec_app[i].buf_offset);
+                auto len = iovec_app[i].buf_len;
+                nread += fread(ptr, len, 1, f);
+            }
+
+            *nread_app = nread;
+            return 0;
+        }),
+        "(i*i*)i",
+        nullptr
+    });
+
     natives->push_back({
         "args_sizes_get",
         (void *) (+[](wasm_exec_env_t exec_env, uint32_t *argc_app, uint32_t *argv_buf_size_app) -> int32_t {
-            auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+            //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
             *argc_app = 0;
             *argv_buf_size_app = 0;
             return 0;
@@ -170,7 +224,7 @@ void wasm_host_register_wasi() {
     natives->push_back({
         "clock_time_get",
         (void *) (+[](wasm_exec_env_t exec_env, wasi_clockid_t clock_id, wasi_timestamp_t precision, wasi_timestamp_t *time) -> int32_t {
-            auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+            //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
             switch (clock_id) {
                 case WASI_CLOCK_REALTIME:
                     *time = std::chrono::system_clock::now().time_since_epoch().count();
@@ -189,7 +243,7 @@ void wasm_host_register_wasi() {
     natives->push_back({
         "proc_exit",
         (void *) (+[](wasm_exec_env_t exec_env, wasi_exitcode_t exitcode) -> void {
-            auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+            //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
             wasm_runtime_set_exception(wasm_runtime_get_module_inst(exec_env), "wasi proc exit");
         }),
         "(i)",
