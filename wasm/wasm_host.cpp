@@ -90,19 +90,19 @@ bool wasm_host_init() {
 
             natives->push_back({
                 "rom_read",
-                FUNC_READ(Memory.ROMStorage.data(), Memory.ROMStorage.size()),
+                FUNC_READ(Memory.ROM, Memory.MAX_ROM_SIZE),
                 "(*~i)i",
                 nullptr
             });
             natives->push_back({
                 "sram_read",
-                FUNC_READ(Memory.SRAMStorage.data(), Memory.SRAMStorage.size()),
+                FUNC_READ(Memory.SRAM, Memory.SRAMStorage.size()),
                 "(*~i)i",
                 nullptr
             });
             natives->push_back({
                 "sram_write",
-                FUNC_WRITE(Memory.SRAMStorage.data(), Memory.SRAMStorage.size()),
+                FUNC_WRITE(Memory.SRAM, Memory.SRAM_SIZE),
                 "(*~i)i",
                 nullptr
             });
