@@ -284,7 +284,7 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
     }
 
     // track the new module:
-    auto m = module::create(name, mod, mi);
+    auto m = module::create(name, mod, mi, module_binary, module_size);
     modules.emplace_back(m);
 
     // start the new thread:

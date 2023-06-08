@@ -451,6 +451,7 @@
     <ClInclude Include="..\vulkan\vulkan_slang_pipeline.hpp" />
     <ClInclude Include="..\vulkan\vulkan_swapchain.hpp" />
     <ClInclude Include="..\vulkan\vulkan_texture.hpp" />
+    <ClInclude Include="..\wasm\wasi_impl.h" />
     <ClInclude Include="..\wasm\wasi_types.h" />
     <ClInclude Include="..\wasm\wasm_host.h" />
     <ClInclude Include="..\wasm\wasm_module.h" />
@@ -619,6 +620,7 @@
     <ClCompile Include="..\vulkan\vulkan_slang_pipeline.cpp" />
     <ClCompile Include="..\vulkan\vulkan_swapchain.cpp" />
     <ClCompile Include="..\vulkan\vulkan_texture.cpp" />
+    <ClCompile Include="..\wasm\wasi_impl.cpp" />
     <ClCompile Include="..\wasm\wasm_host.cpp" />
     <ClCompile Include="..\wasm\wasm_module.cpp" />
     <ClCompile Include="..\wasm\wasm_net.cpp" />

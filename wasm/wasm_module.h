@@ -24,12 +24,12 @@
 
 class module : public std::enable_shared_from_this<module> {
 public:
-    module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p);
+    module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p, uint8_t* module_binary_p, uint32_t module_size_p);
 
     ~module();
 
     [[nodiscard]] static std::shared_ptr<module>
-    create(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p);
+    create(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, uint8_t* module_binary_p, uint32_t module_size_p);
 
     void start_thread();
 
@@ -52,6 +52,8 @@ private:
     wasm_module_t mod;
     wasm_module_inst_t module_inst;
     wasm_exec_env_t exec_env;
+    uint8_t* module_binary;
+    uint32_t module_size;
 
     std::mutex event_mtx;
     std::condition_variable event_notify_cv;

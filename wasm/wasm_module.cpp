@@ -5,8 +5,8 @@
 //#include "thread_manager.h"
 #include "memmap.h"
 
-module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p)
-    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), ppux() {
+module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p, uint8_t* module_binary_p, uint32_t module_size_p)
+    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), module_binary(module_binary_p), module_size(module_size_p), ppux() {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
 }
@@ -17,10 +17,13 @@ module::~module() {
     module_inst = nullptr;
     wasm_runtime_unload(mod);
     mod = nullptr;
+    delete[] module_binary;
+    module_binary = nullptr;
+    module_size = 0;
 }
 
 [[nodiscard]] std::shared_ptr<module>
-module::create(std::string name, wasm_module_t mod, wasm_module_inst_t module_inst) {
+module::create(std::string name, wasm_module_t mod, wasm_module_inst_t module_inst, uint8_t* module_binary, uint32_t module_size) {
     auto exec_env = wasm_runtime_create_exec_env(module_inst, 1048576);
     if (!exec_env) {
         wasm_runtime_deinstantiate(module_inst);
@@ -30,7 +33,7 @@ module::create(std::string name, wasm_module_t mod, wasm_module_inst_t module_in
         return nullptr;
     }
 
-    return std::shared_ptr<module>(new module(std::move(name), mod, module_inst, exec_env));
+    return std::shared_ptr<module>(new module(std::move(name), mod, module_inst, exec_env, module_binary, module_size));
 }
 
 void module::start_thread() {

@@ -4002,20 +4002,23 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 	// unload existing modules first:
 	wasm_host_unload_all_modules();
 
+#ifdef USE_WASM
 	{
 		auto wasm_filename = S9xGetFilename(".wasm", ROMFILENAME_DIR);
 
-		STREAM fp = OPEN_STREAM(wasm_filename.c_str(), "rb");
+		FILE *fp = fopen(wasm_filename.c_str(), "rb");
 		if (fp) {
 			uint8_t* module_binary;
 			uint32_t module_size;
 
-			module_size = 1048576 * 100;
+			fseek(fp, 0, SEEK_END);
+			module_size = ftell(fp);
 			module_binary = new uint8_t[module_size];
 
-			module_size = READ_STREAM(module_binary, module_size, fp);
+			fseek(fp, 0, SEEK_SET);
+			fread(module_binary, module_size, 1, fp);
 
-			CLOSE_STREAM(fp);
+			fclose(fp);
 
 			wasm_host_load_module(wasm_filename, module_binary, module_size);
 		}

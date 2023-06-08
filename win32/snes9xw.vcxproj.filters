@@ -348,6 +348,9 @@
     <ClInclude Include="..\wasm\wasm_ppux.h">
       <Filter>wasm</Filter>
     </ClInclude>
+    <ClInclude Include="..\wasm\wasi_impl.h">
+      <Filter>wasm</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\bsx.cpp">
@@ -753,6 +756,9 @@
       <Filter>wasm</Filter>
     </ClCompile>
     <ClCompile Include="..\wasm\wasm_ppux.cpp">
+      <Filter>wasm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\wasm\wasi_impl.cpp">
       <Filter>wasm</Filter>
     </ClCompile>
   </ItemGroup>
