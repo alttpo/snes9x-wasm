@@ -3998,9 +3998,21 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 		}
 	}
 
-#ifdef USE_WASM
-	// unload existing modules first:
-	wasm_host_unload_all_modules();
+	if(GUI.ControllerOption == SNES_SUPERSCOPE || GUI.ControllerOption == SNES_MACSRIFLE)
+		SetCursor (GUI.GunSight);
+	else {
+		SetCursor (GUI.Arrow);
+		GUI.CursorTimer = 60;
+	}
+	Settings.Paused = false;
+    S9xRestoreWindowTitle();
+
+	if (GUI.FullscreenOnOpen)
+	{
+		if (!GUI.FullScreen && !GUI.EmulatedFullscreen)
+			ToggleFullScreen();
+		SetMenu(GUI.hWnd, NULL);
+	}
 
 #ifdef USE_WASM
 	{
@@ -4027,22 +4039,6 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 		}
 	}
 #endif
-
-	if(GUI.ControllerOption == SNES_SUPERSCOPE || GUI.ControllerOption == SNES_MACSRIFLE)
-		SetCursor (GUI.GunSight);
-	else {
-		SetCursor (GUI.Arrow);
-		GUI.CursorTimer = 60;
-	}
-	Settings.Paused = false;
-    S9xRestoreWindowTitle();
-
-	if (GUI.FullscreenOnOpen)
-	{
-		if (!GUI.FullScreen && !GUI.EmulatedFullscreen)
-			ToggleFullScreen();
-		SetMenu(GUI.hWnd, NULL);
-	}
 
 	return !Settings.StopEmulation;
 }
