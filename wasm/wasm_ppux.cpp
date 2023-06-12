@@ -15,6 +15,7 @@ ppux::ppux() {
     for (auto &layer: sub) {
         layer.resize(ppux::pitch * MAX_SNES_HEIGHT);
     }
+    ram.resize(ram_max_size);
     priority_depth_map[0] = 0;
     priority_depth_map[1] = 0;
     priority_depth_map[2] = 0;
@@ -176,7 +177,7 @@ void ppux::render_line_sub(ppux::layer layer) {
     }
 }
 
-bool ppux::write_cmd(uint32_t *data, uint32_t size) {
+bool ppux::cmd_write(uint32_t *data, uint32_t size) {
     // size is counted in uint32_t units.
 
     // append the uint32_ts:
@@ -195,7 +196,8 @@ bool ppux::write_cmd(uint32_t *data, uint32_t size) {
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
             // MSB must be 1 to indicate opcode/size start of frame:
-            fprintf(stderr, "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
+            fprintf(
+                stderr, "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
                 it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
             return false;
@@ -229,6 +231,16 @@ bool ppux::write_cmd(uint32_t *data, uint32_t size) {
         cmdNext.erase(cmdNext.begin(), cmdNext.end());
     }
 
+    return true;
+}
+
+bool ppux::upload(uint32_t addr, uint32_t *data, uint32_t size) {
+    uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
+    if (maxaddr >= ram_max_size) {
+        return false;
+    }
+
+    std::copy_n(data, size, ram.begin() + addr);
     return true;
 }
 
@@ -293,7 +305,7 @@ void ppux::render_cmd() {
     }
 }
 
-void ppux::render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit) {
+void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit) {
     // draw horizontal runs of 16bpp pixels starting at x,y. wrap at
     // width and proceed to next line until `size-2` pixels in total are
     // drawn.
@@ -369,18 +381,18 @@ void ppux::render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint
 }
 
 template<unsigned bpp, bool hflip, bool vflip, typename PLOT>
-void draw_vram_tile(
-    int x0, int y0,
-    int w, int h,
+void ppux::draw_vram_tile(
+    unsigned x0, unsigned y0,
+    unsigned w, unsigned h,
 
-    uint16_t vram_addr,
-    uint8_t palette,
+    uint32_t vram_addr,
+    uint32_t cgram_addr,
 
-    uint8_t *vram,
-    uint8_t *cgram,
-
-    PLOT &plot
+    PLOT plot
 ) {
+    auto cgram = ram.data() + cgram_addr;
+    auto vram = ram.data() + vram_addr;
+
     // draw tile:
     unsigned sy = y0;
     for (int ty = 0; ty < h; ty++, sy++) {
@@ -391,13 +403,12 @@ void draw_vram_tile(
 
         for (int tx = 0; tx < w; tx++, sx++) {
             sx &= 511;
-            if (sx >= 256) continue;
 
             unsigned x = (!hflip ? tx : (w - 1 - tx));
 
             uint8_t col, d0, d1, d2, d3, d4, d5, d6, d7;
             uint8_t mask = 1 << (7 - (x & 7));
-            uint8_t *tile_ptr = vram + vram_addr;
+            uint8_t *tile_ptr = (uint8_t *) vram;
 
             switch (bpp) {
                 case 2:
@@ -455,63 +466,147 @@ void draw_vram_tile(
             if (col == 0)
                 continue;
 
-            col += palette;
-
             // look up color in cgram:
-            uint16_t bgr = *(cgram + (col << 1)) + (*(cgram + (col << 1) + 1) << 8);
+            uint16_t bgr = cgram[col];
 
             plot(sx, sy, bgr);
         }
     }
 }
 
+void ppux::cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit) {
+    //   MSB                                             LSB
+    //   1111 1111     1111 1111     0000 0000     0000 0000
+    // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+    //   ---- ----     ---- ----     ---- --xx     xxxx xxxx    x = x coordinate (0..1023)
+    //   ---- ----     ---- ----     ---- --yy     yyyy yyyy    y = y coordinate (0..1023)
+    //   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
+    //   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
+    //   ---- slll     ---- ----     ---- ----     fvhh hwww    w = 8<<w width in pixels
+    //                                                          h = 8<<h height in pixels
+    //                                                          f = horizontal flip
+    //                                                          v = vertical flip
+    //                                                          l = PPU layer
+    //                                                          s = main or sub screen; main=0, sub=1
+
+    // width up to 1024 where 0 represents 1024 and 1..1023 are normal:
+    auto x0 = *it & 1023;
+    it++;
+    auto y0 = *it & 1023;
+    it++;
+    auto bitmap_addr = *it;
+    it++;
+    auto cgram_addr = *it;
+    it++;
+
+    auto width = 8 << (*it & 7);
+    auto height = 8 << ((*it >> 3) & 7);
+    auto hflip = (*it & (1 << 7)) == (1 << 7);
+    auto vflip = (*it & (1 << 6)) == (1 << 6);
+
+    // which ppux layer to render to: (BG1..4, OBJ)
+    auto layer = (*it >> 24) & 7;
+
+    // main or sub screen (main=0, sub=1):
+    auto is_sub = ((*it >> 24) >> 4) & 1;
+
+    std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
+
+    if (!hflip) {
+        if (!vflip) {
+            draw_vram_tile<4, false, false>(
+                x0, y0, width, height, bitmap_addr, cgram_addr,
+                [&](unsigned sx, unsigned sy, uint16_t color) {
+                    vec[sy * ppux::pitch + sx] = color | PX_ENABLE;
+                }
+            );
+        } else {
+            draw_vram_tile<4, false, true>(
+                x0, y0, width, height, bitmap_addr, cgram_addr,
+                [&](unsigned sx, unsigned sy, uint16_t color) {
+                    vec[sy * ppux::pitch + sx] = color | PX_ENABLE;
+                }
+            );
+        }
+    } else {
+        if (!vflip) {
+            draw_vram_tile<4, true, false>(
+                x0, y0, width, height, bitmap_addr, cgram_addr,
+                [&](unsigned sx, unsigned sy, uint16_t color) {
+                    vec[sy * ppux::pitch + sx] = color | PX_ENABLE;
+                }
+            );
+        } else {
+            draw_vram_tile<4, true, true>(
+                x0, y0, width, height, bitmap_addr, cgram_addr,
+                [&](unsigned sx, unsigned sy, uint16_t color) {
+                    vec[sy * ppux::pitch + sx] = color | PX_ENABLE;
+                }
+            );
+        }
+    }
+
+    dirty_top = std::min((int) y0, dirty_top);
+    dirty_bottom = std::max((int) (y0 + height), dirty_bottom);
+}
+
 void wasm_host_frame_start() {
-    for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_event(wasm_event_kind::ev_ppu_frame_start);
-        m->ppux.render_cmd();
-    });
+    for_each_module(
+        [=](std::shared_ptr<module> m) {
+            m->notify_event(wasm_event_kind::ev_ppu_frame_start);
+            m->ppux.render_cmd();
+        }
+    );
 }
 
 void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart) {
-    for_each_module([=](std::shared_ptr<module> m) {
-        ppux &ppux = m->ppux;
-        ppux.priority_depth_map[0] = zstart;
-        ppux.priority_depth_map[1] = zstart + 4;
-        ppux.priority_depth_map[2] = zstart + 8;
-        ppux.priority_depth_map[3] = zstart + 12;
+    for_each_module(
+        [=](std::shared_ptr<module> m) {
+            ppux &ppux = m->ppux;
+            ppux.priority_depth_map[0] = zstart;
+            ppux.priority_depth_map[1] = zstart + 4;
+            ppux.priority_depth_map[2] = zstart + 8;
+            ppux.priority_depth_map[3] = zstart + 12;
 
-        if (sub) {
-            ppux.render_line_sub(ppux::layer::OBJ);
-        } else {
-            ppux.render_line_main(ppux::layer::OBJ);
+            if (sub) {
+                ppux.render_line_sub(ppux::layer::OBJ);
+            } else {
+                ppux.render_line_main(ppux::layer::OBJ);
+            }
         }
-    });
+    );
 }
 
 void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
-    for_each_module([=](std::shared_ptr<module> m) {
-        ppux &ppux = m->ppux;
-        ppux.priority_depth_map[0] = zl;
-        ppux.priority_depth_map[1] = zh;
-        ppux.priority_depth_map[2] = zl;
-        ppux.priority_depth_map[3] = zh;
+    for_each_module(
+        [=](std::shared_ptr<module> m) {
+            ppux &ppux = m->ppux;
+            ppux.priority_depth_map[0] = zl;
+            ppux.priority_depth_map[1] = zh;
+            ppux.priority_depth_map[2] = zl;
+            ppux.priority_depth_map[3] = zh;
 
-        if (sub) {
-            ppux.render_line_sub((ppux::layer) layer);
-        } else {
-            ppux.render_line_main((ppux::layer) layer);
+            if (sub) {
+                ppux.render_line_sub((ppux::layer) layer);
+            } else {
+                ppux.render_line_main((ppux::layer) layer);
+            }
         }
-    });
+    );
 }
 
 void wasm_host_frame_end() {
-    for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_event(wasm_event_kind::ev_ppu_frame_end);
-    });
+    for_each_module(
+        [=](std::shared_ptr<module> m) {
+            m->notify_event(wasm_event_kind::ev_ppu_frame_end);
+        }
+    );
 }
 
 void wasm_host_frame_skip() {
-    for_each_module([=](std::shared_ptr<module> m) {
-        m->notify_event(wasm_event_kind::ev_ppu_frame_skip);
-    });
+    for_each_module(
+        [=](std::shared_ptr<module> m) {
+            m->notify_event(wasm_event_kind::ev_ppu_frame_skip);
+        }
+    );
 }

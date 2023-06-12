@@ -69,7 +69,9 @@ struct ppux {
     int dirty_bottom = MAX_SNES_HEIGHT - 1;
 
 public:
-    bool write_cmd(uint32_t *data, uint32_t size);
+    bool cmd_write(uint32_t *data, uint32_t size);
+
+    bool upload(uint32_t addr, uint32_t *data, uint32_t size);
 
     void render_cmd();
 
@@ -78,14 +80,26 @@ public:
     void render_line_sub(layer layer);
 
 private:
-    void render_box_16bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
-
     typedef void (ppux::*opcode_handler)(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
 
-    opcode_handler opcode_handlers[2] = {
+    // ppux opcode functions, starting from opcode 1:
+    void cmd_bitmap_15bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
+
+    void cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
+
+    static constexpr opcode_handler opcode_handlers[3] = {
+        // 0 is the terminate opcode:
         nullptr,
-        &ppux::render_box_16bpp,
+        &ppux::cmd_bitmap_15bpp,
+        &ppux::cmd_vram_tiles
     };
+
+    // 64 MiB max size of extra dual-purpose VRAM/CGRAM used by draw_tile command:
+    static const uint32_t ram_max_size = 64 * 1024 * 1024;
+    std::vector<uint16_t> ram;
+
+    template<unsigned bpp, bool hflip, bool vflip, typename PLOT>
+    void draw_vram_tile(unsigned x0, unsigned y0, unsigned w, unsigned h, uint32_t vram_addr, uint32_t cgram_addr, PLOT plot);
 };
 
 #endif //SNES9X_WASM_PPUX_H

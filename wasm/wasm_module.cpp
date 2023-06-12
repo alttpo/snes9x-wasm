@@ -144,7 +144,7 @@ void module::notify_event(uint32_t event_p) {
         std::unique_lock<std::mutex> lk(event_mtx);
         event_ack_cv.wait_for(
             lk,
-            std::chrono::microseconds(4000),
+            std::chrono::microseconds(3000),
             [this]() { return !event_triggered; }
         );
     }

@@ -137,10 +137,19 @@ bool wasm_host_init() {
         // ppux command queue:
         {
             natives->push_back({
-                "ppux_write",
+                "ppux_cmd_write",
                 (void *) (+[](wasm_exec_env_t exec_env, uint32_t *data, uint32_t size) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("ppux_write", m->ppux.write_cmd(data, size));
+                    MEASURE_TIMING_RETURN("ppux_cmd_write", m->ppux.cmd_write(data, size));
+                }),
+                "(*~)i",
+                nullptr
+            });
+            natives->push_back({
+                "ppux_upload",
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t addr, uint32_t *data, uint32_t size) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_RETURN("ppux_upload", m->ppux.upload(addr, data, size));
                 }),
                 "(*~)i",
                 nullptr
