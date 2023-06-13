@@ -32,7 +32,7 @@ func main() {
 	//                                                          g = green (5-bits)
 	//                                                          b = blue (5-bits)
 	//                                                          p = priority [0..3]
-	//    0000_0000_0000_00pp_1_rrrrr_ggggg_bbbbb
+	//    1000_0000_0000_00pp_0_rrrrr_ggggg_bbbbb
 	testPixels := [8]uint32{
 		// ---
 		0b1000_0000_0000_0000_0_00000_00000_00000,
@@ -64,6 +64,17 @@ func main() {
 	var romTitle [21]byte
 	_, _ = rex.ROM.ReadAt(romTitle[:], 0x7FC0)
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
+
+	// upload to ppux ram from rom sprite data:
+	linkSprites := make([]byte, 0x7000)
+	_, _ = rex.ROM.ReadAt(linkSprites, 0x08_0000)
+	_ = rex.PPUX.Upload(0, linkSprites)
+	// upload palette:
+	palette := [0x20]byte{
+		0x00, 0x00, 0xff, 0x7f, 0x7e, 0x23, 0xb7, 0x11, 0x9e, 0x36, 0xa5, 0x14, 0xff, 0x01, 0x78, 0x10,
+		0x9d, 0x59, 0x47, 0x36, 0x68, 0x3b, 0x4a, 0x0a, 0xef, 0x12, 0x5c, 0x2a, 0x71, 0x15, 0x18, 0x7a,
+	}
+	_ = rex.PPUX.Upload(0x7000, palette[:])
 
 	// listen on tcp port 25600
 	slots = make([]*rex.Socket, 1, 8)
@@ -115,7 +126,7 @@ func main() {
 		}
 
 		// write to bg2 main a rotating test pixel pattern:
-		cmdBytes := [1 + 2 + 8*7 + 1]uint32{}
+		cmdBytes := [(1 + 2 + 8*7) + (1 + 5) + 1]uint32{}
 		cmd := cmdBytes[:0]
 		cmd = append(cmd,
 			//   MSB                                             LSB
@@ -140,9 +151,35 @@ func main() {
 			rotate()
 			cmd = append(cmd, rotatingPixels[:]...)
 		}
+		cmd = append(cmd,
+			//   MSB                                             LSB
+			//   1111 1111     1111 1111     0000 0000     0000 0000
+			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+			//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
+			//                                                          s = size of packet in uint32_ts
+			0b1000_0010_0000_0000_0000_0000_0000_0000+5,
+			//   MSB                                             LSB
+			//   1111 1111     1111 1111     0000 0000     0000 0000
+			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+			//   ---- ----     ---- ----     ---- --xx     xxxx xxxx    x = x coordinate (0..1023)
+			//   ---- ----     ---- ----     ---- --yy     yyyy yyyy    y = y coordinate (0..1023)
+			//   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
+			//   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
+			//   --pp slll     ---- ----     ---- ----     fvhh hwww    w = 8<<w width in pixels
+			//                                                          h = 8<<h height in pixels
+			//                                                          f = horizontal flip
+			//                                                          v = vertical flip
+			//                                                          l = PPU layer
+			//                                                          s = main or sub screen; main=0, sub=1
+			132,
+			132,
+			0x0000,
+			0x7000,
+			0b0010_0100_0000_0000_0000_0000_1000_1001,
+		)
 		// end of list:
 		cmd = append(cmd, 0b1000_0000_0000_0000_0000_0000_0000_0000)
-		_ = rex.PPUX.Write(cmd)
+		_ = rex.PPUX.CmdWrite(cmd)
 
 		// read some WRAM:
 		_, _ = rex.WRAM.ReadAt(wram[0x0:0x100], 0x0)

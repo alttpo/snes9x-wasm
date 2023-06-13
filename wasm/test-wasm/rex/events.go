@@ -6,8 +6,6 @@ import "time"
 //export wait_for_event
 func wait_for_event(timeout_usec uint32, o_event *uint32) bool
 
-// Acknowledge the last event to unblock the emulator.
-//
 //go:wasm-module rex
 //export ack_last_event
 func ack_last_event()
@@ -20,6 +18,7 @@ func WaitForEvent(timeout time.Duration) (event uint32, ok bool) {
 	return
 }
 
+// Acknowledge the last event to unblock the emulator.
 func AcknowledgeLastEvent() {
 	ack_last_event()
 }

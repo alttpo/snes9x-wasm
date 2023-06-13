@@ -71,7 +71,7 @@ struct ppux {
 public:
     bool cmd_write(uint32_t *data, uint32_t size);
 
-    bool upload(uint32_t addr, uint32_t *data, uint32_t size);
+    bool upload(uint32_t addr, uint8_t *data, uint32_t size);
 
     void render_cmd();
 
@@ -96,7 +96,7 @@ private:
 
     // 64 MiB max size of extra dual-purpose VRAM/CGRAM used by draw_tile command:
     static const uint32_t ram_max_size = 64 * 1024 * 1024;
-    std::vector<uint16_t> ram;
+    std::vector<uint8_t> ram;
 
     template<unsigned bpp, bool hflip, bool vflip, typename PLOT>
     void draw_vram_tile(unsigned x0, unsigned y0, unsigned w, unsigned h, uint32_t vram_addr, uint32_t cgram_addr, PLOT plot);

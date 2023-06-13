@@ -365,6 +365,7 @@ static inline void RenderScreen (bool8 sub)
 		S9xSelectTileConverter(4, FALSE, sub, FALSE);
 		S9xSelectTileRenderers(PPU.BGMode, sub, TRUE);
 		DrawOBJS(D + 4);
+        DO_OBJ_PPUX();
 	}
 
 	BG.NameSelect = 0;
@@ -796,6 +797,7 @@ static void DrawOBJS (int D)
 {
 	void (*DrawTile) (uint32, uint32, uint32, uint32) = NULL;
 	void (*DrawClippedTile) (uint32, uint32, uint32, uint32, uint32, uint32) = NULL;
+
 
 	int	PixWidth = IPPU.DoubleWidthPixels ? 2 : 1;
 	BG.InterlaceLine = S9xInterlaceField() ? 8 : 0;
