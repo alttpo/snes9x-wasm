@@ -17,58 +17,68 @@ const (
 	ev_ppu_frame_skip
 )
 
+var slotsArray [8]*rex.Socket
 var slots []*rex.Socket
 
+// each pixel is represented by a 4-byte little-endian uint32:
+//
+//	MSB                                             LSB
+//	1111 1111     1111 1111     0000 0000     0000 0000
+//
+// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+//
+//	---- ----     ---- --pp     Errr rrgg     gggb bbbb    E = enable pixel
+//	                                                       r = red (5-bits)
+//	                                                       g = green (5-bits)
+//	                                                       b = blue (5-bits)
+//	                                                       p = priority [0..3]
+//	 1000_0000_0000_00pp_0_rrrrr_ggggg_bbbbb
+var testPixels = [8]uint32{
+	// ---
+	0b1000_0000_0000_0000_0_00000_00000_00000,
+	// --B
+	0b1000_0000_0000_0000_0_00000_00000_11111,
+	// -G-
+	0b1000_0000_0000_0000_0_00000_11111_00000,
+	// -GB
+	0b1000_0000_0000_0000_0_00000_11111_11111,
+	// R--
+	0b1000_0000_0000_0000_0_11111_00000_00000,
+	// R-B
+	0b1000_0000_0000_0000_0_11111_00000_11111,
+	// RG-
+	0b1000_0000_0000_0000_0_11111_11111_00000,
+	// RGB
+	0b1000_0000_0000_0000_0_11111_11111_11111,
+}
+
+var rotatingPixels [8]uint32
+
+var linkSprites [0x7000]byte
+var romTitle [21]byte
+
+var cmdBytes [(1 + 2 + 8*7) + (1 + 5) + 1 + 10]uint32
+
+var r int
+
+func rotate() {
+	n := copy(rotatingPixels[:], testPixels[r:])
+	copy(rotatingPixels[n:], testPixels[0:8-n])
+	r = (r + 1) & 7
+}
+
+var wram [0x20000]byte
+
 func main() {
-	var wram [0x20000]byte
 	var event uint32
 
-	// each pixel is represented by a 4-byte little-endian uint32:
-	//   MSB                                             LSB
-	//   1111 1111     1111 1111     0000 0000     0000 0000
-	// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-	//   ---- ----     ---- --pp     Errr rrgg     gggb bbbb    E = enable pixel
-	//                                                          r = red (5-bits)
-	//                                                          g = green (5-bits)
-	//                                                          b = blue (5-bits)
-	//                                                          p = priority [0..3]
-	//    1000_0000_0000_00pp_0_rrrrr_ggggg_bbbbb
-	testPixels := [8]uint32{
-		// ---
-		0b1000_0000_0000_0000_0_00000_00000_00000,
-		// --B
-		0b1000_0000_0000_0000_0_00000_00000_11111,
-		// -G-
-		0b1000_0000_0000_0000_0_00000_11111_00000,
-		// -GB
-		0b1000_0000_0000_0000_0_00000_11111_11111,
-		// R--
-		0b1000_0000_0000_0000_0_11111_00000_00000,
-		// R-B
-		0b1000_0000_0000_0000_0_11111_00000_11111,
-		// RG-
-		0b1000_0000_0000_0000_0_11111_11111_00000,
-		// RGB
-		0b1000_0000_0000_0000_0_11111_11111_11111,
-	}
-
-	r := 0
-	rotatingPixels := [8]uint32{}
-	rotate := func() {
-		n := copy(rotatingPixels[:], testPixels[r:])
-		copy(rotatingPixels[n:], testPixels[0:8-n])
-		r = (r + 1) & 7
-	}
-
 	// read rom header:
-	var romTitle [21]byte
 	_, _ = rex.ROM.ReadAt(romTitle[:], 0x7FC0)
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
 	// upload to ppux ram from rom sprite data:
-	linkSprites := make([]byte, 0x7000)
-	_, _ = rex.ROM.ReadAt(linkSprites, 0x08_0000)
-	_ = rex.PPUX.Upload(0, linkSprites)
+	_, _ = rex.ROM.ReadAt(linkSprites[:], 0x08_0000)
+	_ = rex.PPUX.Upload(0, linkSprites[:])
 	// upload palette:
 	palette := [0x20]byte{
 		0x00, 0x00, 0xff, 0x7f, 0x7e, 0x23, 0xb7, 0x11, 0x9e, 0x36, 0xa5, 0x14, 0xff, 0x01, 0x78, 0x10,
@@ -77,12 +87,14 @@ func main() {
 	_ = rex.PPUX.Upload(0x7000, palette[:])
 
 	// listen on tcp port 25600
-	slots = make([]*rex.Socket, 1, 8)
+	slots = slotsArray[:1:8]
 	var err error
 	slots[0], err = rex.TCPListen(25600)
 	if err != nil {
 		fmt.Printf("listen: %v\n", err)
 	}
+
+	r = 0
 
 	//lastEvent := time.Now()
 	lastFrame := uint8(0)
@@ -126,7 +138,6 @@ func main() {
 		}
 
 		// write to bg2 main a rotating test pixel pattern:
-		cmdBytes := [(1 + 2 + 8*7) + (1 + 5) + 1]uint32{}
 		cmd := cmdBytes[:0]
 		cmd = append(cmd,
 			//   MSB                                             LSB
@@ -198,6 +209,8 @@ func main() {
 	fmt.Println("exit")
 }
 
+var msg [65536]byte
+
 func handleNetwork() {
 	// poll for net i/o non-blocking:
 	if len(slots) == 0 {
@@ -222,7 +235,6 @@ func handleNetwork() {
 
 		fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[i].Slot, revents)
 		if slots[i].IsReadAvailable() {
-			var msg [65536]byte
 			n, err = slots[i].Read(msg[:])
 			if err != nil {
 				fmt.Printf("read: slot[%d]: %v\n", slots[i].Slot, err)
