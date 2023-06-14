@@ -251,12 +251,14 @@ if(USE_WAMR)
     set (WAMR_BUILD_PLATFORM "darwin")
     set (WAMR_BUILD_TARGET "AARCH64")
     set (WAMR_BUILD_INTERP 1)
-    set (WAMR_BUILD_FAST_INTERP 1)
+    set (WAMR_BUILD_DEBUG_INTERP 1) # for debugging
+    #set (WAMR_BUILD_FAST_INTERP 1) # if not debugging
+    set (WAMR_DISABLE_HW_BOUND_CHECK 1) # for debugging on M1 macos only
     #set (WAMR_BUILD_FAST_JIT 1) # no aarch64 support
     #set (WAMR_BUILD_JIT 1) # need LLVM
     #set (WAMR_BUILD_AOT 1)
     set (WAMR_BUILD_LIBC_BUILTIN 1)
-    #set (WAMR_BUILD_LIBC_WASI 1)
+    #set (WAMR_BUILD_LIBC_WASI 1) # disabled due to minimal reimplementation in wasm/wasi_impl.cpp
     set (WAMR_BUILD_SIMD 1)
     set (WAMR_BUILD_THREAD_MGR 1)
     #set (WAMR_BUILD_LIB_WASI_THREADS 1)

@@ -45,6 +45,8 @@ bool wasm_host_init() {
     init.mem_alloc_option.pool.heap_buf = new uint8_t[init.mem_alloc_option.pool.heap_size];
 
     init.running_mode = Mode_Interp;
+    strcpy(init.ip_addr, "127.0.0.1");
+    init.instance_port = 0x0ACE; // 2766
 
     {
         auto *natives = new std::vector<NativeSymbol>();

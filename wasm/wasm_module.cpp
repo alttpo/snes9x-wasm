@@ -2,6 +2,9 @@
 #include <utility>
 
 #include "wasm_module.h"
+extern "C" {
+#include "debug_engine.h"
+}
 //#include "thread_manager.h"
 #include "memmap.h"
 
@@ -44,6 +47,14 @@ void module::start_thread() {
             delete m_p;
 
             //pthread_setname_np("wasm");
+
+            uint32_t debug_port = wasm_runtime_start_debug_instance(m->exec_env);
+            fprintf(stdout, "wasm: debugger listening on 127.0.0.1:%u\n", debug_port);
+
+            auto dbg = wasm_exec_env_get_instance(m->exec_env);
+            if (!wasm_debug_instance_continue(dbg)) {
+                fprintf(stderr, "wasm: debugger could not continue\n");
+            }
 
             wasm_runtime_init_thread_env();
             m->thread_main();
