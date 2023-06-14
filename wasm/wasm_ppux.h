@@ -71,7 +71,8 @@ struct ppux {
 public:
     bool cmd_write(uint32_t *data, uint32_t size);
 
-    bool upload(uint32_t addr, uint8_t *data, uint32_t size);
+    bool vram_upload(uint32_t addr, uint8_t *data, uint32_t size);
+    bool cgram_upload(uint32_t addr, uint8_t *data, uint32_t size);
 
     void render_cmd();
 
@@ -94,12 +95,13 @@ private:
         &ppux::cmd_vram_tiles
     };
 
-    // 64 MiB max size of extra dual-purpose VRAM/CGRAM used by draw_tile command:
-    static const uint32_t ram_max_size = 64 * 1024 * 1024;
-    std::vector<uint8_t> ram;
+    static const uint32_t vram_max_size = 65536 * 1024;
+    static const uint32_t cgram_max_size = 256 * 2 * 1024;
+    std::vector<uint8_t> vram;
+    std::vector<uint8_t> cgram;
 
     template<unsigned bpp, bool hflip, bool vflip, typename PLOT>
-    void draw_vram_tile(unsigned x0, unsigned y0, unsigned w, unsigned h, uint32_t vram_addr, uint32_t cgram_addr, PLOT plot);
+    void draw_vram_tile(unsigned x0, unsigned y0, unsigned w, unsigned h, const uint8_t *vram, const uint8_t *cgram, PLOT plot);
 };
 
 #endif //SNES9X_WASM_PPUX_H

@@ -76,15 +76,17 @@ func main() {
 	_, _ = rex.ROM.ReadAt(romTitle[:], 0x7FC0)
 	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
-	// upload to ppux ram from rom sprite data:
+	// read ROM contents of link's entire sprite sheet:
 	_, _ = rex.ROM.ReadAt(linkSprites[:], 0x08_0000)
-	_ = rex.PPUX.Upload(0, linkSprites[:])
-	// upload palette:
+	// upload to ppux vram from rom sprite data:
+	_ = rex.PPUX.VRAM.Upload(0, linkSprites[:])
+
+	// upload palette to ppux cgram:
 	palette := [0x20]byte{
 		0x00, 0x00, 0xff, 0x7f, 0x7e, 0x23, 0xb7, 0x11, 0x9e, 0x36, 0xa5, 0x14, 0xff, 0x01, 0x78, 0x10,
 		0x9d, 0x59, 0x47, 0x36, 0x68, 0x3b, 0x4a, 0x0a, 0xef, 0x12, 0x5c, 0x2a, 0x71, 0x15, 0x18, 0x7a,
 	}
-	_ = rex.PPUX.Upload(0x7000, palette[:])
+	_ = rex.PPUX.CGRAM.Upload(0, palette[:])
 
 	// listen on tcp port 25600
 	slots = slotsArray[:1:8]
@@ -185,7 +187,7 @@ func main() {
 			132,
 			132,
 			0x0000,
-			0x7000,
+			0x0000,
 			0b0010_0100_0000_0000_0000_0000_1000_1001,
 		)
 		// end of list:

@@ -15,7 +15,8 @@ ppux::ppux() {
     for (auto &layer: sub) {
         layer.resize(ppux::pitch * MAX_SNES_HEIGHT);
     }
-    ram.resize(ram_max_size);
+    vram.resize(vram_max_size);
+    cgram.resize(cgram_max_size);
     priority_depth_map[0] = 0;
     priority_depth_map[1] = 0;
     priority_depth_map[2] = 0;
@@ -243,13 +244,23 @@ bool ppux::cmd_write(uint32_t *data, uint32_t size) {
     return true;
 }
 
-bool ppux::upload(uint32_t addr, uint8_t *data, uint32_t size) {
+bool ppux::vram_upload(uint32_t addr, uint8_t *data, uint32_t size) {
     uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
-    if (maxaddr >= ram_max_size) {
+    if (maxaddr >= vram_max_size) {
         return false;
     }
 
-    std::copy_n(data, size, ram.begin() + addr);
+    std::copy_n(data, size, vram.begin() + addr);
+    return true;
+}
+
+bool ppux::cgram_upload(uint32_t addr, uint8_t *data, uint32_t size) {
+    uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
+    if (maxaddr >= vram_max_size) {
+        return false;
+    }
+
+    std::copy_n(data, size, cgram.begin() + addr);
     return true;
 }
 
@@ -394,14 +405,11 @@ void ppux::draw_vram_tile(
     unsigned x0, unsigned y0,
     unsigned w, unsigned h,
 
-    uint32_t vram_addr,
-    uint32_t cgram_addr,
+    const uint8_t *vram,
+    const uint8_t *cgram,
 
     PLOT plot
 ) {
-    auto vram = (ram.data() + vram_addr);
-    auto cgram = (ram.data() + cgram_addr);
-
     // draw tile:
     unsigned sy = y0;
     for (int ty = 0; ty < h; ty++, sy++) {
@@ -417,7 +425,7 @@ void ppux::draw_vram_tile(
 
             uint8_t col, d0, d1, d2, d3, d4, d5, d6, d7;
             uint8_t mask = 1 << (7 - (x & 7));
-            uint8_t *tile_ptr = vram;
+            const uint8_t *tile_ptr = vram;
 
             switch (bpp) {
                 case 2:
@@ -510,6 +518,9 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32
     auto cgram_addr = *it;
     it++;
 
+    auto bitmap = vram.data() + bitmap_addr;
+    auto palette = cgram.data() + cgram_addr;
+
     auto width = 8 << (*it & 7);
     auto height = 8 << ((*it >> 3) & 7);
     auto hflip = (*it & (1 << 7)) == (1 << 7);
@@ -528,14 +539,14 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32
     if (!hflip) {
         if (!vflip) {
             draw_vram_tile<4, false, false>(
-                x0, y0, width, height, bitmap_addr, cgram_addr,
+                x0, y0, width, height, bitmap, palette,
                 [&](unsigned sx, unsigned sy, uint16_t color) {
                     vec[sy * ppux::pitch + sx] = (uint32_t)color | PX_ENABLE | prio;
                 }
             );
         } else {
             draw_vram_tile<4, false, true>(
-                x0, y0, width, height, bitmap_addr, cgram_addr,
+                x0, y0, width, height, bitmap, palette,
                 [&](unsigned sx, unsigned sy, uint16_t color) {
                     vec[sy * ppux::pitch + sx] = (uint32_t)color | PX_ENABLE | prio;
                 }
@@ -544,14 +555,14 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32
     } else {
         if (!vflip) {
             draw_vram_tile<4, true, false>(
-                x0, y0, width, height, bitmap_addr, cgram_addr,
+                x0, y0, width, height, bitmap, palette,
                 [&](unsigned sx, unsigned sy, uint16_t color) {
                     vec[sy * ppux::pitch + sx] = (uint32_t)color | PX_ENABLE | prio;
                 }
             );
         } else {
             draw_vram_tile<4, true, true>(
-                x0, y0, width, height, bitmap_addr, cgram_addr,
+                x0, y0, width, height, bitmap, palette,
                 [&](unsigned sx, unsigned sy, uint16_t color) {
                     vec[sy * ppux::pitch + sx] = (uint32_t)color | PX_ENABLE | prio;
                 }

@@ -146,10 +146,19 @@ bool wasm_host_init() {
                 nullptr
             });
             natives->push_back({
-                "ppux_upload",
+                "ppux_vram_upload",
                 (void *) (+[](wasm_exec_env_t exec_env, uint32_t addr, uint8_t *data, uint32_t size) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("ppux_upload", m->ppux.upload(addr, data, size));
+                    MEASURE_TIMING_RETURN("ppux_vram_upload", m->ppux.vram_upload(addr, data, size));
+                }),
+                "(i*~)i",
+                nullptr
+            });
+            natives->push_back({
+                "ppux_cgram_upload",
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t addr, uint8_t *data, uint32_t size) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_RETURN("ppux_cgram_upload", m->ppux.cgram_upload(addr, data, size));
                 }),
                 "(i*~)i",
                 nullptr
