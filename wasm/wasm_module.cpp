@@ -52,8 +52,8 @@ void module::start_thread() {
 
             // create a debug instance:
             auto cluster = wasm_exec_env_get_cluster(m->exec_env);
-            auto debug_instance = wasm_debug_instance_create(cluster, -1);
-            wasm_debug_instance_continue(debug_instance);
+            wasm_debug_instance_create(cluster, -1);
+            wasm_cluster_thread_continue(m->exec_env);
 
             m->thread_main();
             wasm_runtime_destroy_thread_env();
