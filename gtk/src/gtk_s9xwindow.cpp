@@ -42,6 +42,7 @@
 
 #ifdef USE_WASM
 #include "wasm_host.h"
+#include "gtk_wasm.h"
 #endif
 
 static Glib::RefPtr<Gtk::FileFilter> get_save_states_file_filter()
@@ -275,11 +276,11 @@ void Snes9xWindow::connect_signals()
     });
 
 #ifdef USE_WASM
-    get_object<Gtk::CheckMenuItem>("wasm_remote_debugger_item")->signal_toggled().connect([&] {
-        wasm_host_debugger_enable(
-            get_object<Gtk::CheckMenuItem>("wasm_remote_debugger_item")->get_active()
-        );
+    get_object<Gtk::MenuItem>("wasm_console_item")->signal_activate().connect([&] {
+        snes9x_wasm_open(this);
     });
+#else
+    get_object<Gtk::MenuItem>("wasm_console_item")->hide();
 #endif
 }
 

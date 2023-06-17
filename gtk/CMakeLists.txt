@@ -277,6 +277,8 @@ if(USE_WAMR)
             ../wasm/wasm_module.cpp
             ../wasm/wasm_ppux.cpp
             ../wasm/wasm_net.cpp
+            src/gtk_wasm.cpp
+            src/gtk_wasm.h
             )
 endif()
 
