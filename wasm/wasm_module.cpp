@@ -48,15 +48,13 @@ void module::start_thread() {
 
             //pthread_setname_np("wasm");
 
-            uint32_t debug_port = wasm_runtime_start_debug_instance(m->exec_env);
-            fprintf(stdout, "wasm: debugger listening on 127.0.0.1:%u\n", debug_port);
-
-            auto dbg = wasm_exec_env_get_instance(m->exec_env);
-            if (!wasm_debug_instance_continue(dbg)) {
-                fprintf(stderr, "wasm: debugger could not continue\n");
-            }
-
             wasm_runtime_init_thread_env();
+
+            // create a debug instance:
+            auto cluster = wasm_exec_env_get_cluster(m->exec_env);
+            auto debug_instance = wasm_debug_instance_create(cluster, -1);
+            wasm_debug_instance_continue(debug_instance);
+
             m->thread_main();
             wasm_runtime_destroy_thread_env();
         },
@@ -158,5 +156,17 @@ void module::notify_event(uint32_t event_p) {
             std::chrono::microseconds(3000),
             [this]() { return !event_triggered; }
         );
+    }
+}
+
+void module::debugger_enable(bool enabled) {
+    auto debug_instance = wasm_exec_env_get_instance(exec_env);
+    if (enabled) {
+        // set module to single-step mode so remote debugger can attach:
+        wasm_cluster_send_signal_all(debug_instance->cluster, WAMR_SIG_SINGSTEP);
+    } else {
+        // continue wasm execution:
+        wasm_cluster_thread_continue(exec_env);
+        //wasm_debug_instance_continue(debug_instance);
     }
 }

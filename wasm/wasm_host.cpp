@@ -6,6 +6,9 @@
 
 // WAMR:
 #include "wasm_export.h"
+extern "C" {
+#include "debug_engine.h"
+}
 
 #include "wasi_types.h"
 #include "wasm_host.h"
@@ -243,6 +246,9 @@ bool wasm_host_init() {
 
     wasm_host_register_wasi();
 
+    // each module listens for remote debuggers on port 2766+n where n >= 0:
+    wasm_debug_engine_init((char *)"127.0.0.1", 2766);
+
     return true;
 }
 
@@ -317,5 +323,11 @@ int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint3
 void wasm_host_notify_events(wasm_event_kind events) {
     for_each_module([=](std::shared_ptr<module> m) {
         m->notify_event(events);
+    });
+}
+
+void wasm_host_debugger_enable(bool enabled) {
+    for_each_module([=](std::shared_ptr<module> m) {
+        m->debugger_enable(enabled);
     });
 }

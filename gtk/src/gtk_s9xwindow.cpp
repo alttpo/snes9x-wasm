@@ -40,6 +40,10 @@
 #include "snapshot.h"
 #include "netplay.h"
 
+#ifdef USE_WASM
+#include "wasm_host.h"
+#endif
+
 static Glib::RefPtr<Gtk::FileFilter> get_save_states_file_filter()
 {
     const char *exts[] = { "*.sst", "*.000", "*.001", "*.002", "*.003", "*.004",
@@ -269,6 +273,14 @@ void Snes9xWindow::connect_signals()
     get_object<Gtk::MenuItem>("open_multicart_item")->signal_activate().connect([&] {
         open_multicart_dialog();
     });
+
+#ifdef USE_WASM
+    get_object<Gtk::CheckMenuItem>("wasm_remote_debugger_item")->signal_toggled().connect([&] {
+        wasm_host_debugger_enable(
+            get_object<Gtk::CheckMenuItem>("wasm_remote_debugger_item")->get_active()
+        );
+    });
+#endif
 }
 
 bool Snes9xWindow::button_press(GdkEventButton *event)
