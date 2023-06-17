@@ -9368,7 +9368,6 @@
               <object class="GtkHBox" id="wasm-hbox1">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
-                <property name="spacing">5</property>
                 <child>
                   <object class="GtkLabel" id="wasm-label">
                     <property name="visible">True</property>

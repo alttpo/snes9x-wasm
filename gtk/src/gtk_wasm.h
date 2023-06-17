@@ -21,6 +21,8 @@ public:
     void show();
 
     void connect_signals();
+
+    Glib::RefPtr<Gtk::TextBuffer> textBuffer;
 };
 
 #endif /* __GTK_WASM_H */

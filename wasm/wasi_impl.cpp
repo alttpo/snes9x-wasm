@@ -16,6 +16,9 @@
 
 #include "wasi_impl.h"
 
+static wasi_write_cb stdout_write_cb = +[](const char *b, const char *e){ return fwrite(b, e - b, 1, stdout); };
+static wasi_write_cb stderr_write_cb = +[](const char *b, const char *e){ return fwrite(b, e - b, 1, stderr); };
+
 void wasm_host_register_wasi() {
     // register minimal WASI implementation:
     auto *natives = new std::vector<NativeSymbol>();
@@ -155,27 +158,27 @@ void wasm_host_register_wasi() {
         nullptr
     });
 
-    static FILE *fdFiles[3] = {
-        stdin,
-        stdout,
-        stderr
-    };
     natives->push_back({
         "fd_write",
         (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, const iovec_app_t *iovec_app, uint32_t iovs_len, uint32 *nwritten_app) -> int32_t {
             //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
             auto module_inst = wasm_runtime_get_module_inst(exec_env);
 
-            if (fd >= 3) {
+            // only stdout, stderr supported for writing:
+            wasi_write_cb cb;
+            if (fd == 1) {
+                cb = stdout_write_cb;
+            } else if (fd == 2) {
+                cb = stderr_write_cb;
+            } else {
                 return WASI_EBADF;
             }
-            FILE *f = fdFiles[fd];
 
             uint32_t written = 0;
             for (uint32_t i = 0; i < iovs_len; i++) {
                 auto ptr = wasm_runtime_addr_app_to_native(module_inst, iovec_app[i].buf_offset);
                 auto len = iovec_app[i].buf_len;
-                written += fwrite(ptr, len, 1, f);
+                written += cb((const char *)ptr,  (const char *)ptr + len);
             }
 
             *nwritten_app = written;
@@ -190,10 +193,12 @@ void wasm_host_register_wasi() {
             //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
             auto module_inst = wasm_runtime_get_module_inst(exec_env);
 
-            if (fd >= 3) {
+            // only stdin supported for reading:
+            if (fd != 0) {
                 return WASI_EBADF;
             }
-            FILE *f = fdFiles[fd];
+            // TODO: enhance with callback system to read from arbitrary stream
+            FILE *f = stdin;
 
             uint32_t nread = 0;
             for (uint32_t i = 0; i < iovs_len; i++) {
@@ -255,4 +260,12 @@ void wasm_host_register_wasi() {
         natives->data(),
         natives->size()
     );
+}
+
+void wasm_host_wasi_stdout(wasi_write_cb cb) {
+    stdout_write_cb = cb;
+}
+
+void wasm_host_wasi_stderr(wasi_write_cb cb) {
+    stderr_write_cb = cb;
 }
