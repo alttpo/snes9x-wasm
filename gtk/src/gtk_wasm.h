@@ -21,6 +21,8 @@ public:
     void show();
 
     void connect_signals();
+
+    bool auto_scroll = true;
 };
 
 extern Snes9xWasm *wasmWindow;

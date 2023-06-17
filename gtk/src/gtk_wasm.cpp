@@ -37,6 +37,11 @@ Snes9xWasm::~Snes9xWasm() {
 
 void Snes9xWasm::connect_signals() {
     //window->signal_key_press_event().connect(sigc::mem_fun(*this, &Snes9xWasm::key_pressed), false);
+    const Glib::RefPtr<Gtk::CheckButton> &autoScrollChk = get_object<Gtk::CheckButton>("wasm-auto-scroll");
+    autoScrollChk->signal_toggled().connect([&]{
+        auto_scroll = get_object<Gtk::CheckButton>("wasm-auto-scroll")->get_active();
+    });
+    autoScrollChk->set_active(auto_scroll);
 }
 
 void Snes9xWasm::show() {
