@@ -264,7 +264,7 @@ void wasm_host_unload_all_modules() {
     }
 }
 
-bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint32_t module_size) {
+int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint32_t module_size) {
     char wamrError[1024];
 
     for (auto it = modules.begin(); it != modules.end();) {
@@ -287,7 +287,7 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
     );
     if (!mod) {
         fprintf(stderr, "wasm_runtime_load: %s\n", wamrError);
-        return false;
+        return -1;
     }
 
     wasm_module_inst_t mi = wasm_runtime_instantiate(
@@ -300,17 +300,18 @@ bool wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint
     if (!mi) {
         wasm_runtime_unload(mod);
         fprintf(stderr, "wasm_runtime_instantiate: %s\n", wamrError);
-        return false;
+        return -1;
     }
 
     // track the new module:
     auto m = module::create(name, mod, mi, module_binary, module_size);
     modules.emplace_back(m);
+    auto index = (int)modules.size() - 1;
 
     // start the new thread:
     m->start_thread();
 
-    return true;
+    return index;
 }
 
 void wasm_host_notify_events(wasm_event_kind events) {

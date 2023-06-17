@@ -17,7 +17,7 @@ enum wasm_event_kind : uint32_t {
 bool wasm_host_init();
 
 void wasm_host_unload_all_modules();
-bool wasm_host_load_module(const std::string& name, uint8_t *module_binary, uint32_t module_size);
+int wasm_host_load_module(const std::string& name, uint8_t *module_binary, uint32_t module_size);
 
 void wasm_host_notify_events(wasm_event_kind events);
 

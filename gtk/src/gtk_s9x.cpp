@@ -229,7 +229,7 @@ void S9xROMLoaded()
     wasm_host_unload_all_modules();
 
     {
-        auto wasm_filename = S9xGetFilename(".wasm", PATCH_DIR);
+        auto wasm_filename = S9xGetFilename(".wasm", ROMFILENAME_DIR);
 
         FILE *fp = fopen(wasm_filename.c_str(), "rb");
         if (fp) {
