@@ -11,43 +11,23 @@
 
 #include "wasm_host.h"
 
-static Snes9xWasm *wasm = nullptr;
+Snes9xWasm *wasmWindow = nullptr;
 
 void snes9x_wasm_open(Snes9xWindow *window) {
-    if (!wasm)
-        wasm = new Snes9xWasm();
+    if (!wasmWindow)
+        wasmWindow = new Snes9xWasm();
 
-    wasm->window->set_transient_for(*window->window.get());
+    wasmWindow->window->set_transient_for(*window->window.get());
 
-    wasm->show();
-}
-
-size_t snes9x_wasm_append_text(const char *text_begin, const char *text_end) {
-    auto textView = wasm->get_object<Gtk::TextView>("wasm_console_view");
-    auto textBuffer = wasm->textBuffer;
-
-    // append to end of buffer:
-    auto iter = textBuffer->end();
-    textBuffer->insert(iter, text_begin, text_end);
-
-    // scroll to end of buffer:
-    iter = textBuffer->end();
-    textView->scroll_to(iter);
-
-    return text_end - text_begin;
+    wasmWindow->show();
 }
 
 Snes9xWasm::Snes9xWasm()
     : GtkBuilderWindow("wasm_window") {
     gtk_widget_realize(GTK_WIDGET(window->gobj()));
 
-    textBuffer = Gtk::TextBuffer::create();
     auto textView = get_object<Gtk::TextView>("wasm_console_view");
-    textView->set_buffer(textBuffer);
-
-    // redirect wasm stdout/stderr to append to our text buffer:
-    wasm_host_wasi_stdout(snes9x_wasm_append_text);
-    wasm_host_wasi_stderr(snes9x_wasm_append_text);
+    textView->set_buffer(top_level->wasmTextBuffer);
 
     connect_signals();
 }

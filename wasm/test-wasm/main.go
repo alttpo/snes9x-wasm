@@ -130,6 +130,7 @@ func main() {
 				fmt.Printf("%02x -> %02x\n", lastFrame, currFrame)
 			}
 			lastFrame = wram[0x1A]
+			fmt.Printf("%02x\n", lastFrame)
 			continue
 		}
 
@@ -204,6 +205,8 @@ func main() {
 
 		// unblock emulator:
 		rex.AcknowledgeLastEvent()
+
+		fmt.Printf("%02x\n", lastFrame)
 	}
 
 	slots[0].Close()

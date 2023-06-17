@@ -111,6 +111,10 @@ class Snes9xWindow : public GtkBuilderWindow
 
     unsigned int last_key_pressed_keyval;
     GdkEventType last_key_pressed_type;
+
+#ifdef USE_WASM
+    Glib::RefPtr<Gtk::TextBuffer> wasmTextBuffer;
+#endif
 };
 
 typedef struct gtk_splash_t

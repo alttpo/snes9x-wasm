@@ -65,6 +65,25 @@ static Glib::RefPtr<Gtk::FileFilter> get_all_files_filter()
     return filter;
 }
 
+static size_t snes9x_wasm_append_text(const char *text_begin, const char *text_end) {
+    auto textBuffer = top_level->wasmTextBuffer;
+
+    // append to end of buffer:
+    auto iter = textBuffer->end();
+    textBuffer->insert(iter, text_begin, text_end);
+
+    // scroll to end of buffer in wasmWindow's TextView:
+    if (wasmWindow) {
+        auto textView = wasmWindow->get_object<Gtk::TextView>("wasm_console_view");
+        if (textView) {
+            iter = textBuffer->end();
+            textView->scroll_to(iter);
+        }
+    }
+
+    return text_end - text_begin;
+}
+
 Snes9xWindow::Snes9xWindow(Snes9xConfig *config)
     : GtkBuilderWindow("main_window")
 {
@@ -116,6 +135,13 @@ Snes9xWindow::Snes9xWindow(Snes9xConfig *config)
     window->get_window()->set_cursor();
 
     resize(config->window_width, config->window_height);
+
+#ifdef USE_WASM
+    // redirect wasm stdout/stderr to append to our text buffer:
+    wasmTextBuffer = Gtk::TextBuffer::create();
+    wasm_host_wasi_stdout(snes9x_wasm_append_text);
+    wasm_host_wasi_stderr(snes9x_wasm_append_text);
+#endif
 }
 
 void Snes9xWindow::connect_signals()

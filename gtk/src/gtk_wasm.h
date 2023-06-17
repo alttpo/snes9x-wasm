@@ -21,8 +21,8 @@ public:
     void show();
 
     void connect_signals();
-
-    Glib::RefPtr<Gtk::TextBuffer> textBuffer;
 };
+
+extern Snes9xWasm *wasmWindow;
 
 #endif /* __GTK_WASM_H */
