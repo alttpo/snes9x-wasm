@@ -16,8 +16,8 @@
 
 #include "wasi_impl.h"
 
-static wasi_write_cb stdout_write_cb = +[](const char *b, const char *e){ return fwrite(b, e - b, 1, stdout); };
-static wasi_write_cb stderr_write_cb = +[](const char *b, const char *e){ return fwrite(b, e - b, 1, stderr); };
+wasi_write_cb stdout_write_cb = +[](const char *b, const char *e){ return fwrite(b, e - b, 1, stdout); };
+wasi_write_cb stderr_write_cb = +[](const char *b, const char *e){ return fwrite(b, e - b, 1, stderr); };
 
 void wasm_host_register_wasi() {
     // register minimal WASI implementation:

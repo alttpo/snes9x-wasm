@@ -262,6 +262,8 @@ if(USE_WAMR)
     set (WAMR_BUILD_SIMD 1)
     set (WAMR_BUILD_THREAD_MGR 1)
     #set (WAMR_BUILD_LIB_WASI_THREADS 1)
+    # point to our custom platform definition to override os_printf et al:
+    set (SHARED_PLATFORM_CONFIG ../wasm/shared/platform/shared_platform.cmake)
 
     include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
     add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE})
