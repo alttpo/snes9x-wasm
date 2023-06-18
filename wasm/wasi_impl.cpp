@@ -135,6 +135,28 @@ void wasm_host_register_wasi() {
     // (sock_shutdown, "(ii)i"),
     // (sched_yield, "()i"),
 
+    auto environ_sizes_get = (+[](wasm_exec_env_t exec_env, uint32 *environ_count_app, uint32 *environ_buf_size_app) {
+        *environ_count_app = 0;
+        *environ_buf_size_app = 0;
+        return 0;
+    });
+    auto environ_get = (+[](wasm_exec_env_t exec_env, uint32 *environ_offsets, char *environ_buf) {
+        return 0;
+    });
+
+    natives->push_back({
+        "environ_sizes_get",
+        (void *) environ_sizes_get,
+        "(**)i",
+        nullptr
+    });
+    natives->push_back({
+        "environ_get",
+        (void *) environ_get,
+        "(**)i",
+        nullptr
+    });
+
     natives->push_back({
         "fd_prestat_get",
         (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, wasi_prestat_app_t *prestat_app) -> int32_t {
