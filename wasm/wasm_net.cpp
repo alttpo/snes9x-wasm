@@ -53,6 +53,7 @@ auto net::tcp_listen(uint32_t port) -> int32_t {
     int flags = fcntl(fd, F_GETFL);
     int res = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
     if (res < 0) {
+        ::close(fd);
         // TODO: translate to wasi error?
         return -errno;
     }
@@ -65,6 +66,7 @@ auto net::tcp_listen(uint32_t port) -> int32_t {
 #else
     if (setsockopt(fd, SOL_SOCKET, TCP_NODELAY, (void *)&flags, sizeof(flags)) < 0) {
 #endif
+        ::close(fd);
         // TODO: translate to wasi error?
         return -errno;
     }
@@ -77,12 +79,14 @@ auto net::tcp_listen(uint32_t port) -> int32_t {
 
     if (::bind(fd, (const sockaddr *) &address, sizeof(address)) < 0) {
         fprintf(stderr, "net_tcp_listen: unable to bind socket; error %d\n", errno);
+        ::close(fd);
         // TODO: translate to wasi error?
         return -errno;
     }
 
     if (::listen(fd, 1) < 0) {
         fprintf(stderr, "net_tcp_listen: unable to listen on socket; error %d\n", errno);
+        ::close(fd);
         // TODO: translate to wasi error?
         return -errno;
     }
@@ -103,6 +107,86 @@ auto net::tcp_accept(int32_t slot) -> int32_t {
     }
 
     return allocate_slot(accepted);
+}
+
+auto net::udpv4_bind(uint32_t ipv4_addr, uint16_t port) -> int32_t {
+    int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) {
+        // TODO: translate to wasi error?
+        return -errno;
+    }
+
+#ifdef __WIN32__
+    unsigned long flags = 1;
+    int res = ioctlsocket(fd, FIONBIO, &flags);
+    if (res != NO_ERROR) {
+        ::close(fd);
+        return -res;
+    }
+#else
+    int flags = fcntl(fd, F_GETFL);
+    int res = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    if (res < 0) {
+        ::close(fd);
+        // TODO: translate to wasi error?
+        return -errno;
+    }
+#endif
+
+    struct sockaddr_in address{};
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(ipv4_addr);
+    address.sin_port = htons(port);
+
+    if (::bind(fd, (const sockaddr *) &address, sizeof(address)) < 0) {
+        fprintf(stderr, "net_udpv4_bind: unable to bind socket; error %d\n", errno);
+        ::close(fd);
+        // TODO: translate to wasi error?
+        return -errno;
+    }
+
+    return allocate_slot(fd);
+}
+
+auto net::udpv4_connect(uint32_t ipv4_addr, uint16_t port) -> int32_t {
+    int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) {
+        // TODO: translate to wasi error?
+        return -errno;
+    }
+
+#ifdef __WIN32__
+    unsigned long flags = 1;
+    int res = ioctlsocket(fd, FIONBIO, &flags);
+    if (res != NO_ERROR) {
+        ::close(fd);
+        return -res;
+    }
+#else
+    int flags = fcntl(fd, F_GETFL);
+    int res = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    if (res < 0) {
+        ::close(fd);
+        // TODO: translate to wasi error?
+        return -errno;
+    }
+#endif
+
+    struct sockaddr_in address{};
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(ipv4_addr);
+    address.sin_port = htons(port);
+
+    if (::connect(fd, (const sockaddr *) &address, sizeof(address)) < 0) {
+        fprintf(stderr, "net_udpv4_connect: unable to connect socket; error %d\n", errno);
+        ::close(fd);
+        // TODO: translate to wasi error?
+        return -errno;
+    }
+
+    return allocate_slot(fd);
 }
 
 auto net::poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t {
@@ -158,6 +242,31 @@ auto net::send(int32_t slot, uint8_t *data, uint32_t len) -> int32_t {
     return (int32_t)n;
 }
 
+auto net::sendto(int32_t slot, uint8_t *data, uint32_t len, uint32_t ipv4_addr, uint16_t port) -> int32_t {
+    auto it = slots.find(slot);
+    if (it == slots.end()) {
+        return -EBADF;
+    }
+
+    struct sockaddr_in address{};
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(ipv4_addr);
+    address.sin_port = htons(port);
+
+    auto fd = it->second;
+#ifdef __WIN32__
+    auto n = ::sendto(fd, (const char *)data, len, 0, (struct sockaddr *)&address, sizeof(address));
+#else
+    auto n = ::sendto(fd, data, len, 0, (struct sockaddr *)&address, sizeof(address));
+#endif
+    if (n < 0) {
+        return -errno;
+    }
+
+    return (int32_t)n;
+}
+
 auto net::recv(int32_t slot, uint8_t *data, uint32_t len) -> int32_t {
     auto it = slots.find(slot);
     if (it == slots.end()) {
@@ -173,6 +282,32 @@ auto net::recv(int32_t slot, uint8_t *data, uint32_t len) -> int32_t {
     if (n < 0) {
         return -errno;
     }
+
+    return (int32_t)n;
+}
+
+auto net::recvfrom(int32_t slot, uint8_t *data, uint32_t len, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t {
+    auto it = slots.find(slot);
+    if (it == slots.end()) {
+        return -EBADF;
+    }
+
+    socklen_t address_len;
+    struct sockaddr_in address{};
+    memset(&address, 0, sizeof(address));
+
+    auto fd = it->second;
+#ifdef __WIN32__
+    auto n = ::recv(fd, (char*)data, len, 0);
+#else
+    auto n = ::recvfrom(fd, data, len, 0, (struct sockaddr *)&address, &address_len);
+#endif
+    if (n < 0) {
+        return -errno;
+    }
+
+    *o_ipv4_addr = ntohl(address.sin_addr.s_addr);
+    *o_port = ntohs(address.sin_port);
 
     return (int32_t)n;
 }
