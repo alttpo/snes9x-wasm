@@ -25,14 +25,14 @@ std::vector<std::shared_ptr<module>> modules;
         auto t_start = std::chrono::steady_clock::now(); \
         auto retval = (expr); \
         auto t_end = std::chrono::steady_clock::now(); \
-        printf(name ": %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start).count()); \
+        wasm_host_stdout_printf(name ": %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start).count()); \
         return retval; \
     }
 #  define MEASURE_TIMING_DO(name, stmt) { \
         auto t_start = std::chrono::steady_clock::now(); \
         stmt; \
         auto t_end = std::chrono::steady_clock::now(); \
-        printf(name ": %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start).count()); \
+        wasm_host_stdout_printf(name ": %lld us\n", std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start).count()); \
     }
 #else
 #  define MEASURE_TIMING_RETURN(name, expr) return (expr)
@@ -300,7 +300,7 @@ bool wasm_host_init() {
     }
 
     if (!wasm_runtime_full_init(&init)) {
-        fprintf(stderr, "wasm_runtime_full_init failed\n");
+        wasm_host_stderr_printf("wasm_runtime_full_init failed\n");
         return false;
     }
 
@@ -352,7 +352,7 @@ int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint3
         sizeof(wamrError)
     );
     if (!mod) {
-        fprintf(stderr, "wasm_runtime_load: %s\n", wamrError);
+        wasm_host_stderr_printf("wasm_runtime_load: %s\n", wamrError);
         return -1;
     }
 
@@ -365,7 +365,7 @@ int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint3
     );
     if (!mi) {
         wasm_runtime_unload(mod);
-        fprintf(stderr, "wasm_runtime_instantiate: %s\n", wamrError);
+        wasm_host_stderr_printf("wasm_runtime_instantiate: %s\n", wamrError);
         return -1;
     }
 

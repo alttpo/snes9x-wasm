@@ -206,8 +206,7 @@ bool ppux::cmd_write(uint32_t *data, uint32_t size) {
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
             // MSB must be 1 to indicate opcode/size start of frame:
-            fprintf(
-                stderr, "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
+            wasm_host_stderr_printf("enqueued cmd list malformed at index %td; opcode must have MSB set\n",
                 it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
             return false;
@@ -297,7 +296,7 @@ void ppux::render_cmd() {
         //   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
-            fprintf(stderr, "cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.begin());
+            wasm_host_stderr_printf("cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.begin());
             cmd.erase(cmd.begin(), cmd.end());
             return;
         }

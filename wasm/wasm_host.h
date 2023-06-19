@@ -40,4 +40,33 @@ void wasm_host_frame_start();
 void wasm_host_frame_end();
 void wasm_host_frame_skip();
 
+
+template<typename ... Args>
+size_t wasm_host_stdout_printf(const std::string& format, Args ... args) {
+    int size_s = std::snprintf( nullptr, 0, format.c_str(), args ... ) + 1;
+    if (size_s <= 0) {
+        throw std::runtime_error("error formatting");
+    }
+
+    auto size = static_cast<size_t>( size_s );
+    std::unique_ptr<char[]> buf(new char[size]);
+
+    std::snprintf(buf.get(), size, format.c_str(), args ...);
+    return wasm_host_write_stdout(buf.get(), buf.get() + size - 1);
+}
+
+template<typename ... Args>
+size_t wasm_host_stderr_printf(const std::string& format, Args ... args) {
+    int size_s = std::snprintf( nullptr, 0, format.c_str(), args ... ) + 1;
+    if (size_s <= 0) {
+        throw std::runtime_error("error formatting");
+    }
+
+    auto size = static_cast<size_t>( size_s );
+    std::unique_ptr<char[]> buf(new char[size]);
+
+    std::snprintf(buf.get(), size, format.c_str(), args ...);
+    return wasm_host_write_stderr(buf.get(), buf.get() + size - 1);
+}
+
 #endif //SNES9X_WASM_HOST_H

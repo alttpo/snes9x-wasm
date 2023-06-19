@@ -112,9 +112,7 @@ void module::thread_main() {
 fail:
     const char *ex;
     ex = wasm_runtime_get_exception(module_inst);
-    wasm_host_write_stdout(name + " wasm module encountered exception: ");
-    wasm_host_write_stderr(ex, ex + strlen(ex));
-    wasm_host_write_stderr("\n");
+    wasm_host_stderr_printf("%s wasm module encountered exception: %s\n", name.c_str(), ex);
     return;
 
 exec_main:

@@ -113,7 +113,6 @@ auto net::connect(int32_t slot, uint32_t ipv4_addr, uint16_t port) -> int32_t {
     address.sin_port = htons(port);
 
     if (::connect(fd, (const sockaddr *) &address, sizeof(address)) < 0) {
-        fprintf(stderr, "net_connect: unable to connect socket; error %d\n", errno);
         // TODO: translate to wasi error?
         return -errno;
     }
@@ -135,7 +134,6 @@ auto net::bind(int32_t slot, uint32_t ipv4_addr, uint16_t port) -> int32_t {
     address.sin_port = htons(port);
 
     if (::bind(fd, (const sockaddr *) &address, sizeof(address)) < 0) {
-        fprintf(stderr, "net_bind: unable to bind socket; error %d\n", errno);
         // TODO: translate to wasi error?
         return -errno;
     }
@@ -151,7 +149,6 @@ auto net::listen(int32_t slot) -> int32_t {
     auto fd = it->second;
 
     if (::listen(fd, 1) < 0) {
-        fprintf(stderr, "net_listen: unable to listen on socket; error %d\n", errno);
         // TODO: translate to wasi error?
         return -errno;
     }
