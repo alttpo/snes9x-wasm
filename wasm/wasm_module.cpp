@@ -12,6 +12,7 @@ module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p,
     : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), module_binary(module_binary_p), module_size(module_size_p), ppux() {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
+    wasm_host_write_stdout(name + " wasm module created\n");
 }
 
 module::~module() {
@@ -23,6 +24,7 @@ module::~module() {
     delete[] module_binary;
     module_binary = nullptr;
     module_size = 0;
+    wasm_host_write_stdout(name + " wasm module destroyed\n");
 }
 
 [[nodiscard]] std::shared_ptr<module>
@@ -108,7 +110,11 @@ void module::thread_main() {
 #endif
 
 fail:
-    fprintf(stderr, "wasm exception: %s\n", wasm_runtime_get_exception(module_inst));
+    const char *ex;
+    ex = wasm_runtime_get_exception(module_inst);
+    wasm_host_write_stdout(name + " wasm module encountered exception: ");
+    wasm_host_write_stderr(ex, ex + strlen(ex));
+    wasm_host_write_stderr("\n");
     return;
 
 exec_main:

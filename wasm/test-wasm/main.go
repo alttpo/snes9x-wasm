@@ -91,9 +91,30 @@ func main() {
 	// listen on tcp port 25600
 	slots = slotsArray[:1:8]
 	var err error
-	slots[0], err = rex.TCPListen(25600)
+	slots[0], err = rex.TCPSocket()
 	if err != nil {
-		fmt.Printf("listen: %v\n", err)
+		fmt.Printf("%v\n", err)
+	}
+	err = slots[0].Bind(rex.AddrV4{0, 25600})
+	if err != nil {
+		fmt.Printf("%v\n", err)
+	}
+	err = slots[0].Listen()
+	if err != nil {
+		fmt.Printf("%v\n", err)
+	}
+
+	// connect to udp socket:
+	var sock *rex.Socket
+	sock, err = rex.UDPSocket()
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		return
+	}
+	err = sock.Connect(rex.AddrV4{Addr: 0x7F000001, Port: 2700})
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		return
 	}
 
 	r = 0
@@ -264,7 +285,7 @@ func handleNetwork() {
 		fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[0].Slot, revents)
 		if slots[0].IsReadAvailable() {
 			var accepted *rex.Socket
-			accepted, err = slots[0].TCPAccept()
+			accepted, err = slots[0].Accept()
 			if err != nil {
 				fmt.Printf("accept: %v\n", err)
 			} else {
