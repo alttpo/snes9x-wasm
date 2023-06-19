@@ -284,10 +284,32 @@ void wasm_host_register_wasi() {
     );
 }
 
-void wasm_host_wasi_stdout(wasi_write_cb cb) {
+void wasm_host_set_wasi_stdout_cb(wasi_write_cb cb) {
     stdout_write_cb = cb;
 }
 
-void wasm_host_wasi_stderr(wasi_write_cb cb) {
+void wasm_host_set_wasi_stderr_cb(wasi_write_cb cb) {
     stderr_write_cb = cb;
+}
+
+size_t wasm_host_write_stdout(const char *text_begin, const char *text_end) {
+    if (stdout_write_cb) {
+        return stdout_write_cb(text_begin, text_end);
+    }
+    return 0;
+}
+
+size_t wasm_host_write_stdout(const std::string& str) {
+    return wasm_host_write_stdout(str.data(), str.data() + str.length());
+}
+
+size_t wasm_host_write_stderr(const char *text_begin, const char *text_end) {
+    if (stderr_write_cb) {
+        return stderr_write_cb(text_begin, text_end);
+    }
+    return 0;
+}
+
+size_t wasm_host_write_stderr(const std::string& str) {
+    return wasm_host_write_stderr(str.data(), str.data() + str.length());
 }

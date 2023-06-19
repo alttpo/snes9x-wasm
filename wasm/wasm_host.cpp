@@ -172,44 +172,64 @@ bool wasm_host_init() {
 
         // network interface:
         {
-            // net_tcp_listen(uint16_t port) -> int32_t
+            // net_tcp_socket() -> int32_t
             natives->push_back({
-                "net_tcp_listen",
-                (void *) (+[](wasm_exec_env_t exec_env, uint16_t port) -> int32_t {
+                "net_tcp_socket",
+                (void *) (+[](wasm_exec_env_t exec_env) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_tcp_listen", m->net.tcp_listen(port));
+                    MEASURE_TIMING_RETURN("net_tcp_socket", m->net.tcp_socket());
+                }),
+                "()i",
+                nullptr
+            });
+            // net_udp_socket() -> int32_t
+            natives->push_back({
+                "net_udp_socket",
+                (void *) (+[](wasm_exec_env_t exec_env) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_RETURN("net_udp_socket", m->net.udp_socket());
+                }),
+                "()i",
+                nullptr
+            });
+            // net_connect(int32_t slot, uint32_t ipv4_addr, uint16_t port) -> int32_t
+            natives->push_back({
+                "net_connect",
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot, uint32_t ipv4_addr, uint16_t port) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_RETURN("net_connect", m->net.connect(slot, ipv4_addr, port));
+                }),
+                "(iii)i",
+                nullptr
+            });
+            // net_bind(int32_t slot, uint32_t ipv4_addr, uint16_t port) -> int32_t
+            natives->push_back({
+                "net_bind",
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot, uint32_t ipv4_addr, uint16_t port) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_RETURN("net_bind", m->net.bind(slot, ipv4_addr, port));
+                }),
+                "(iii)i",
+                nullptr
+            });
+            // net_listen(int32_t slot) -> int32_t
+            natives->push_back({
+                "net_listen",
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_RETURN("net_listen", m->net.listen(slot));
                 }),
                 "(i)i",
                 nullptr
             });
-            // net_tcp_accept(int32_t fd) -> int32_t
+            // net_accept(int32_t slot) -> int32_t
             natives->push_back({
-                "net_tcp_accept",
-                (void *) (+[](wasm_exec_env_t exec_env, int32_t fd) -> int32_t {
+                "net_accept",
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_tcp_accept", m->net.tcp_accept(fd));
+                    MEASURE_TIMING_RETURN("net_accept", m->net.accept(slot));
                 }),
                 "(i)i",
-                nullptr
-            });
-            // net_udpv4_bind(uint32_t ipv4_addr, uint16_t port) -> int32_t
-            natives->push_back({
-                "net_udpv4_bind",
-                (void *) (+[](wasm_exec_env_t exec_env, uint32_t ipv4_addr, uint16_t port) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_udpv4_bind", m->net.udpv4_bind(ipv4_addr, port));
-                }),
-                "(ii)i",
-                nullptr
-            });
-            // net_udpv4_connect(uint32_t ipv4_addr, uint16_t port) -> int32_t
-            natives->push_back({
-                "net_udpv4_connect",
-                (void *) (+[](wasm_exec_env_t exec_env, uint32_t ipv4_addr, uint16_t port) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_udpv4_connect", m->net.udpv4_connect(ipv4_addr, port));
-                }),
-                "(ii)i",
                 nullptr
             });
             // net_poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t
@@ -222,52 +242,52 @@ bool wasm_host_init() {
                 "(*~)i",
                 nullptr
             });
-            // net_send(int32_t fd, uint8_t *data, uint32_t data_len) -> int32_t
+            // net_send(int32_t slot, uint8_t *data, uint32_t data_len) -> int32_t
             natives->push_back({
                 "net_send",
-                (void *) (+[](wasm_exec_env_t exec_env, int32_t fd, uint8_t *data, uint32_t len) -> int32_t {
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot, uint8_t *data, uint32_t len) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_send", m->net.send(fd, data, len));
+                    MEASURE_TIMING_RETURN("net_send", m->net.send(slot, data, len));
                 }),
                 "(i*~)i",
                 nullptr
             });
-            // net_sendto(int32_t fd, uint8_t *data, uint32_t data_len, uint32_t ipv4_addr, uint16_t port) -> int32_t
+            // net_sendto(int32_t slot, uint8_t *data, uint32_t data_len, uint32_t ipv4_addr, uint16_t port) -> int32_t
             natives->push_back({
                 "net_sendto",
-                (void *) (+[](wasm_exec_env_t exec_env, int32_t fd, uint8_t *data, uint32_t len, uint32_t ipv4_addr, uint16_t port) -> int32_t {
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot, uint8_t *data, uint32_t len, uint32_t ipv4_addr, uint16_t port) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_sendto", m->net.sendto(fd, data, len, ipv4_addr, port));
+                    MEASURE_TIMING_RETURN("net_sendto", m->net.sendto(slot, data, len, ipv4_addr, port));
                 }),
                 "(i*~ii)i",
                 nullptr
             });
-            // net_recv(int32_t fd, uint8_t *data, uint32_t data_len) -> int32_t
+            // net_recv(int32_t slot, uint8_t *data, uint32_t data_len) -> int32_t
             natives->push_back({
                 "net_recv",
-                (void *) (+[](wasm_exec_env_t exec_env, int32_t fd, uint8_t *data, uint32_t len) -> int32_t {
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot, uint8_t *data, uint32_t len) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_recv", m->net.recv(fd, data, len));
+                    MEASURE_TIMING_RETURN("net_recv", m->net.recv(slot, data, len));
                 }),
                 "(i*~)i",
                 nullptr
             });
-            // net_recvfrom(int32_t fd, uint8_t *data, uint32_t data_len, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t
+            // net_recvfrom(int32_t slot, uint8_t *data, uint32_t data_len, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t
             natives->push_back({
                 "net_recvfrom",
-                (void *) (+[](wasm_exec_env_t exec_env, int32_t fd, uint8_t *data, uint32_t len, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t {
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot, uint8_t *data, uint32_t len, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_recvfrom", m->net.recvfrom(fd, data, len, o_ipv4_addr, o_port));
+                    MEASURE_TIMING_RETURN("net_recvfrom", m->net.recvfrom(slot, data, len, o_ipv4_addr, o_port));
                 }),
-                "(i*~ii)i",
+                "(i*~**)i",
                 nullptr
             });
-            // net_close(int32_t fd) -> int32_t
+            // net_close(int32_t slot) -> int32_t
             natives->push_back({
                 "net_close",
-                (void *) (+[](wasm_exec_env_t exec_env, int32_t fd) -> int32_t {
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_close", m->net.close(fd));
+                    MEASURE_TIMING_RETURN("net_close", m->net.close(slot));
                 }),
                 "(i)i",
                 nullptr

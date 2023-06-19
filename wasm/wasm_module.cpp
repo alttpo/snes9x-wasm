@@ -106,11 +106,12 @@ void module::thread_main() {
         "_main, __main_argc_argv) failed"
     );
 #endif
-    fail:
+
+fail:
     fprintf(stderr, "wasm exception: %s\n", wasm_runtime_get_exception(module_inst));
     return;
 
-    exec_main:
+exec_main:
     if (!wasm_runtime_call_wasm(exec_env, func, 0, nullptr)) {
         goto fail;
     }

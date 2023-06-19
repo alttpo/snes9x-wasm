@@ -139,8 +139,8 @@ Snes9xWindow::Snes9xWindow(Snes9xConfig *config)
 #ifdef USE_WASM
     // redirect wasm stdout/stderr to append to our text buffer:
     wasmTextBuffer = Gtk::TextBuffer::create();
-    wasm_host_wasi_stdout(snes9x_wasm_append_text);
-    wasm_host_wasi_stderr(snes9x_wasm_append_text);
+    wasm_host_set_wasi_stdout_cb(snes9x_wasm_append_text);
+    wasm_host_set_wasi_stderr_cb(snes9x_wasm_append_text);
 #endif
 }
 

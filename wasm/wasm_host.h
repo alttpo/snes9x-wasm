@@ -18,8 +18,12 @@ enum wasm_event_kind : uint32_t {
 
 typedef size_t (*wasi_write_cb)(const char *text_begin, const char *text_end);
 
-void wasm_host_wasi_stdout(wasi_write_cb cb);
-void wasm_host_wasi_stderr(wasi_write_cb cb);
+void wasm_host_set_wasi_stdout_cb(wasi_write_cb cb);
+void wasm_host_set_wasi_stderr_cb(wasi_write_cb cb);
+size_t wasm_host_write_stdout(const std::string& str);
+size_t wasm_host_write_stdout(const char *text_begin, const char *text_end);
+size_t wasm_host_write_stderr(const std::string& str);
+size_t wasm_host_write_stderr(const char *text_begin, const char *text_end);
 
 bool wasm_host_init();
 void wasm_host_unload_all_modules();
