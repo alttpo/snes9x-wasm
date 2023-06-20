@@ -48,7 +48,7 @@ func net_listen(slot int32) int32
 
 //go:wasm-module rex
 //export net_accept
-func net_accept(slot int32) int32
+func net_accept(slot int32, o_ipv4_addr *uint32, o_port *uint16) int32
 
 //go:wasm-module rex
 //export net_poll
@@ -126,10 +126,10 @@ func (s *Socket) Listen() (err error) {
 	return
 }
 
-func (s *Socket) Accept() (a *Socket, err error) {
-	res := net_accept(s.Slot)
+func (s *Socket) Accept() (a *Socket, addr AddrV4, err error) {
+	res := net_accept(s.Slot, &addr.Addr, &addr.Port)
 	if res < 0 {
-		return nil, fmt.Errorf("error accepting socket: %d", -res)
+		return nil, AddrV4{}, fmt.Errorf("error accepting socket: %d", -res)
 	}
 	a = &Socket{Slot: res}
 	return

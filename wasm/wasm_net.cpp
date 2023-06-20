@@ -156,16 +156,27 @@ auto net::listen(int32_t slot) -> int32_t {
     return 0;
 }
 
-auto net::accept(int32_t slot) -> int32_t {
+auto net::accept(int32_t slot, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t {
     auto it = slots.find(slot);
     if (it == slots.end()) {
         return -EBADF;
     }
     auto fd = it->second;
 
-    auto accepted = ::accept(fd, nullptr, nullptr);
+    socklen_t address_len = 0;
+    struct sockaddr_in address{};
+    memset(&address, 0, sizeof(address));
+
+    auto accepted = ::accept(fd, (struct sockaddr *)&address, &address_len);
     if (accepted < 0) {
         return -errno;
+    }
+
+    if (o_ipv4_addr) {
+        *o_ipv4_addr = ntohl(address.sin_addr.s_addr);
+    }
+    if (o_port) {
+        *o_port = ntohs(address.sin_port);
     }
 
     return allocate_slot(accepted);

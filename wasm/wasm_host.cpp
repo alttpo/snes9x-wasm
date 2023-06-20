@@ -222,14 +222,14 @@ bool wasm_host_init() {
                 "(i)i",
                 nullptr
             });
-            // net_accept(int32_t slot) -> int32_t
+            // net_accept(int32_t slot, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t
             natives->push_back({
                 "net_accept",
-                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot) -> int32_t {
+                (void *) (+[](wasm_exec_env_t exec_env, int32_t slot, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("net_accept", m->net.accept(slot));
+                    MEASURE_TIMING_RETURN("net_accept", m->net.accept(slot, o_ipv4_addr, o_port));
                 }),
-                "(i)i",
+                "(i**)i",
                 nullptr
             });
             // net_poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t

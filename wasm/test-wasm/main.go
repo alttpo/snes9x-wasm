@@ -285,7 +285,7 @@ func handleNetwork() {
 		fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[0].Slot, revents)
 		if slots[0].IsReadAvailable() {
 			var accepted *rex.Socket
-			accepted, err = slots[0].Accept()
+			accepted, _, err = slots[0].Accept()
 			if err != nil {
 				fmt.Printf("accept: %v\n", err)
 			} else {

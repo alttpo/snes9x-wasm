@@ -83,6 +83,7 @@ static size_t snes9x_wasm_append_text(const char *text_begin, const char *text_e
                 auto iter = textBuffer->end();
                 textView->scroll_to(iter);
             }
+            wasmWindow->refresh();
         }
     }
 
