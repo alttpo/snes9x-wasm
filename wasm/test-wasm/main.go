@@ -17,8 +17,8 @@ const (
 	ev_ppu_frame_skip
 )
 
-var slotsArray [8]*rex.Socket
-var slots []*rex.Socket
+var slotsArray [8]rex.Socket
+var slots []rex.Socket
 
 // each pixel is represented by a 4-byte little-endian uint32:
 //
@@ -91,7 +91,7 @@ func main() {
 	// listen on tcp port 25600
 	slots = slotsArray[:1:8]
 	var err error
-	slots[0], err = rex.TCPSocket()
+	err = rex.TCPSocket(&slots[0])
 	if err != nil {
 		fmt.Printf("%v\n", err)
 	}
@@ -105,8 +105,8 @@ func main() {
 	}
 
 	// connect to udp socket:
-	var sock *rex.Socket
-	sock, err = rex.UDPSocket()
+	var sock rex.Socket
+	err = rex.UDPSocket(&sock)
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		return
@@ -284,8 +284,8 @@ func handleNetwork() {
 
 		fmt.Printf("poll: slot[%d]: revents=0x%04x\n", slots[0].Slot, revents)
 		if slots[0].IsReadAvailable() {
-			var accepted *rex.Socket
-			accepted, _, err = slots[0].Accept()
+			var accepted rex.Socket
+			_, err = slots[0].Accept(&accepted)
 			if err != nil {
 				fmt.Printf("accept: %v\n", err)
 			} else {
