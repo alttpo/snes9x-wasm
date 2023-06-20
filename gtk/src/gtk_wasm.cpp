@@ -17,7 +17,7 @@ void snes9x_wasm_open(Snes9xWindow *window) {
     if (!wasmWindow)
         wasmWindow = new Snes9xWasm();
 
-    wasmWindow->window->set_transient_for(*window->window.get());
+    //wasmWindow->window->set_transient_for(*window->window.get());
 
     wasmWindow->show();
 }

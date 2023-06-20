@@ -66,18 +66,23 @@ static Glib::RefPtr<Gtk::FileFilter> get_all_files_filter()
 }
 
 static size_t snes9x_wasm_append_text(const char *text_begin, const char *text_end) {
-    auto textBuffer = top_level->wasmTextBuffer;
+    {
+        auto textBuffer = top_level->wasmTextBuffer;
 
-    // append to end of buffer:
-    auto iter = textBuffer->end();
-    textBuffer->insert(iter, text_begin, text_end);
+        // append to end of buffer:
+        auto iter = textBuffer->end();
+        textBuffer->insert(iter, text_begin, text_end);
+    }
 
-    // scroll to end of buffer in wasmWindow's TextView:
-    if (wasmWindow && wasmWindow->auto_scroll) {
-        auto textView = wasmWindow->get_object<Gtk::TextView>("wasm_console_view");
-        if (textView) {
-            iter = textBuffer->end();
-            textView->scroll_to(iter);
+    {
+        // scroll to end of buffer in wasmWindow's TextView:
+        if (wasmWindow && wasmWindow->auto_scroll) {
+            auto textView = wasmWindow->get_object<Gtk::TextView>("wasm_console_view");
+            if (textView) {
+                auto textBuffer = top_level->wasmTextBuffer;
+                auto iter = textBuffer->end();
+                textView->scroll_to(iter);
+            }
         }
     }
 

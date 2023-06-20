@@ -27,6 +27,7 @@
 #include "ppu.h"
 
 #ifdef USE_WASM
+#include "gtk_wasm.h"
 #include "wasm_host.h"
 #endif
 
@@ -137,6 +138,12 @@ int main(int argc, char *argv[])
     S9xNoROMLoaded();
 
 #ifdef USE_WASM
+    // create wasm console window:
+    wasmWindow = new Snes9xWasm;
+    app->signal_startup().connect([&]{
+        app->add_window(*wasmWindow->window.get());
+    });
+
     // initialize wasm runtime:
     wasm_host_init();
 #endif
