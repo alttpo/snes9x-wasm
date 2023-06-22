@@ -273,10 +273,14 @@ void wasm_host_register_wasi() {
             //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
             switch (clock_id) {
                 case WASI_CLOCK_REALTIME:
-                    *time = std::chrono::system_clock::now().time_since_epoch().count();
+                    *time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()
+                    ).count();
                     return 0;
                 case WASI_CLOCK_MONOTONIC:
-                    *time = std::chrono::steady_clock::now().time_since_epoch().count();
+                    *time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch()
+                    ).count();
                     return 0;
                 default:
                     return 0;
