@@ -1,10 +1,14 @@
 package rex
 
-import "fmt"
+import (
+	"fmt"
+	"unsafe"
+)
 
 //go:wasm-module rex
 //export vram_read
-func vram_read(b *byte, l uint32, offset uint32) bool
+//go:wasmimport rex vram_read
+func vram_read(b unsafe.Pointer, l uint32, offset uint32) int32
 
 type vram struct{}
 
@@ -12,8 +16,8 @@ type vram struct{}
 var VRAM vram
 
 func (r *vram) ReadAt(p []byte, off int64) (n int, err error) {
-	res := vram_read(&p[0], uint32(len(p)), uint32(off))
-	if !res {
+	res := vram_read(unsafe.Pointer(&p[0]), uint32(len(p)), uint32(off))
+	if res != 0 {
 		err = fmt.Errorf("unable to read fvram VRAM at offset $%04x size $%x", off, len(p))
 		return 0, err
 	}

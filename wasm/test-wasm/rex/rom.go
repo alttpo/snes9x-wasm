@@ -1,10 +1,14 @@
 package rex
 
-import "fmt"
+import (
+	"fmt"
+	"unsafe"
+)
 
 //go:wasm-module rex
 //export rom_read
-func rom_read(b *byte, l uint32, offset uint32) bool
+//go:wasmimport rex rom_read
+func rom_read(b unsafe.Pointer, l uint32, offset uint32) int32
 
 type rom struct{}
 
@@ -12,8 +16,8 @@ type rom struct{}
 var ROM rom
 
 func (r *rom) ReadAt(p []byte, off int64) (n int, err error) {
-	res := rom_read(&p[0], uint32(len(p)), uint32(off))
-	if !res {
+	res := rom_read(unsafe.Pointer(&p[0]), uint32(len(p)), uint32(off))
+	if res != 0 {
 		err = fmt.Errorf("unable to read from ROM at offset $%06x size $%x", off, len(p))
 		return 0, err
 	}

@@ -1,14 +1,19 @@
 package rex
 
-import "fmt"
+import (
+	"fmt"
+	"unsafe"
+)
 
 //go:wasm-module rex
 //export sram_read
-func sram_read(b *byte, l uint32, offset uint32) bool
+//go:wasmimport rex sram_read
+func sram_read(b unsafe.Pointer, l uint32, offset uint32) int32
 
 //go:wasm-module rex
 //export sram_write
-func sram_write(b *byte, l uint32, offset uint32) bool
+//go:wasmimport rex sram_write
+func sram_write(b unsafe.Pointer, l uint32, offset uint32) int32
 
 type sram struct{}
 
@@ -16,8 +21,8 @@ type sram struct{}
 var SRAM sram
 
 func (r *sram) ReadAt(p []byte, off int64) (n int, err error) {
-	res := sram_read(&p[0], uint32(len(p)), uint32(off))
-	if !res {
+	res := sram_read(unsafe.Pointer(&p[0]), uint32(len(p)), uint32(off))
+	if res != 0 {
 		err = fmt.Errorf("unable to read from SRAM at offset $%06x size $%x", off, len(p))
 		return 0, err
 	}
@@ -25,8 +30,8 @@ func (r *sram) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (r *sram) WriteAt(p []byte, off int64) (n int, err error) {
-	res := sram_write(&p[0], uint32(len(p)), uint32(off))
-	if !res {
+	res := sram_write(unsafe.Pointer(&p[0]), uint32(len(p)), uint32(off))
+	if res != 0 {
 		err = fmt.Errorf("unable to write to SRAM at offset $%06x size $%x", off, len(p))
 		return 0, err
 	}

@@ -95,7 +95,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("%v\n", err)
 	}
-	err = slots[0].Bind(rex.AddrV4{0, 25600})
+	err = slots[0].Bind(rex.AddrV4{Port: 25600})
 	if err != nil {
 		fmt.Printf("%v\n", err)
 	}
@@ -119,7 +119,7 @@ func main() {
 
 	r = 0
 
-	//lastEvent := time.Now()
+	lastEvent := time.Now()
 	lastFrame := uint8(0)
 	for {
 		handleNetwork()
@@ -128,13 +128,13 @@ func main() {
 		var ok bool
 		event, ok = rex.WaitForEvent(time.Microsecond * 1000)
 		if !ok {
-			//fmt.Printf("wait_for_event: %d us\n", time.Now().Sub(lastEvent).Microseconds())
+			fmt.Printf("wait_for_event: %d us\n", time.Now().Sub(lastEvent).Microseconds())
 			continue
 		}
 
-		//nd := time.Now()
-		//fmt.Printf("event(%032b): %d us\n", events, nd.Sub(lastEvent).Microseconds())
-		//lastEvent = nd
+		nd := time.Now()
+		fmt.Printf("event(%d): %d us\n", event, nd.Sub(lastEvent).Microseconds())
+		lastEvent = nd
 
 		// graceful exit condition:
 		if event == ev_shutdown {
@@ -151,7 +151,7 @@ func main() {
 				fmt.Printf("%02x -> %02x\n", lastFrame, currFrame)
 			}
 			lastFrame = wram[0x1A]
-			fmt.Printf("%02x\n", lastFrame)
+			//fmt.Printf("%02x\n", lastFrame)
 			continue
 		}
 
@@ -227,7 +227,7 @@ func main() {
 		// unblock emulator:
 		rex.AcknowledgeLastEvent()
 
-		fmt.Printf("%02x\n", lastFrame)
+		//fmt.Printf("%02x\n", lastFrame)
 	}
 
 	slots[0].Close()
