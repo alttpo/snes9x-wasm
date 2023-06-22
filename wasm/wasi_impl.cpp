@@ -159,7 +159,7 @@ void wasm_host_register_wasi() {
 
     natives->push_back({
         "fd_prestat_get",
-        (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, wasi_prestat_app_t *prestat_app) -> int32_t {
+        (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, wasi_prestat_t *prestat_app) -> int32_t {
             //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
             if (fd >= 3) {
                 return WASI_EBADF;
@@ -170,6 +170,7 @@ void wasm_host_register_wasi() {
         nullptr
     });
 
+
     natives->push_back({
         "fd_prestat_dir_name",
         (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, char *path, uint32_t path_len) -> int32_t {
@@ -177,6 +178,24 @@ void wasm_host_register_wasi() {
             return 0;
         }),
         "(i*~)i",
+        nullptr
+    });
+
+    natives->push_back({
+        "fd_fdstat_get",
+        (void *) (+[](wasm_exec_env_t exec_env, wasi_fd_t fd, wasi_fdstat_t *fdstat_app) -> int32_t {
+            //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+            if (fd >= 3) {
+                return WASI_EBADF;
+            }
+            // TODO:
+            fdstat_app->fs_filetype = WASI_FILETYPE_CHARACTER_DEVICE;
+            fdstat_app->fs_flags = 0;
+            fdstat_app->fs_rights_base = WASI_RIGHTS_FD_READ | WASI_RIGHTS_FD_WRITE;
+            fdstat_app->fs_rights_inheriting = 0;
+            return 0;
+        }),
+        "(i*)i",
         nullptr
     });
 
@@ -266,6 +285,17 @@ void wasm_host_register_wasi() {
         "(iI*)i",
         nullptr
     });
+
+    natives->push_back({
+       "random_get",
+       (void *) (+[](wasm_exec_env_t exec_env, void *buf, uint32 buf_len) -> int32_t {
+           //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+           arc4random_buf(buf, buf_len);
+           return 0;
+       }),
+       "(*~)i",
+       nullptr
+   });
 
     natives->push_back({
         "proc_exit",

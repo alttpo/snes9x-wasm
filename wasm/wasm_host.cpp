@@ -43,9 +43,10 @@ bool wasm_host_init() {
     // initialize wasm runtime
     RuntimeInitArgs init;
 
-    init.mem_alloc_type = Alloc_With_Pool;
-    init.mem_alloc_option.pool.heap_size = 1048576 * 64;
-    init.mem_alloc_option.pool.heap_buf = new uint8_t[init.mem_alloc_option.pool.heap_size];
+    init.mem_alloc_type = Alloc_With_System_Allocator;
+    //init.mem_alloc_type = Alloc_With_Pool;
+    //init.mem_alloc_option.pool.heap_size = 1048576 * 64;
+    //init.mem_alloc_option.pool.heap_buf = new uint8_t[init.mem_alloc_option.pool.heap_size];
 
     init.running_mode = Mode_Interp;
     strcpy(init.ip_addr, "127.0.0.1");
@@ -359,7 +360,7 @@ int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint3
     wasm_module_inst_t mi = wasm_runtime_instantiate(
         mod,
         1024 * 1024 * 4,
-        1024 * 1024 * 64,
+        1024 * 1024 * 128,
         wamrError,
         sizeof(wamrError)
     );
