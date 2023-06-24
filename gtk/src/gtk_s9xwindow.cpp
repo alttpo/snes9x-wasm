@@ -66,26 +66,51 @@ static Glib::RefPtr<Gtk::FileFilter> get_all_files_filter()
 }
 
 static size_t snes9x_wasm_append_text(const char *text_begin, const char *text_end) {
-    {
-        auto textBuffer = top_level->wasmTextBuffer;
+#if 1
+    fwrite(text_begin, 1, (int)(text_end - text_begin), stdout);
+#else
+    static Glib::ustring buf{};
+    static std::mutex buf_mtx{};
 
-        // append to end of buffer:
-        auto iter = textBuffer->end();
-        textBuffer->insert(iter, text_begin, text_end);
+    {
+        std::unique_lock<std::mutex> lk(buf_mtx);
+        buf.append(text_begin, text_end - text_begin);
     }
 
-    {
-        // scroll to end of buffer in wasmWindow's TextView:
-        if (wasmWindow && wasmWindow->auto_scroll) {
-            auto textView = wasmWindow->get_object<Gtk::TextView>("wasm_console_view");
-            if (textView) {
-                auto textBuffer = top_level->wasmTextBuffer;
-                auto iter = textBuffer->end();
-                textView->scroll_to(iter);
+    Glib::MainContext::get_default()->invoke([]() -> bool {
+        {
+            std::unique_lock<std::mutex> lk(buf_mtx);
+            if (buf.empty()) {
+                return false;
             }
-            wasmWindow->refresh();
+
+            auto textBuffer = top_level->wasmTextBuffer;
+            if (!textBuffer) {
+                return false;
+            }
+
+            // append to end of buffer:
+            auto iter = textBuffer->end();
+            textBuffer->insert(iter, buf);
+            buf.clear();
         }
-    }
+
+        {
+            // scroll to end of buffer in wasmWindow's TextView:
+            if (wasmWindow && wasmWindow->auto_scroll) {
+                auto textView = wasmWindow->get_object<Gtk::TextView>("wasm_console_view");
+                if (textView) {
+                    auto textBuffer = top_level->wasmTextBuffer;
+                    auto iter = textBuffer->end();
+                    textView->scroll_to(iter);
+                }
+                wasmWindow->refresh();
+            }
+        }
+
+        return false;
+    });
+#endif
 
     return text_end - text_begin;
 }
