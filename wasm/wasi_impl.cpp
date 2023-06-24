@@ -326,24 +326,24 @@ void wasm_host_set_wasi_stderr_cb(wasi_write_cb cb) {
     stderr_write_cb = cb;
 }
 
-size_t wasm_host_write_stdout(const char *text_begin, const char *text_end) {
+size_t wasm_host_stdout_write(const char *text_begin, const char *text_end) {
     if (stdout_write_cb) {
         return stdout_write_cb(text_begin, text_end);
     }
     return 0;
 }
 
-size_t wasm_host_write_stdout(const std::string& str) {
-    return wasm_host_write_stdout(str.data(), str.data() + str.length());
+size_t wasm_host_stdout_write(const std::string& str) {
+    return wasm_host_stdout_write(str.data(), str.data() + str.length());
 }
 
-size_t wasm_host_write_stderr(const char *text_begin, const char *text_end) {
+size_t wasm_host_stderr_write(const char *text_begin, const char *text_end) {
     if (stderr_write_cb) {
         return stderr_write_cb(text_begin, text_end);
     }
     return 0;
 }
 
-size_t wasm_host_write_stderr(const std::string& str) {
-    return wasm_host_write_stderr(str.data(), str.data() + str.length());
+size_t wasm_host_stderr_write(const std::string& str) {
+    return wasm_host_stderr_write(str.data(), str.data() + str.length());
 }

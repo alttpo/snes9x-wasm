@@ -206,7 +206,8 @@ bool ppux::cmd_write(uint32_t *data, uint32_t size) {
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
             // MSB must be 1 to indicate opcode/size start of frame:
-            wasm_host_stderr_printf("enqueued cmd list malformed at index %td; opcode must have MSB set\n",
+            wasm_host_stderr_printf(
+                "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
                 it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
             return false;
@@ -484,7 +485,7 @@ void ppux::draw_vram_tile(
 
             // look up color in cgram:
             //uint16_t bgr = cgram[col];
-            uint16_t bgr = *(cgram + (col<<1)) + (*(cgram + (col<<1) + 1) << 8);
+            uint16_t bgr = *(cgram + (col << 1)) + (*(cgram + (col << 1) + 1) << 8);
 
             plot(sx, sy, bgr);
         }
@@ -540,14 +541,14 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32
             draw_vram_tile<4, false, false>(
                 x0, y0, width, height, bitmap, palette,
                 [&](unsigned sx, unsigned sy, uint16_t color) {
-                    vec[sy * ppux::pitch + sx] = (uint32_t)color | PX_ENABLE | prio;
+                    vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
                 }
             );
         } else {
             draw_vram_tile<4, false, true>(
                 x0, y0, width, height, bitmap, palette,
                 [&](unsigned sx, unsigned sy, uint16_t color) {
-                    vec[sy * ppux::pitch + sx] = (uint32_t)color | PX_ENABLE | prio;
+                    vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
                 }
             );
         }
@@ -556,14 +557,14 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32
             draw_vram_tile<4, true, false>(
                 x0, y0, width, height, bitmap, palette,
                 [&](unsigned sx, unsigned sy, uint16_t color) {
-                    vec[sy * ppux::pitch + sx] = (uint32_t)color | PX_ENABLE | prio;
+                    vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
                 }
             );
         } else {
             draw_vram_tile<4, true, true>(
                 x0, y0, width, height, bitmap, palette,
                 [&](unsigned sx, unsigned sy, uint16_t color) {
-                    vec[sy * ppux::pitch + sx] = (uint32_t)color | PX_ENABLE | prio;
+                    vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
                 }
             );
         }
@@ -577,6 +578,11 @@ void wasm_host_frame_start() {
     for_each_module(
         [=](std::shared_ptr<module> m) {
             m->notify_event(wasm_event_kind::ev_ppu_frame_start);
+        }
+    );
+    for_each_module(
+        [=](std::shared_ptr<module> m) {
+            m->wait_for_ack_last_event(std::chrono::microseconds(2000));
             m->ppux.render_cmd();
         }
     );
@@ -624,12 +630,18 @@ void wasm_host_frame_end() {
             m->notify_event(wasm_event_kind::ev_ppu_frame_end);
         }
     );
+    // don't wait for ack
 }
 
 void wasm_host_frame_skip() {
     for_each_module(
         [=](std::shared_ptr<module> m) {
             m->notify_event(wasm_event_kind::ev_ppu_frame_skip);
+        }
+    );
+    for_each_module(
+        [=](std::shared_ptr<module> m) {
+            m->wait_for_ack_last_event(std::chrono::microseconds(2000));
         }
     );
 }

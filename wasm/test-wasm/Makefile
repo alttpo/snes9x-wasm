@@ -8,5 +8,5 @@ REX_SRC := rex/events.go \
  rex/wram.go
 
 main.wasm: main.go go.mod go.sum $(REX_SRC)
-#	tinygo build -target wasi -panic trap -o main.wasm
-	GOOS=wasip1 GOARCH=wasm gotip build -gcflags="-N -dwarf=true -dwarflocationlists=false" -ldflags="-w=false" -o main.wasm
+	tinygo build -target wasi -panic trap -o main.wasm
+#	GOOS=wasip1 GOARCH=wasm gotip build -o main.wasm

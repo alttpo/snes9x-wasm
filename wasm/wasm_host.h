@@ -20,10 +20,10 @@ typedef size_t (*wasi_write_cb)(const char *text_begin, const char *text_end);
 
 void wasm_host_set_wasi_stdout_cb(wasi_write_cb cb);
 void wasm_host_set_wasi_stderr_cb(wasi_write_cb cb);
-size_t wasm_host_write_stdout(const std::string& str);
-size_t wasm_host_write_stdout(const char *text_begin, const char *text_end);
-size_t wasm_host_write_stderr(const std::string& str);
-size_t wasm_host_write_stderr(const char *text_begin, const char *text_end);
+size_t wasm_host_stdout_write(const std::string& str);
+size_t wasm_host_stdout_write(const char *text_begin, const char *text_end);
+size_t wasm_host_stderr_write(const std::string& str);
+size_t wasm_host_stderr_write(const char *text_begin, const char *text_end);
 
 bool wasm_host_init();
 void wasm_host_unload_all_modules();
@@ -52,7 +52,7 @@ size_t wasm_host_stdout_printf(const std::string& format, Args ... args) {
     std::unique_ptr<char[]> buf(new char[size]);
 
     std::snprintf(buf.get(), size, format.c_str(), args ...);
-    return wasm_host_write_stdout(buf.get(), buf.get() + size - 1);
+    return wasm_host_stdout_write(buf.get(), buf.get() + size - 1);
 }
 
 template<typename ... Args>
@@ -66,7 +66,7 @@ size_t wasm_host_stderr_printf(const std::string& format, Args ... args) {
     std::unique_ptr<char[]> buf(new char[size]);
 
     std::snprintf(buf.get(), size, format.c_str(), args ...);
-    return wasm_host_write_stderr(buf.get(), buf.get() + size - 1);
+    return wasm_host_stderr_write(buf.get(), buf.get() + size - 1);
 }
 
 #endif //SNES9X_WASM_HOST_H

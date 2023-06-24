@@ -53,6 +53,8 @@ public:
 
     void ack_last_event();
 
+    void wait_for_ack_last_event(std::chrono::nanoseconds timeout);
+
     void notify_event(uint32_t event_p);
 
     void debugger_enable(bool enabled);
@@ -70,6 +72,8 @@ private:
 
     uint32_t event = wasm_event_kind::ev_none;
     bool event_triggered = false;
+
+    std::chrono::time_point<std::chrono::steady_clock> tStarted;
 
 public:
     ppux ppux;

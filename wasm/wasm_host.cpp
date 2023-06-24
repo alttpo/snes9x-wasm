@@ -75,6 +75,22 @@ bool wasm_host_init() {
                 "()",
                 nullptr
             });
+            natives->push_back({
+                "stdout_write",
+                (void *) (+[](wasm_exec_env_t exec_env, const char *text, uint32_t len) -> void {
+                    wasm_host_stdout_write(text, text + len);
+                }),
+                "(*~)",
+                nullptr
+            });
+            natives->push_back({
+                "stderr_write",
+                (void *) (+[](wasm_exec_env_t exec_env, const char *text, uint32_t len) -> void {
+                    wasm_host_stderr_write(text, text + len);
+                }),
+                "(*~)",
+                nullptr
+            });
         }
 
         // memory access:
@@ -317,6 +333,7 @@ void module_shutdown(std::shared_ptr<module> &m) {
     // notify module for termination:
     m->notify_event(wasm_event_kind::ev_shutdown);
     // TODO: allow a grace period and then forcefully shut down with m->cancel_thread()
+    m->wait_for_ack_last_event(std::chrono::microseconds(16000));
     m.reset();
 }
 
@@ -384,6 +401,9 @@ int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint3
 void wasm_host_notify_events(wasm_event_kind events) {
     for_each_module([=](std::shared_ptr<module> m) {
         m->notify_event(events);
+    });
+    for_each_module([=](std::shared_ptr<module> m) {
+        m->wait_for_ack_last_event(std::chrono::microseconds(1000));
     });
 }
 

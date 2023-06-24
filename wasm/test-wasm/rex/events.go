@@ -19,7 +19,7 @@ func ack_last_event()
 // emulator event occurs. The emulator is then blocked until AcknowledgeLastEvent
 // is called.
 func WaitForEvent(timeout time.Duration) (event uint32, ok bool) {
-	ret := wait_for_event(uint32(timeout.Microseconds()), (unsafe.Pointer)(&event))
+	ret := wait_for_event(uint32(timeout.Microseconds()), unsafe.Pointer(&event))
 	ok = ret != 0
 	return
 }

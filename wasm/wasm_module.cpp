@@ -12,7 +12,7 @@ module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p,
     : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), module_binary(module_binary_p), module_size(module_size_p), ppux() {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
-    wasm_host_write_stdout(name + " wasm module created\n");
+    wasm_host_stdout_write(name + " wasm module created\n");
 }
 
 module::~module() {
@@ -24,7 +24,7 @@ module::~module() {
     delete[] module_binary;
     module_binary = nullptr;
     module_size = 0;
-    wasm_host_write_stdout(name + " wasm module destroyed\n");
+    wasm_host_stdout_write(name + " wasm module destroyed\n");
 }
 
 [[nodiscard]] std::shared_ptr<module>
@@ -57,6 +57,7 @@ void module::start_thread() {
             wasm_debug_instance_create(cluster, -1);
             wasm_cluster_thread_continue(m->exec_env);
 
+            m->tStarted = std::chrono::steady_clock::now();
             m->thread_main();
             wasm_runtime_destroy_thread_env();
         },
@@ -122,6 +123,7 @@ exec_main:
 }
 
 bool module::wait_for_event(uint32_t timeout_usec, uint32_t &o_event) {
+    //wasm_host_stderr_printf("%10lld] wait_for_event; start\n", std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - tStarted));
     std::unique_lock<std::mutex> lk(event_mtx);
     if (event_notify_cv.wait_for(
         lk,
@@ -130,6 +132,7 @@ bool module::wait_for_event(uint32_t timeout_usec, uint32_t &o_event) {
     )) {
         event_triggered = false;
         o_event = event;
+        //wasm_host_stderr_printf("%10lld] wait_for_event; complete\n", std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - tStarted));
         return true;
     }
 
@@ -143,6 +146,7 @@ void module::ack_last_event() {
         event_triggered = false;
     }
     event_ack_cv.notify_one();
+    //wasm_host_stderr_printf("%10lld] ack\n", std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - tStarted));
 }
 
 void module::notify_event(uint32_t event_p) {
@@ -152,16 +156,18 @@ void module::notify_event(uint32_t event_p) {
         event_triggered = true;
     }
     event_notify_cv.notify_one();
+    //wasm_host_stderr_printf("%10lld] notify_event\n", std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - tStarted));
+}
 
+void module::wait_for_ack_last_event(std::chrono::nanoseconds timeout) {
     // wait for ack_last_event call:
-    {
-        std::unique_lock<std::mutex> lk(event_mtx);
-        event_ack_cv.wait_for(
-            lk,
-            std::chrono::microseconds(3000),
-            [this]() { return !event_triggered; }
-        );
-    }
+    std::unique_lock<std::mutex> lk(event_mtx);
+    event_ack_cv.wait_for(
+        lk,
+        timeout,
+        [this]() { return !event_triggered; }
+    );
+    //wasm_host_stderr_printf("%10lld] notify_event; wait_for_ack complete\n", std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - tStarted));
 }
 
 void module::debugger_enable(bool enabled) {
