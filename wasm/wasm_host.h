@@ -24,6 +24,7 @@ size_t wasm_host_stdout_write(const std::string& str);
 size_t wasm_host_stdout_write(const char *text_begin, const char *text_end);
 size_t wasm_host_stderr_write(const std::string& str);
 size_t wasm_host_stderr_write(const char *text_begin, const char *text_end);
+size_t wasm_host_trace_writeln(const char *text_begin, const char *text_end);
 
 bool wasm_host_init();
 void wasm_host_unload_all_modules();
@@ -39,7 +40,6 @@ void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl);
 void wasm_host_frame_start();
 void wasm_host_frame_end();
 void wasm_host_frame_skip();
-
 
 template<typename ... Args>
 size_t wasm_host_stdout_printf(const std::string& format, Args ... args) {

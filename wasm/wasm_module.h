@@ -47,8 +47,6 @@ public:
     std::string name;
 
 public:
-
-public:
     bool wait_for_event(uint32_t timeout_usec, uint32_t &o_event);
 
     void ack_last_event();
@@ -73,11 +71,28 @@ private:
     uint32_t event = wasm_event_kind::ev_none;
     bool event_triggered = false;
 
-    std::chrono::time_point<std::chrono::steady_clock> tStarted;
-
 public:
     ppux ppux;
     net net;
+
+    std::chrono::time_point<std::chrono::steady_clock> tStarted;
+    bool trace_enabled = true;
+
+    template<typename ... Args>
+    void trace_writeln(const std::string& format, Args ... args) {
+        if (!trace_enabled) {
+            return;
+        }
+
+        std::string fmt = "%10lld] " + format + "\n";
+        wasm_host_stdout_printf(
+            fmt,
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - tStarted
+            ),
+            args ...
+        );
+    }
 };
 
 extern std::vector<std::shared_ptr<module>> modules;

@@ -76,6 +76,15 @@ bool wasm_host_init() {
                 nullptr
             });
             natives->push_back({
+                "trace_writeln",
+                (void *) (+[](wasm_exec_env_t exec_env, const char *text, uint32_t len) -> void {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    m->trace_writeln("%.*s", len, text);
+                }),
+                "(*~)",
+                nullptr
+            });
+            natives->push_back({
                 "stdout_write",
                 (void *) (+[](wasm_exec_env_t exec_env, const char *text, uint32_t len) -> void {
                     wasm_host_stdout_write(text, text + len);

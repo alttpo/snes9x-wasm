@@ -119,7 +119,6 @@ func main() {
 
 	r = 0
 
-	lastEvent := time.Now()
 	lastFrame := uint8(0)
 	for {
 		handleNetwork()
@@ -128,36 +127,16 @@ func main() {
 		var ok bool
 		event, ok = rex.WaitForEvent(time.Microsecond * 1000)
 		if !ok {
-			fmt.Printf("wait_for_event: %d us\n", time.Now().Sub(lastEvent).Microseconds())
 			continue
 		}
-
-		nd := time.Now()
-		fmt.Printf("event(%d): %d us\n", event, nd.Sub(lastEvent).Microseconds())
-		lastEvent = nd
 
 		// graceful exit condition:
 		if event == ev_shutdown {
 			break
 		}
 
-		if event == ev_ppu_frame_skip {
-			// read some WRAM:
-			_, _ = rex.WRAM.ReadAt(wram[0x0:0x100], 0x0)
+		if event != ev_ppu_frame_start && event != ev_ppu_frame_skip {
 			rex.AcknowledgeLastEvent()
-
-			currFrame := wram[0x1A]
-			if uint8(currFrame-lastFrame) >= 2 {
-				fmt.Printf("%02x -> %02x\n", lastFrame, currFrame)
-			}
-			lastFrame = wram[0x1A]
-			//fmt.Printf("%02x\n", lastFrame)
-			continue
-		}
-
-		if event != ev_ppu_frame_start {
-			rex.AcknowledgeLastEvent()
-			//fmt.Printf("events timeout: %d us\n", nd.Sub(st).Microseconds())
 			continue
 		}
 
@@ -226,13 +205,9 @@ func main() {
 
 		// unblock emulator:
 		rex.AcknowledgeLastEvent()
-
-		//fmt.Printf("%02x\n", lastFrame)
 	}
 
 	slots[0].Close()
-
-	fmt.Println("exit")
 }
 
 var msg [65536]byte
