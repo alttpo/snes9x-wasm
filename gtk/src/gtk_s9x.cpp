@@ -565,6 +565,10 @@ void S9xExit()
 
     Settings.StopEmulation = true;
 
+#ifdef USE_WASM
+    wasm_host_unload_all_modules();
+#endif
+
     if (gui_config->rom_loaded)
     {
         S9xAutoSaveSRAM();
