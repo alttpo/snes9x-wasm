@@ -75,23 +75,15 @@ public:
     ppux ppux;
     net net;
 
-    std::chrono::time_point<std::chrono::steady_clock> tStarted;
     uint32_t trace_mask = (1 << 0);
 
     template<typename ... Args>
-    void trace_writeln(uint32_t flags, const std::string& format, Args ... args) {
+    void trace_printf(uint32_t flags, const std::string& format, Args ... args) {
         if ((flags & trace_mask) == 0) {
             return;
         }
 
-        std::string fmt = "[%10lld us] " + format + "\n";
-        wasm_host_stdout_printf(
-            fmt,
-            std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::steady_clock::now() - tStarted
-            ),
-            args ...
-        );
+        wasm_host_stdout_printf(format, args ...);
     }
 };
 

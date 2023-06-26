@@ -235,6 +235,8 @@ void S9xROMLoaded()
     // unload existing modules first:
     wasm_host_unload_all_modules();
 
+    gui_config->rom_loaded_at = std::chrono::steady_clock::now();
+
     {
         auto wasm_filename = S9xGetFilename(".wasm", ROMFILENAME_DIR);
 

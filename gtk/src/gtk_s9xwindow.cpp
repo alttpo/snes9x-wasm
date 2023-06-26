@@ -67,7 +67,34 @@ static Glib::RefPtr<Gtk::FileFilter> get_all_files_filter()
 
 static size_t snes9x_wasm_append_text(const char *text_begin, const char *text_end) {
 #if 1
-    fwrite(text_begin, 1, (int)(text_end - text_begin), stdout);
+    // true iff the last write ended in a newline:
+    static bool newline = true;
+
+    auto last_emit = std::chrono::steady_clock::now();
+    auto since = std::chrono::duration_cast<std::chrono::microseconds>(
+        last_emit - gui_config->rom_loaded_at
+    ).count();
+
+    // prefix all lines with the same timestamp:
+    const void *s = text_begin;
+    const void *nl;
+    while ((nl = std::memchr(s, '\n', (const char *)text_end - (const char *)s))) {
+        if (newline) {
+            fprintf(stdout, "[%12lld us] ", since);
+        }
+        fwrite(s, 1, ((const char *)nl + 1 - (const char *)s), stdout);
+        s = (const char *)nl + 1;
+        newline = true;
+    }
+
+    // prefix the last line:
+    if (s < text_end) {
+        if (newline) {
+            fprintf(stdout, "[%12lld us] ", since);
+        }
+        fwrite(s, 1, (text_end - (const char *)s), stdout);
+        newline = false;
+    }
 #else
     static Glib::ustring buf{};
     static std::mutex buf_mtx{};

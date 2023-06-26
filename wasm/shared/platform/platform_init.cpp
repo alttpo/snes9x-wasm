@@ -24,16 +24,15 @@ int
 os_printf(const char *format, ...) {
     int ret;
     va_list ap;
-    char str[4096];
 
     if (!stdout_write_cb) {
         return 0;
     }
 
+    // size up the buffer appropriately:
     va_start(ap, format);
-    ret = vsnprintf(str, 4095, format, ap);
+    os_vprintf(format, ap);
     va_end(ap);
-    stdout_write_cb(str, str + ret);
 
     return ret;
 }
@@ -41,14 +40,21 @@ os_printf(const char *format, ...) {
 int
 os_vprintf(const char *format, va_list ap) {
     int ret;
-    char str[4096];
 
     if (!stdout_write_cb) {
         return 0;
     }
 
-    ret = vsnprintf(str, 4095, format, ap);
-    stdout_write_cb(str, str + ret);
+    // size up the buffer appropriately:
+    auto size_s = vsnprintf(nullptr, 0, format, ap) + 1;
+
+    // allocate a new buffer:
+    std::unique_ptr<char[]> buf(new char[size_s]);
+
+    // format into the buffer:
+    ret = vsnprintf(buf.get(), size_s, format, ap);
+
+    stdout_write_cb(buf.get(), buf.get() + ret);
 
     return ret;
 }

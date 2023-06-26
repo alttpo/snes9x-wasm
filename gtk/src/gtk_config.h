@@ -134,6 +134,7 @@ class Snes9xConfig
     bool auto_input_rate;
     int sound_input_rate;
     bool rom_loaded;
+    std::chrono::time_point<std::chrono::steady_clock> rom_loaded_at;
     int window_width, window_height;
     int preferences_width, preferences_height;
     int shader_parameters_width, shader_parameters_height;
