@@ -77,11 +77,11 @@ bool wasm_host_init() {
             });
             natives->push_back({
                 "trace_writeln",
-                (void *) (+[](wasm_exec_env_t exec_env, const char *text, uint32_t len) -> void {
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t flags, const char *text, uint32_t len) -> void {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    m->trace_writeln("%.*s", len, text);
+                    m->trace_writeln(flags, "%.*s", len, text);
                 }),
-                "(*~)",
+                "(i*~)",
                 nullptr
             });
             natives->push_back({
@@ -341,16 +341,18 @@ bool wasm_host_init() {
 void module_shutdown(std::shared_ptr<module> &m) {
     // notify module for termination:
     m->notify_event(wasm_event_kind::ev_shutdown);
+
     // TODO: allow a grace period and then forcefully shut down with m->cancel_thread()
     m->wait_for_ack_last_event(std::chrono::microseconds(16000));
+
     m.reset();
 }
 
 void wasm_host_unload_all_modules() {
     for (auto it = modules.begin(); it != modules.end();) {
-        auto &me = *it;
+        auto &m = *it;
 
-        module_shutdown(me);
+        module_shutdown(m);
 
         // releasing the shared_ptr should delete the module* and likely crash any running thread
         it = modules.erase(it);
@@ -380,6 +382,7 @@ int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint3
     );
     if (!mod) {
         wasm_host_stderr_printf("wasm_runtime_load: %s\n", wamrError);
+        delete [] module_binary;
         return -1;
     }
 
@@ -393,6 +396,7 @@ int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint3
     if (!mi) {
         wasm_runtime_unload(mod);
         wasm_host_stderr_printf("wasm_runtime_instantiate: %s\n", wamrError);
+        delete [] module_binary;
         return -1;
     }
 

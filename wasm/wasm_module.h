@@ -76,15 +76,15 @@ public:
     net net;
 
     std::chrono::time_point<std::chrono::steady_clock> tStarted;
-    bool trace_enabled = true;
+    uint32_t trace_mask = (1 << 0);
 
     template<typename ... Args>
-    void trace_writeln(const std::string& format, Args ... args) {
-        if (!trace_enabled) {
+    void trace_writeln(uint32_t flags, const std::string& format, Args ... args) {
+        if ((flags & trace_mask) == 0) {
             return;
         }
 
-        std::string fmt = "%10lld] " + format + "\n";
+        std::string fmt = "[%10lld us] " + format + "\n";
         wasm_host_stdout_printf(
             fmt,
             std::chrono::duration_cast<std::chrono::microseconds>(

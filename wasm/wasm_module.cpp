@@ -12,7 +12,10 @@ module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p,
     : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), module_binary(module_binary_p), module_size(module_size_p), ppux() {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
-    wasm_host_stderr_printf("%s wasm module created\n", name.c_str());
+
+    tStarted = std::chrono::steady_clock::now();
+
+    trace_writeln(1UL << 0, "%s wasm module created", name.c_str());
 }
 
 module::~module() {
@@ -24,7 +27,7 @@ module::~module() {
     delete[] module_binary;
     module_binary = nullptr;
     module_size = 0;
-    wasm_host_stderr_printf("%s wasm module destroyed\n", name.c_str());
+    trace_writeln(1UL << 0, "%s wasm module destroyed", name.c_str());
 }
 
 [[nodiscard]] std::shared_ptr<module>
@@ -62,7 +65,6 @@ void module::start_thread() {
             wasm_debug_instance_create(cluster, -1);
             wasm_cluster_thread_continue(m->exec_env);
 
-            m->tStarted = std::chrono::steady_clock::now();
             m->thread_main();
             wasm_runtime_destroy_thread_env();
         },
@@ -118,18 +120,18 @@ void module::thread_main() {
 fail:
     const char *ex;
     ex = wasm_runtime_get_exception(module_inst);
-    wasm_host_stderr_printf("%s wasm module encountered exception: %s\n", name.c_str(), ex);
+    trace_writeln(1UL << 0, "%s wasm module encountered exception: %s", name.c_str(), ex);
     return;
 
 exec_main:
     if (!wasm_runtime_call_wasm(exec_env, func, 0, nullptr)) {
         goto fail;
     }
-    wasm_host_stderr_printf("%s wasm module exited normally\n", name.c_str());
+    trace_writeln(1UL << 0, "%s wasm module exited normally", name.c_str());
 }
 
 bool module::wait_for_event(uint32_t timeout_usec, uint32_t &o_event) {
-    trace_writeln("+wait_for_event()");
+    trace_writeln(1UL << 31, "+wait_for_event()");
     std::unique_lock<std::mutex> lk(event_mtx);
     if (event_notify_cv.wait_for(
         lk,
@@ -138,7 +140,7 @@ bool module::wait_for_event(uint32_t timeout_usec, uint32_t &o_event) {
     )) {
         event_triggered = false;
         o_event = event;
-        trace_writeln("-wait_for_event()");
+        trace_writeln(1UL << 31, "-wait_for_event()");
         return true;
     }
 
@@ -152,7 +154,7 @@ void module::ack_last_event() {
         event_triggered = false;
     }
     event_ack_cv.notify_one();
-    trace_writeln("ack_last_event()");
+    trace_writeln(1UL << 31, "ack_last_event()");
 }
 
 void module::notify_event(uint32_t event_p) {
@@ -162,19 +164,19 @@ void module::notify_event(uint32_t event_p) {
         event_triggered = true;
     }
     event_notify_cv.notify_one();
-    trace_writeln("notify_event(%u)", event_p);
+    trace_writeln(1UL << 31, "notify_event(%u)", event_p);
 }
 
 void module::wait_for_ack_last_event(std::chrono::nanoseconds timeout) {
     // wait for ack_last_event call:
-    trace_writeln("+wait_for_ack_last_event()");
+    trace_writeln(1UL << 31, "+wait_for_ack_last_event()");
     std::unique_lock<std::mutex> lk(event_mtx);
     event_ack_cv.wait_for(
         lk,
         timeout,
         [this]() { return !event_triggered; }
     );
-    trace_writeln("-wait_for_ack_last_event()");
+    trace_writeln(1UL << 31, "-wait_for_ack_last_event()");
 }
 
 void module::debugger_enable(bool enabled) {
