@@ -385,6 +385,10 @@ static bool S9xIdleFunc()
         S9xNetplayPop();
     }
 
+#if USE_WASM
+    wasmWindow->refresh();
+#endif
+
     return true;
 }
 
