@@ -76,6 +76,24 @@ bool wasm_host_init() {
                 nullptr
             });
             natives->push_back({
+                "register_pc_event",
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc, uint32_t timeout_nsec) -> uint32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_RETURN("register_pc_event", m->register_pc_event(pc, timeout_nsec));
+                }),
+                "(ii)i",
+                nullptr
+            });
+            natives->push_back({
+                "unregister_pc_event",
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc) -> void {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_DO("unregister_pc_event", m->unregister_pc_event(pc));
+                }),
+                "(i)",
+                nullptr
+            });
+            natives->push_back({
                 "trace_write",
                 (void *) (+[](wasm_exec_env_t exec_env, uint32_t flags, const char *text, uint32_t len) -> void {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
@@ -423,5 +441,11 @@ void wasm_host_notify_events(wasm_event_kind events) {
 void wasm_host_debugger_enable(bool enabled) {
     for_each_module([=](std::shared_ptr<module> m) {
         m->debugger_enable(enabled);
+    });
+}
+
+void wasm_host_notify_pc(uint32_t pc) {
+    for_each_module([=](std::shared_ptr<module> m) {
+        m->notify_pc(pc);
     });
 }

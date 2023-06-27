@@ -6,7 +6,7 @@
 
 // bit flags for events raised from emulator that wasm modules would want to monitor
 enum wasm_event_kind : uint32_t {
-    ev_none = 0UL,
+    ev_none = 0ULL,
 
     ev_shutdown,
     ev_snes_nmi,
@@ -14,6 +14,8 @@ enum wasm_event_kind : uint32_t {
     ev_ppu_frame_start,
     ev_ppu_frame_end,
     ev_ppu_frame_skip,
+
+    ev_user0 = 1ULL << 31
 };
 
 typedef size_t (*wasi_write_cb)(const char *text_begin, const char *text_end);
@@ -30,6 +32,7 @@ bool wasm_host_init();
 void wasm_host_unload_all_modules();
 int wasm_host_load_module(const std::string& name, uint8_t *module_binary, uint32_t module_size);
 
+void wasm_host_notify_pc(uint32_t pc);
 void wasm_host_notify_events(wasm_event_kind events);
 
 void wasm_host_debugger_enable(bool enabled);

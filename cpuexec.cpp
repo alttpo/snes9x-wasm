@@ -113,6 +113,11 @@ void S9xMainLoop (void)
 		/* Change IRQ flag for instructions that set it only on last cycle */
 		CHECK_FOR_IRQ_CHANGE();
 
+#ifdef USE_WASM
+        // notify wasm of current 24-bit PC address:
+        wasm_host_notify_pc(Registers.PC.xPBPC);
+#endif
+
 	#ifdef DEBUGGER
 		if ((CPU.Flags & BREAK_FLAG) && !(CPU.Flags & SINGLE_STEP_FLAG))
 		{

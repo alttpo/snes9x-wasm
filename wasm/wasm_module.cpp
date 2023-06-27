@@ -166,6 +166,10 @@ void module::notify_event(uint32_t event_p) {
 }
 
 void module::wait_for_ack_last_event(std::chrono::nanoseconds timeout) {
+    if (timeout == std::chrono::nanoseconds::zero()) {
+        return;
+    }
+
     // wait for ack_last_event call:
     trace_printf(1UL << 31, "{ wait_for_ack_last_event()\n");
     std::unique_lock<std::mutex> lk(event_mtx);
@@ -187,4 +191,38 @@ void module::debugger_enable(bool enabled) {
         wasm_cluster_thread_continue(exec_env);
         //wasm_debug_instance_continue(debug_instance);
     }
+}
+
+void module::notify_pc(uint32_t pc) {
+    auto it = pc_events.find(pc);
+    if (it == pc_events.end()) {
+        return;
+    }
+
+    // notify wasm of the PC-hit event:
+    notify_event(ev_user0 + (pc & 0x00ffffff));
+
+    // wait for wasm to complete its work:
+    wait_for_ack_last_event(it->second.timeout);
+}
+
+uint32_t module::register_pc_event(uint32_t pc, uint32_t timeout_nsec) {
+    // put a 14 millisecond cap on the timeout so it doesn't take an entire 60fps frame (16.67 milliseconds):
+    if (timeout_nsec > 14000000) {
+        timeout_nsec = 14000000;
+    }
+
+    pc_events.insert_or_assign(
+        pc,
+        pc_event{
+            .timeout = std::chrono::nanoseconds(timeout_nsec),
+        }
+    );
+
+    // return the event id:
+    return ev_user0 + (pc & 0x00ffffff);
+}
+
+void module::unregister_pc_event(uint32_t pc) {
+    pc_events.erase(pc);
 }
