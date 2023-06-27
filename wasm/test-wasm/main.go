@@ -117,6 +117,8 @@ func main() {
 		return
 	}
 
+	ev_pc := rex.RegisterPCEvent(0x068328, time.Microsecond*2000)
+
 	r = 0
 
 	lastFrame := uint8(0)
@@ -133,6 +135,11 @@ func main() {
 		// graceful exit condition:
 		if event == ev_shutdown {
 			break
+		}
+
+		if event == ev_pc {
+			fmt.Printf("Sprite_Main\n")
+			continue
 		}
 
 		if event != ev_ppu_frame_start && event != ev_ppu_frame_skip {
