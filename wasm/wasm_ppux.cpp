@@ -40,19 +40,25 @@ void ppux::lines_math_main(
         xp += pitch
         ) {
         for (int x = left; x < right; x++) {
+            if ((xp[x] & PX_ENABLE) == 0) {
+                continue;
+            }
+
             // map priority of pixel to depth value:
             auto prio = (xp[x] >> 16) & 3;
             auto xd = priority_depth_map[prio];
 
-            if (((xp[x] & PX_ENABLE) == PX_ENABLE) && (xd > md[x])) {
-                uint32_t r, g, b;
-                auto rgb555 = xp[x] & 0x7fff;
-                DECOMPOSE_PIXEL_RGB555(rgb555, b, g, r);
-                auto pix = BUILD_PIXEL(r, g, b);
-
-                mc[x] = MATH::Calc(pix, sc[x], sd[x]);
-                md[x] = xd;
+            if (xd <= md[x]) {
+                continue;
             }
+
+            uint32_t r, g, b;
+            auto rgb555 = xp[x] & 0x7fff;
+            DECOMPOSE_PIXEL_RGB555(rgb555, b, g, r);
+            auto pix = BUILD_PIXEL(r, g, b);
+
+            mc[x] = MATH::Calc(pix, sc[x], sd[x]);
+            md[x] = xd;
         }
     }
 }
