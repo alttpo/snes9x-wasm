@@ -102,6 +102,7 @@ int Snes9xConfig::load_defaults()
     allow_xv = false;
     allow_xrandr = false;
     auto_vrr = false;
+    osd_size = 24;
     force_inverted_byte_order = false;
     hires_effect = HIRES_NORMAL;
     pause_emulation_on_switch = false;
@@ -171,6 +172,7 @@ int Snes9xConfig::load_defaults()
     Settings.Transparency = true;
     Settings.DisplayTime = false;
     Settings.DisplayFrameRate = false;
+    Settings.DisplayIndicators = false;
     Settings.SixteenBitSound = true;
     Settings.Stereo = true;
     Settings.ReverseStereo = false;
@@ -244,6 +246,7 @@ int Snes9xConfig::save_config_file()
     outstring("HardwareAcceleration", display_driver, "none, opengl, xv, vulkan");
     outint("SplashBackground", splash_image, "0: Black, 1: Color bars, 2: Pattern, 3: Blue, 4: Default");
     outbool("AutoVRR", auto_vrr, "Automatically use the best settings for variable sync in fullscreen mode");
+    outint("OSDSize", osd_size, "Size of on-screen display elements. Default: 24pt");
 
     section = "NTSC";
     outstring("Hue", std::to_string(ntsc_setup.hue));
@@ -324,6 +327,7 @@ int Snes9xConfig::save_config_file()
     outbool("DisplayTime", Settings.DisplayTime);
     outbool("DisplayFrameRate", Settings.DisplayFrameRate);
     outbool("DisplayPressedKeys", Settings.DisplayPressedKeys);
+    outbool("DisplayIndicators", Settings.DisplayIndicators);
     outint("SpeedControlMethod", Settings.SkipFrames, "0: Time the frames to 50 or 60Hz, 1: Same, but skip frames if too slow, 2: Synchronize to the sound buffer, 3: Unlimited, except potentially by vsync");
     outint("SaveSRAMEveryNSeconds", Settings.AutoSaveDelay);
     outbool("BlockInvalidVRAMAccess", Settings.BlockInvalidVRAMAccessMaster);
@@ -470,6 +474,7 @@ int Snes9xConfig::load_config_file()
     inbool("BilinearFilter", Settings.BilinearFilter);
     inint("SplashBackground", splash_image);
     inbool("AutoVRR", auto_vrr);
+    inint("OSDSize", osd_size);
 
     section = "NTSC";
     indouble("Hue", ntsc_setup.hue);
@@ -551,6 +556,7 @@ int Snes9xConfig::load_config_file()
     inint("SaveSRAMEveryNSeconds", Settings.AutoSaveDelay);
     inbool("BlockInvalidVRAMAccess", Settings.BlockInvalidVRAMAccessMaster);
     inbool("AllowDPadContradictions", Settings.UpAndDown);
+    inbool("DisplayIndicators", Settings.DisplayIndicators);
 
     section = "Hacks";
     inint("SuperFXClockMultiplier", Settings.SuperFXClockMultiplier);

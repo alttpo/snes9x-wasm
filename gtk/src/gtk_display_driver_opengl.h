@@ -10,16 +10,16 @@
 #include "gtk_s9x.h"
 #include "gtk_display_driver.h"
 
-#include <epoxy/gl.h>
+#include <glad/gl.h>
 
-#include "gtk_opengl_context.h"
+#include "common/video/opengl_context.hpp"
 
 #include "gtk_compat.h"
 #ifdef GDK_WINDOWING_X11
-#include "gtk_glx_context.h"
+#include "common/video/glx_context.hpp"
 #endif
 #ifdef GDK_WINDOWING_WAYLAND
-#include "gtk_wayland_egl_context.h"
+#include "common/video/wayland_egl_context.hpp"
 #endif
 
 #include "shaders/glsl.h"
@@ -39,7 +39,9 @@ class S9xOpenGLDisplayDriver : public S9xDisplayDriver
     void save(const char *filename) override;
     static int query_availability();
     bool is_ready() override;
-    bool can_throttle() override { return true; };
+    bool can_throttle() override { return true; }
+    int get_width() final override { return output_window_width; }
+    int get_height() final override { return output_window_height; }
 
   private:
     bool opengl_defaults();

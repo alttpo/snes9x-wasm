@@ -2118,7 +2118,7 @@ LRESULT CALLBACK WinProc(
 			RECT margins;
 			factor = (wParam & 0xffff) - ID_WINDOW_SIZE_1X + 1;
 			newWidth = GUI.AspectWidth * factor;
-			newHeight = (GUI.HeightExtend ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT) * factor;
+			newHeight = (Settings.ShowOverscan ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT) * factor;
 
 			margins = GetWindowMargins(GUI.hWnd,newWidth);
 			newHeight += margins.top + margins.bottom;
@@ -2452,7 +2452,7 @@ LRESULT CALLBACK WinProc(
 
 //					int theight;
 //					(IPPU.RenderedScreenHeight> 256)? theight= SNES_HEIGHT_EXTENDED<<1: theight = SNES_HEIGHT_EXTENDED;
-					int theight = GUI.HeightExtend ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT;
+					int theight = Settings.ShowOverscan ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT;
 					if(IPPU.RenderedScreenHeight > SNES_HEIGHT_EXTENDED) theight <<= 1;
 
 					startx= size.right-IPPU.RenderedScreenWidth;
@@ -2482,7 +2482,7 @@ LRESULT CALLBACK WinProc(
 						sizex=IPPU.RenderedScreenWidth;
 					else sizex=IPPU.RenderedScreenWidth*2;
 
-					int theight = GUI.HeightExtend ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT;
+					int theight = Settings.ShowOverscan ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT;
 					sizey = (IPPU.RenderedScreenHeight > SNES_HEIGHT_EXTENDED) ? theight : (theight << 1);
 
 					startx= size.right-sizex;
@@ -2507,7 +2507,7 @@ LRESULT CALLBACK WinProc(
 				else
 				{
 					int sizex = IPPU.RenderedScreenWidth;
-					int sizey = GUI.HeightExtend ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT;
+					int sizey = Settings.ShowOverscan ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT;
 					sizey = (IPPU.RenderedScreenHeight > SNES_HEIGHT_EXTENDED) ? (sizey << 1) : sizey;
 					int width = size.right, height = size.bottom, xdiff = 0, ydiff = 0;
 					if(GUI.AspectRatio)
@@ -7543,7 +7543,7 @@ INT_PTR CALLBACK DlgFunky(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
         prevAspectRatio = GUI.AspectRatio;
         prevAspectWidth = GUI.AspectWidth;
 		prevIntegerScaling = GUI.IntegerScaling;
-        prevHeightExtend = GUI.HeightExtend;
+		prevHeightExtend = Settings.ShowOverscan;
         prevAutoDisplayMessages = Settings.AutoDisplayMessages != 0;
         prevShaderEnabled = GUI.shaderEnabled;
         prevBlendHires = GUI.BlendHiRes;
@@ -7572,12 +7572,10 @@ INT_PTR CALLBACK DlgFunky(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 
         if (GUI.BlendHiRes)
             SendDlgItemMessage(hDlg, IDC_HIRESBLEND, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
-        if (GUI.HeightExtend)
+        if (Settings.ShowOverscan)
             SendDlgItemMessage(hDlg, IDC_HEIGHT_EXTEND, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
         if (Settings.AutoDisplayMessages)
             SendDlgItemMessage(hDlg, IDC_MESSAGES_IN_IMAGE, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
-		if (GUI.filterMessagFont)
-			SendDlgItemMessage(hDlg, IDC_MESSAGES_SCALE, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
         if (Settings.SkipFrames == AUTO_FRAMERATE)
             SendDlgItemMessage(hDlg, IDC_AUTOFRAME, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
         if (GUI.Stretch)
@@ -7631,6 +7629,8 @@ INT_PTR CALLBACK DlgFunky(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
         SendDlgItemMessage(hDlg, IDC_SPIN_MAX_SKIP_DISP, UDM_SETPOS, 0, Settings.AutoMaxSkipFrames);
         SendDlgItemMessage(hDlg, IDC_SPIN_MAX_SKIP_DISP_FIXED, UDM_SETRANGE, 0, MAKELPARAM((short)59, (short)0));
         SendDlgItemMessage(hDlg, IDC_SPIN_MAX_SKIP_DISP_FIXED, UDM_SETPOS, 0, Settings.SkipFrames == AUTO_FRAMERATE ? 0 : Settings.SkipFrames);
+		SendDlgItemMessage(hDlg, IDC_SPIN_OSD_SIZE, UDM_SETRANGE, 0, MAKELPARAM(160, 24));
+		SendDlgItemMessage(hDlg, IDC_SPIN_OSD_SIZE, UDM_SETPOS, 0, GUI.OSDSize);
 
         if (GUI.shaderEnabled) {
             SendDlgItemMessage(hDlg, IDC_SHADER_ENABLED, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
@@ -7727,7 +7727,6 @@ INT_PTR CALLBACK DlgFunky(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 		case IDC_MESSAGES_IN_IMAGE:
 		case IDC_MESSAGES_SCALE:
 			Settings.AutoDisplayMessages = (bool)(IsDlgButtonChecked(hDlg,IDC_MESSAGES_IN_IMAGE)==BST_CHECKED);
-			GUI.filterMessagFont = (bool)(IsDlgButtonChecked(hDlg, IDC_MESSAGES_SCALE) == BST_CHECKED);
 			if(Settings.AutoDisplayMessages)
 			{
 				if(GFX.InfoString.empty()) {
@@ -7779,7 +7778,7 @@ INT_PTR CALLBACK DlgFunky(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 			break;
 
 		case IDC_HEIGHT_EXTEND:
-			GUI.HeightExtend = (bool)(IsDlgButtonChecked(hDlg,IDC_HEIGHT_EXTEND)==BST_CHECKED);
+			Settings.ShowOverscan = (bool)(IsDlgButtonChecked(hDlg,IDC_HEIGHT_EXTEND)==BST_CHECKED);
 			// refresh screen, so the user can see the new mode
 			WinDisplayApplyChanges();
 
@@ -7961,14 +7960,23 @@ INT_PTR CALLBACK DlgFunky(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 			bool fullscreenWanted;
  			Settings.Transparency = IsDlgButtonChecked(hDlg, IDC_TRANS);
 			Settings.BilinearFilter = (bool)(IsDlgButtonChecked(hDlg,IDC_BILINEAR)==BST_CHECKED);
-			GUI.HeightExtend = IsDlgButtonChecked(hDlg, IDC_HEIGHT_EXTEND)!=0;
-			Settings.AutoDisplayMessages = IsDlgButtonChecked(hDlg, IDC_MESSAGES_IN_IMAGE);
-			GUI.filterMessagFont = IsDlgButtonChecked(hDlg, IDC_MESSAGES_SCALE);
+			Settings.ShowOverscan = IsDlgButtonChecked(hDlg, IDC_HEIGHT_EXTEND)!=0;
 			GUI.DoubleBuffered = (bool)(IsDlgButtonChecked(hDlg, IDC_DBLBUFFER)==BST_CHECKED);
 			GUI.ReduceInputLag = (bool)(IsDlgButtonChecked(hDlg, IDC_REDUCEINPUTLAG) == BST_CHECKED);
 			GUI.Vsync = (bool)(IsDlgButtonChecked(hDlg, IDC_VSYNC
 
 				)==BST_CHECKED);
+			{
+				int newOSDSize = SendDlgItemMessage(hDlg, IDC_SPIN_OSD_SIZE, UDM_GETPOS, 0, 0);
+				bool need_reset = ((bool)Settings.AutoDisplayMessages != prevAutoDisplayMessages || newOSDSize != GUI.OSDSize);
+				GUI.OSDSize = newOSDSize;
+				if (need_reset)
+				{
+					WinDisplayReset();
+					WinRefreshDisplay();
+					UpdateWindow(GUI.hWnd);
+				}
+			}
 			if(IsDlgButtonChecked(hDlg, IDC_AUTOFRAME))
 			{
 				Settings.SkipFrames=AUTO_FRAMERATE;
@@ -8024,10 +8032,7 @@ INT_PTR CALLBACK DlgFunky(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 				ToggleFullScreen();
 			}
 
-
 			return false;
-
-
 
 		case IDCANCEL:
 			SelectOutputMethodInVideoDropdown(hDlg, prevOutputMethod);
@@ -8043,7 +8048,7 @@ INT_PTR CALLBACK DlgFunky(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 				GUI.AspectRatio = prevAspectRatio;
 				GUI.AspectWidth = prevAspectWidth;
 				GUI.IntegerScaling = prevIntegerScaling;
-				GUI.HeightExtend = prevHeightExtend;
+				Settings.ShowOverscan = prevHeightExtend;
 				GUI.shaderEnabled = prevShaderEnabled;
 				GUI.BlendHiRes = prevBlendHires;
 				GUI.NTSCScanlines = prevNTSCScanlines;

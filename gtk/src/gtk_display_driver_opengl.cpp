@@ -5,6 +5,7 @@
 \*****************************************************************************/
 
 #include <dlfcn.h>
+#include <cstdio>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/time.h>
@@ -12,6 +13,9 @@
 #include "gtk_display.h"
 #include "gtk_display_driver_opengl.h"
 #include "gtk_shader_parameters.h"
+
+#include "snes9x_imgui.h"
+#include "imgui_impl_opengl3.h"
 
 static const GLchar *stock_vertex_shader_110 =
 "#version 110\n"
@@ -62,6 +66,14 @@ static const GLchar *stock_fragment_shader_140 =
 "    fragcolor = texture(texmap, texcoord);\n"
 "}\n";
 
+#ifdef GDK_WINDOWING_WAYLAND
+static WaylandSurface::Metrics get_metrics(Gtk::DrawingArea &w)
+{
+    int x, y, width, height;
+    w.get_window()->get_geometry(x, y, width, height);
+    return { x, y, width, height, w.get_window()->get_scale_factor() };
+}
+#endif
 
 static GLfloat coords[] = { -1.0f, -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f,
                              0.0f,  1.0f, 1.0f,  1.0f,  0.0f, 0.0f, 1.0f, 0.0f, };
@@ -123,6 +135,17 @@ void S9xOpenGLDisplayDriver::update(uint16_t *buffer, int width, int height, int
     else
     {
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+
+    if (S9xImGuiRunning())
+    {
+        ImGui_ImplOpenGL3_NewFrame();
+        if (S9xImGuiDraw(context->width, context->height))
+        {
+
+            auto *draw_data = ImGui::GetDrawData();
+            ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+        }
     }
 
     swap_buffers();
@@ -321,7 +344,20 @@ void S9xOpenGLDisplayDriver::refresh()
 
 void S9xOpenGLDisplayDriver::resize()
 {
-    context->resize();
+#ifdef GDK_WINDOWING_WAYLAND
+    if (GDK_IS_WAYLAND_WINDOW(gdk_window))
+    {
+        ((WaylandEGLContext *)context)->resize(get_metrics(*drawing_area));
+    }
+#endif
+#ifdef GDK_WINDOWING_X11
+    if (GDK_IS_X11_WINDOW(gdk_window))
+    {
+        context->resize();
+    }
+#endif
+
+
     context->swap_interval(config->sync_to_vblank);
     Gtk::Allocation allocation = drawing_area->get_allocation();
     output_window_width = allocation.get_width();
@@ -337,7 +373,9 @@ bool S9xOpenGLDisplayDriver::create_context()
 #ifdef GDK_WINDOWING_WAYLAND
     if (GDK_IS_WAYLAND_WINDOW(gdk_window))
     {
-        if (!wl.attach(GTK_WIDGET(drawing_area->gobj())))
+        wl_surface *surface = gdk_wayland_window_get_wl_surface(drawing_area->get_window()->gobj());
+        wl_display *display = gdk_wayland_display_get_wl_display(drawing_area->get_display()->gobj());
+        if (!wl.attach(display, surface, get_metrics(*drawing_area)))
             return false;
         context = &wl;
     }
@@ -357,9 +395,16 @@ bool S9xOpenGLDisplayDriver::create_context()
         return false;
 
     context->make_current();
+    gladLoaderLoadGL();
 
     legacy = false;
-    version = epoxy_gl_version();
+
+    auto version_string = (const char *)glGetString(GL_VERSION);
+    int major_version = 1;
+    int minor_version = 0;
+    std::sscanf(version_string, "%d.%d", &major_version, &minor_version);
+    version = major_version * 10 + minor_version;
+
     if (version < 20)
     {
         printf("OpenGL version is only %d.%d. Recommended version is 2.0.\n",
@@ -393,6 +438,15 @@ int S9xOpenGLDisplayDriver::init()
     }
 
     context->swap_interval(config->sync_to_vblank);
+
+    if (version >= 33)
+    {
+        auto defaults = S9xImGuiGetDefaults();
+        defaults.font_size = gui_config->osd_size;
+        defaults.spacing = defaults.font_size / 2.4;
+        S9xImGuiInit(&defaults);
+        ImGui_ImplOpenGL3_Init();
+    }
 
     initialized = true;
 
@@ -430,6 +484,14 @@ void S9xOpenGLDisplayDriver::deinit()
     }
 
     glDeleteTextures(1, &texmap);
+
+    if (S9xImGuiRunning())
+    {
+        ImGui_ImplOpenGL3_Shutdown();
+        S9xImGuiDeinit();
+    }
+
+    gladLoaderUnloadGL();
 }
 
 int S9xOpenGLDisplayDriver::query_availability()
@@ -446,12 +508,7 @@ int S9xOpenGLDisplayDriver::query_availability()
 #ifdef GDK_WINDOWING_X11
     if (GDK_IS_X11_DISPLAY(gdk_display))
     {
-        Display *dpy = GDK_DISPLAY_XDISPLAY(gdk_display);
-
-        if (glXQueryExtension(dpy, NULL, NULL) == True)
-        {
             return 1;
-        }
     }
 #endif
 

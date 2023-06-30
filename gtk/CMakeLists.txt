@@ -72,13 +72,23 @@ list(APPEND LINKARGS ${GTK_LDFLAGS})
 # MACOS specific:
 list(APPEND LINKARGS ${SDL2_LDFLAGS})
 
-pkg_check_modules(EPOXY REQUIRED epoxy)
-list(APPEND ARGS ${EPOXY_CFLAGS})
-list(APPEND LIBS ${EPOXY_LIBRARIES})
 list(APPEND SOURCES src/gtk_display_driver_opengl.cpp
                     ../shaders/glsl.cpp
                     ../shaders/shader_helpers.cpp
+                    ../vulkan/slang_helpers.cpp
+                    ../vulkan/slang_helpers.hpp
+                    ../vulkan/slang_preset_ini.cpp
+                    ../vulkan/slang_preset_ini.hpp
+                    ../external/glad/src/egl.c
+                    ../external/glad/src/gl.c
                     src/gtk_shader_parameters.cpp)
+
+list(APPEND INCLUDES ../external/glad/include)
+if(USE_X11)
+    list(APPEND SOURCES
+            ../external/glad/src/glx.c
+        )
+endif()
 
 if(USE_SLANG)
     list(APPEND SOURCES ../shaders/slang.cpp)
@@ -105,19 +115,16 @@ if(USE_SLANG)
                         "VK_USE_PLATFORM_WAYLAND_KHR"
                         "VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1"
                         "VMA_DYNAMIC_VULKAN_FUNCTIONS=1"
-                        "VMA_STATIC_VULKAN_FUNCTIONS=0")
+                        "VMA_STATIC_VULKAN_FUNCTIONS=0"
+                        "IMGUI_IMPL_VULKAN_NO_PROTOTYPES")
     list(APPEND INCLUDES ../external/vulkan-headers/include)
     list(APPEND INCLUDES ../external/VulkanMemoryAllocator-Hpp/include)
     list(APPEND INCLUDES ../external/stb)
     list(APPEND SOURCES ../external/stb/stb_image_implementation.cpp)
-    list(APPEND SOURCES ../vulkan/slang_helpers.cpp
-                        ../vulkan/slang_helpers.hpp
-                        ../vulkan/slang_shader.cpp
+    list(APPEND SOURCES ../vulkan/slang_shader.cpp
                         ../vulkan/slang_shader.hpp
                         ../vulkan/slang_preset.cpp
                         ../vulkan/slang_preset.hpp
-                        ../vulkan/slang_preset_ini.cpp
-                        ../vulkan/slang_preset_ini.hpp
                         ../vulkan/vulkan_hpp_storage.cpp
                         ../vulkan/vk_mem_alloc_implementation.cpp
                         ../vulkan/vulkan_context.cpp
@@ -137,7 +144,8 @@ if(USE_SLANG)
                         ../vulkan/std_chrono_throttle.cpp
                         ../vulkan/std_chrono_throttle.hpp
                         src/gtk_display_driver_vulkan.cpp
-                        src/gtk_display_driver_vulkan.h)
+                        src/gtk_display_driver_vulkan.h
+                        ../external/imgui/imgui_impl_vulkan.cpp)
 else()
     list(APPEND SOURCES
                         ../vulkan/std_chrono_throttle.cpp
@@ -156,16 +164,26 @@ if(USE_X11)
                         src/gtk_glx_context.cpp)
 endif()
 
+
+list(APPEND SOURCES ../external/imgui/imgui.cpp
+../external/imgui/imgui_demo.cpp
+../external/imgui/imgui_draw.cpp
+../external/imgui/imgui_impl_opengl3.cpp
+../external/imgui/imgui_tables.cpp
+../external/imgui/imgui_widgets.cpp
+../external/imgui/snes9x_imgui.cpp)
+list(APPEND INCLUDES ../external/imgui)
+
 if(USE_WAYLAND)
     pkg_check_modules(WAYLAND REQUIRED wayland-client wayland-egl)
     list(APPEND DEFINES "USE_WAYLAND")
-    list(APPEND SOURCES src/gtk_wayland_egl_context.cpp
-                        src/gtk_wayland_egl_context.h
-                        src/gtk_wayland_surface.cpp
-                        src/gtk_wayland_surface.h
-                        src/wayland-idle-inhibit-unstable-v1.c
-                        src/viewporter-client-protocol.c
-                        src/fractional-scale-v1.c)
+    list(APPEND SOURCES ../common/video/wayland_egl_context.cpp
+                        ../common/video/wayland_egl_context.hpp
+                        ../common/video/wayland_surface.cpp
+                        ../common/video/wayland_surface.hpp
+                        ../common/video/wayland-idle-inhibit-unstable-v1.c
+                        ../common/video/viewporter-client-protocol.c
+                        ../common/video/fractional-scale-v1.c)
     list(APPEND ARGS ${WAYLAND_CFLAGS})
     list(APPEND LIBS ${WAYLAND_LIBRARIES})
 endif()
@@ -182,7 +200,7 @@ endif()
 if(USE_PULSEAUDIO)
     pkg_check_modules(PULSEAUDIO REQUIRED libpulse)
     list(APPEND DEFINES "USE_PULSEAUDIO")
-    list(APPEND SOURCES src/gtk_sound_driver_pulse.cpp)
+    list(APPEND SOURCES ../common/audio/s9x_sound_driver_pulse.cpp)
     list(APPEND ARGS ${PULSEAUDIO_CFLAGS})
     list(APPEND LIBS ${PULSEAUDIO_LIBRARIES})
 endif()
@@ -190,7 +208,7 @@ endif()
 if(USE_PORTAUDIO)
     pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
     list(APPEND DEFINES "USE_PORTAUDIO")
-    list(APPEND SOURCES src/gtk_sound_driver_portaudio.cpp)
+    list(APPEND SOURCES ../common/audio/s9x_sound_driver_portaudio.cpp)
     list(APPEND ARGS ${PORTAUDIO_CFLAGS})
     list(APPEND LIBS ${PORTAUDIO_LIBRARIES})
 endif()
@@ -198,7 +216,7 @@ endif()
 if(USE_ALSA)
     pkg_check_modules(ALSA REQUIRED alsa)
     list(APPEND DEFINES "USE_ALSA")
-    list(APPEND SOURCES src/gtk_sound_driver_alsa.cpp)
+    list(APPEND SOURCES ../common/audio/s9x_sound_driver_alsa.cpp)
     list(APPEND ARGS ${ALSA_CFLAGS})
     list(APPEND LIBS ${ALSA_LIBRARIES})
 endif()
@@ -206,7 +224,7 @@ endif()
 if(USE_OSS)
     CHECK_INCLUDE_FILE("sys/soundcard.h" OSS)
     if(OSS)
-        list(APPEND SOURCES src/gtk_sound_driver_oss.cpp)
+        list(APPEND SOURCES ../common/audio/s9x_sound_driver_oss.cpp)
         list(APPEND DEFINES "USE_OSS")
     endif()
 endif()
@@ -285,7 +303,7 @@ if(USE_WAMR)
 endif()
 
 list(APPEND SOURCES
-    src/gtk_sound_driver.h
+    ../common/audio/s9x_sound_driver.hpp
     ../filter/2xsai.cpp
     ../filter/2xsai.h
     ../filter/epx.cpp
@@ -326,8 +344,8 @@ list(APPEND SOURCES
     ../filter/snes_ntsc_impl.h
     ../filter/snes_ntsc.c
     src/gtk_compat.h
-    src/gtk_sound_driver_sdl.h
-    src/gtk_sound_driver_sdl.cpp
+    ../common/audio/s9x_sound_driver_sdl.hpp
+    ../common/audio/s9x_sound_driver_sdl.cpp
     ../fxinst.cpp
     ../fxemu.cpp
     ../fxdbg.cpp

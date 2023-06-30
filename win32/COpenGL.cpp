@@ -15,6 +15,8 @@
 #include "../filter/hq2x.h"
 #include "../filter/2xsai.h"
 
+#include "snes9x_imgui.h"
+#include "imgui_impl_opengl3.h"
 
 COpenGL::COpenGL(void)
 {
@@ -133,13 +135,28 @@ bool COpenGL::Initialize(HWND hWnd)
 	glClear(GL_COLOR_BUFFER_BIT);
 	SwapBuffers(hDC);
 
+	if (ogl_GetMajorVersion() >= 3 && !Settings.AutoDisplayMessages)
+	{
+		auto defaults = S9xImGuiGetDefaults();
+		defaults.font_size = GUI.OSDSize;
+		defaults.spacing = defaults.font_size / 2.4;
+		S9xImGuiInit(&defaults);
+		ImGui_ImplOpenGL3_Init();
+		Settings.DisplayIndicators = true;
+	}
+
 	initDone = true;
 	return true;
 }
 
 void COpenGL::DeInitialize()
 {
-	initDone = false;
+	if (initDone && S9xImGuiRunning())
+	{
+		ImGui_ImplOpenGL3_Shutdown();
+		S9xImGuiDeinit();
+	}
+    initDone = false;
 	SetShaders(NULL);
 	DestroyDrawSurface();
 	wglMakeCurrent(NULL,NULL);
@@ -297,10 +314,6 @@ void COpenGL::Render(SSurface Src)
 	Dst.Pitch = outTextureWidth * 2;
 
 	RenderMethod (Src, Dst, &dstRect);
-	if(!Settings.AutoDisplayMessages) {
-		WinSetCustomDisplaySurface((void *)Dst.Surface, Dst.Pitch/2, dstRect.right-dstRect.left, dstRect.bottom-dstRect.top, GetFilterScale(CurrentScale));
-		S9xDisplayMessages ((uint16*)Dst.Surface, Dst.Pitch/2, dstRect.right-dstRect.left, dstRect.bottom-dstRect.top, GetFilterScale(CurrentScale));
-	}
 
 	if(pboFunctionsLoaded)
 		glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
@@ -369,6 +382,16 @@ void COpenGL::Render(SSurface Src)
     }
 
 	glFlush();
+
+	if (S9xImGuiRunning())
+	{
+		ImGui_ImplOpenGL3_NewFrame();
+		if (S9xImGuiDraw(windowSize.right, windowSize.bottom))
+		{
+			auto* draw_data = ImGui::GetDrawData();
+			ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+		}
+	}
 
 	WinThrottleFramerate();
 

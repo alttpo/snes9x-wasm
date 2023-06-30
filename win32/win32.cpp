@@ -826,7 +826,7 @@ void InitSnes9x( void)
 //    generate_offsets_h (0, NULL);
 //    fclose (offsets_h);
 //#endif
-
+	S9xCustomDisplayString = S9xWinDisplayString;
     Memory.Init();
 
 	extern void S9xPostRomInit();
@@ -1169,7 +1169,7 @@ void DoAVIOpen(const TCHAR* filename)
 	AVISetFramerate(framerate, frameskip, GUI.AVIOut);
 
 	avi_width = SNES_WIDTH;
-	avi_height = GUI.HeightExtend ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT;
+	avi_height = Settings.ShowOverscan ? SNES_HEIGHT_EXTENDED : SNES_HEIGHT;
 	avi_skip_frames = Settings.SkipFrames;
 
 	if(GUI.AVIHiRes) {

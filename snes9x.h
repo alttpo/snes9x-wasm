@@ -254,10 +254,12 @@ struct SSettings
 	bool8	DisplayWatchedAddresses;
 	bool8	DisplayPressedKeys;
 	bool8	DisplayMovieFrame;
+	bool	DisplayIndicators;
 	bool8	AutoDisplayMessages;
 	uint32	InitialInfoStringTimeout;
 	uint16	DisplayColor;
 	bool8	BilinearFilter;
+	bool	ShowOverscan;
 
 	bool8	Multi;
 	char	CartAName[PATH_MAX + 1];
