@@ -194,35 +194,56 @@ void module::debugger_enable(bool enabled) {
 }
 
 void module::notify_pc(uint32_t pc) {
-    auto it = pc_events.find(pc);
-    if (it == pc_events.end()) {
-        return;
+    for (const auto &it: pc_events) {
+        if (it.pc == pc) {
+            // notify wasm of the PC-hit event:
+            notify_event(ev_user0 + (pc & 0x00ffffff));
+
+            // wait for wasm to complete its work:
+            wait_for_ack_last_event(it.timeout);
+        }
     }
-
-    // notify wasm of the PC-hit event:
-    notify_event(ev_user0 + (pc & 0x00ffffff));
-
-    // wait for wasm to complete its work:
-    wait_for_ack_last_event(it->second.timeout);
 }
 
 uint32_t module::register_pc_event(uint32_t pc, uint32_t timeout_nsec) {
     // put a 14 millisecond cap on the timeout so it doesn't take an entire 60fps frame (16.67 milliseconds):
-    if (timeout_nsec > 14000000) {
-        timeout_nsec = 14000000;
+    if (timeout_nsec > 14000000UL) {
+        timeout_nsec = 14000000UL;
     }
 
-    pc_events.insert_or_assign(
-        pc,
+    uint32_t event_id = ev_user0 + (pc & 0x00ffffffUL);
+
+    auto it = std::find_if(
+        pc_events.begin(),
+        pc_events.end(),
+        [&](const auto &item) {
+            return item.pc == pc;
+        }
+    );
+    if (it != pc_events.end()) {
+        it->timeout = std::chrono::nanoseconds(timeout_nsec);
+        return event_id;
+    }
+
+    pc_events.emplace_back(
         pc_event{
             .timeout = std::chrono::nanoseconds(timeout_nsec),
+            .pc = pc
         }
     );
 
     // return the event id:
-    return ev_user0 + (pc & 0x00ffffff);
+    return event_id;
 }
 
 void module::unregister_pc_event(uint32_t pc) {
-    pc_events.erase(pc);
+    auto it = std::find_if(
+        pc_events.begin(),
+        pc_events.end(),
+        [&](const auto &item) {
+            return item.pc == pc;
+        }
+    );
+    if (!(it != pc_events.end())) return;
+    pc_events.erase(it);
 }

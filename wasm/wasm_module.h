@@ -25,6 +25,7 @@
 
 struct pc_event {
     std::chrono::nanoseconds timeout;
+    uint32_t pc;
 };
 
 class module : public std::enable_shared_from_this<module> {
@@ -81,7 +82,7 @@ private:
     uint32_t event = wasm_event_kind::ev_none;
     bool event_triggered = false;
 
-    std::unordered_map<uint32_t, pc_event> pc_events;
+    std::vector<pc_event> pc_events;
     uint32_t last_user_event = 0;
 
 public:
