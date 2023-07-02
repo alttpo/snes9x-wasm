@@ -197,7 +197,7 @@ void module::notify_pc(uint32_t pc) {
     for (const auto &it: pc_events) {
         if (it.pc == pc) {
             // notify wasm of the PC-hit event:
-            notify_event(ev_user0 + (pc & 0x00ffffff));
+            notify_event(ev_pc_break_start + (pc & 0x00ffffff));
 
             // wait for wasm to complete its work:
             wait_for_ack_last_event(it.timeout);
@@ -211,13 +211,21 @@ uint32_t module::register_pc_event(uint32_t pc, uint32_t timeout_nsec) {
         timeout_nsec = 14000000UL;
     }
 
-    uint32_t event_id = ev_user0 + (pc & 0x00ffffffUL);
-    for (int i = 0; i < pc_events.size(); i++) {
+    uint32_t event_id = ev_pc_break_start + (pc & 0x00ffffffUL);
+    int i;
+    for (i = 0; i < pc_events.size(); i++) {
         auto &it = pc_events[i];
         if (it.pc == pc || it.pc == 0) {
             it.timeout = std::chrono::nanoseconds(timeout_nsec);
             it.pc = pc;
+            i++;
             break;
+        }
+    }
+    for (; i < pc_events.size(); i++) {
+        auto &it = pc_events[i];
+        if (it.pc == pc) {
+            it.pc = 0;
         }
     }
 

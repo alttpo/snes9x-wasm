@@ -5,9 +5,7 @@ import (
 	"unsafe"
 )
 
-//go:wasm-module rex
-//export vram_read
-//go:wasmimport rex vram_read
+//go:wasmimport rex mem_read_vram
 func vram_read(b unsafe.Pointer, l uint32, offset uint32) int32
 
 type vram struct{}

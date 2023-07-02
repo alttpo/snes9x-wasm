@@ -5,14 +5,10 @@ import (
 	"unsafe"
 )
 
-//go:wasm-module rex
-//export wram_read
-//go:wasmimport rex wram_read
+//go:wasmimport rex mem_read_wram
 func wram_read(b unsafe.Pointer, l uint32, offset uint32) int32
 
-//go:wasm-module rex
-//export wram_write
-//go:wasmimport rex wram_write
+//go:wasmimport rex mem_write_wram
 func wram_write(b unsafe.Pointer, l uint32, offset uint32) int32
 
 type wram struct{}

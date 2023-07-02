@@ -2,19 +2,13 @@ package rex
 
 import "unsafe"
 
-//go:wasm-module rex
-//export trace_writeln
-//go:wasmimport rex trace_writeln
+//go:wasmimport rex log_trace
 func trace_printf(flags uint32, b unsafe.Pointer, l uint32)
 
-//go:wasm-module rex
-//export stdout_write
-//go:wasmimport rex stdout_write
+//go:wasmimport rex log_stdout
 func stdout_write(b unsafe.Pointer, l uint32)
 
-//go:wasm-module rex
-//export stderr_write
-//go:wasmimport rex stderr_write
+//go:wasmimport rex log_stderr
 func stderr_write(b unsafe.Pointer, l uint32)
 
 type stdout struct{}

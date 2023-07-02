@@ -5,9 +5,7 @@ import (
 	"unsafe"
 )
 
-//go:wasm-module rex
-//export rom_read
-//go:wasmimport rex rom_read
+//go:wasmimport rex mem_read_rom
 func rom_read(b unsafe.Pointer, l uint32, offset uint32) int32
 
 type rom struct{}

@@ -5,19 +5,13 @@ import (
 	"unsafe"
 )
 
-//go:wasm-module rex
-//export ppux_cmd_write
-//go:wasmimport rex ppux_cmd_write
+//go:wasmimport rex ppux_write_cmd
 func ppux_cmd_write(b unsafe.Pointer, l uint32) int32
 
-//go:wasm-module rex
-//export ppux_vram_upload
-//go:wasmimport rex ppux_vram_upload
+//go:wasmimport rex ppux_write_vram
 func ppux_vram_upload(addr uint32, data unsafe.Pointer, size uint32) int32
 
-//go:wasm-module rex
-//export ppux_cgram_upload
-//go:wasmimport rex ppux_cgram_upload
+//go:wasmimport rex ppux_write_cgram
 func ppux_cgram_upload(addr uint32, data unsafe.Pointer, size uint32) int32
 
 type ppux struct {

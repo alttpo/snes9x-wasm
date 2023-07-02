@@ -5,9 +5,7 @@ import (
 	"unsafe"
 )
 
-//go:wasm-module rex
-//export oam_read
-//go:wasmimport rex oam_read
+//go:wasmimport rex mem_read_oam
 func oam_read(b unsafe.Pointer, l uint32, offset uint32) int32
 
 type oam struct{}

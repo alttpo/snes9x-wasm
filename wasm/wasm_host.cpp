@@ -55,55 +55,10 @@ bool wasm_host_init() {
     {
         auto *natives = new std::vector<NativeSymbol>();
 
-        // event subsystem (wait for irq, nmi, ppu frame start/end, shutdown, etc.):
+        // output logging and trace subsystem:
         {
             natives->push_back({
-                "wait_for_event",
-                (void *) (+[](wasm_exec_env_t exec_env, uint32_t timeout_usec, uint32_t *o_events) -> int32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("wait_for_event", m->wait_for_event(timeout_usec, *o_events));
-                }),
-                "(i*)i",
-                nullptr
-            });
-            natives->push_back({
-                "ack_last_event",
-                (void *) (+[](wasm_exec_env_t exec_env) -> void {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_DO("ack_last_event", m->ack_last_event());
-                }),
-                "()",
-                nullptr
-            });
-            natives->push_back({
-                "register_pc_event",
-                (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc, uint32_t timeout_nsec) -> uint32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("register_pc_event", m->register_pc_event(pc, timeout_nsec));
-                }),
-                "(ii)i",
-                nullptr
-            });
-            natives->push_back({
-                "unregister_pc_event",
-                (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc) -> void {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_DO("unregister_pc_event", m->unregister_pc_event(pc));
-                }),
-                "(i)",
-                nullptr
-            });
-            natives->push_back({
-                "trace_write",
-                (void *) (+[](wasm_exec_env_t exec_env, uint32_t flags, const char *text, uint32_t len) -> void {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    m->trace_printf(flags, "%.*s", len, text);
-                }),
-                "(i*~)",
-                nullptr
-            });
-            natives->push_back({
-                "stdout_write",
+                "log_stdout",
                 (void *) (+[](wasm_exec_env_t exec_env, const char *text, uint32_t len) -> void {
                     wasm_host_stdout_write(text, text + len);
                 }),
@@ -111,103 +66,133 @@ bool wasm_host_init() {
                 nullptr
             });
             natives->push_back({
-                "stderr_write",
+                "log_stderr",
                 (void *) (+[](wasm_exec_env_t exec_env, const char *text, uint32_t len) -> void {
                     wasm_host_stderr_write(text, text + len);
                 }),
                 "(*~)",
                 nullptr
             });
+            natives->push_back({
+                "log_trace",
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t flags, const char *text, uint32_t len) -> void {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    m->trace_printf(flags, "%.*s", len, text);
+                }),
+                "(i*~)",
+                nullptr
+            });
+        }
+
+        // event subsystem (wait for irq, nmi, ppu frame start/end, shutdown, etc.):
+        {
+            natives->push_back({
+                "event_register_pc_break",
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc, uint32_t timeout_nsec) -> uint32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_RETURN("event_register_pc_break", m->register_pc_event(pc, timeout_nsec));
+                }),
+                "(ii)i",
+                nullptr
+            });
+            natives->push_back({
+                "event_unregister_pc_break",
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc) -> void {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_DO("event_unregister_pc_break", m->unregister_pc_event(pc));
+                }),
+                "(i)",
+                nullptr
+            });
+            natives->push_back({
+                "event_wait_for",
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t timeout_usec, uint32_t *o_events) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_RETURN("event_wait_for", m->wait_for_event(timeout_usec, *o_events));
+                }),
+                "(i*)i",
+                nullptr
+            });
+            natives->push_back({
+                "event_ack_last",
+                (void *) (+[](wasm_exec_env_t exec_env) -> void {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    MEASURE_TIMING_DO("event_ack_last", m->ack_last_event());
+                }),
+                "()",
+                nullptr
+            });
         }
 
         // memory access:
         {
-#define FUNC_READ(start, size) \
-        ((void *)(+[](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
-            if (offset >= size) return false; \
-            if (offset + dest_len > size) return false; \
-            MEASURE_TIMING_DO("mem_read", { std::unique_lock<std::mutex> lk(Memory.lock); memcpy(dest, start + offset, dest_len); }); \
-            return true; \
-        }))
-#define FUNC_WRITE(start, size) \
-        ((void *)(+[](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
-            if (offset >= size) return false; \
-            if (offset + dest_len > size) return false; \
-            MEASURE_TIMING_DO("mem_write", { std::unique_lock<std::mutex> lk(Memory.lock); memcpy(start + offset, dest, dest_len); }); \
-            return true; \
-        }))
+#define FUNC_READ(name, start, size) { \
+                name, \
+                ((void *)(+[](wasm_exec_env_t exec_env, uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t { \
+                    if (offset >= size) return false; \
+                    if (offset + dest_len > size) return false; \
+                    MEASURE_TIMING_DO(name, { std::unique_lock<std::mutex> lk(Memory.lock); memcpy(dest, start + offset, dest_len); }); \
+                    return true; \
+                })), \
+                "(*~i)i", \
+                nullptr \
+            }
 
-            natives->push_back({
-                "rom_read",
-                FUNC_READ(Memory.ROM, Memory.MAX_ROM_SIZE),
-                "(*~i)i",
-                nullptr
-            });
-            natives->push_back({
-                "sram_read",
-                FUNC_READ(Memory.SRAM, Memory.SRAMStorage.size()),
-                "(*~i)i",
-                nullptr
-            });
-            natives->push_back({
-                "sram_write",
-                FUNC_WRITE(Memory.SRAM, Memory.SRAM_SIZE),
-                "(*~i)i",
-                nullptr
-            });
-            natives->push_back({
-                "wram_read",
-                FUNC_READ(Memory.RAM, sizeof(Memory.RAM)),
-                "(*~i)i",
-                nullptr
-            });
-            natives->push_back({
-                "wram_write",
-                FUNC_WRITE(Memory.RAM, sizeof(Memory.RAM)),
-                "(*~i)i",
-                nullptr
-            });
-            natives->push_back({
-                "vram_read",
-                FUNC_READ(Memory.VRAM, sizeof(Memory.VRAM)),
-                "(*~i)i",
-                nullptr
-            });
-            natives->push_back({
-                "oam_read",
-                FUNC_READ(PPU.OAMData, sizeof(PPU.OAMData)),
-                "(*~i)i",
-                nullptr
-            });
+#define FUNC_WRITE(name, start, size) { \
+                name, \
+                ((void *)(+[](wasm_exec_env_t exec_env, uint8_t *src, uint32_t src_len, uint32_t offset) -> int32_t { \
+                    if (offset >= size) return false; \
+                    if (offset + src_len > size) return false; \
+                    MEASURE_TIMING_DO(name, { std::unique_lock<std::mutex> lk(Memory.lock); memcpy(start + offset, src, src_len); }); \
+                    return true; \
+                })), \
+                "(*~i)i", \
+                nullptr \
+            }
+
+            // mem_read_rom(uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t;
+            // mem_read_sram(uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t;
+            // mem_write_sram(uint8_t *src, uint32_t src_len, uint32_t offset) -> int32_t;
+            // mem_read_wram(uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t;
+            // mem_write_wram(uint8_t *src, uint32_t src_len, uint32_t offset) -> int32_t;
+            // mem_read_vram(uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t;
+            // mem_read_oam(uint8_t *dest, uint32_t dest_len, uint32_t offset) -> int32_t;
+            natives->push_back(FUNC_READ("mem_read_rom", Memory.ROM, Memory.MAX_ROM_SIZE));
+            natives->push_back(FUNC_READ("mem_read_sram", Memory.SRAM, Memory.SRAMStorage.size()));
+            natives->push_back(FUNC_WRITE("mem_write_sram", Memory.SRAM, Memory.SRAM_SIZE));
+            natives->push_back(FUNC_READ("mem_read_wram", Memory.RAM, sizeof(Memory.RAM)));
+            natives->push_back(FUNC_WRITE("mem_write_wram", Memory.RAM, sizeof(Memory.RAM)));
+            natives->push_back(FUNC_READ("mem_read_vram", Memory.VRAM, sizeof(Memory.VRAM)));
+            natives->push_back(FUNC_READ("mem_read_oam", PPU.OAMData, sizeof(PPU.OAMData)));
 #undef FUNC_WRITE
 #undef FUNC_READ
         }
 
-        // ppux command queue:
+        // ppux (PPU integrated extensions):
         {
             natives->push_back({
-                "ppux_cmd_write",
+                "ppux_write_cmd",
                 (void *) (+[](wasm_exec_env_t exec_env, uint32_t *data, uint32_t size) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("ppux_cmd_write", m->ppux.cmd_write(data, size));
+                    MEASURE_TIMING_RETURN("ppux_write_cmd", m->ppux.cmd_write(data, size));
                 }),
                 "(*~)i",
                 nullptr
             });
             natives->push_back({
-                "ppux_vram_upload",
+                "ppux_write_vram",
                 (void *) (+[](wasm_exec_env_t exec_env, uint32_t addr, uint8_t *data, uint32_t size) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("ppux_vram_upload", m->ppux.vram_upload(addr, data, size));
+                    MEASURE_TIMING_RETURN("ppux_write_vram", m->ppux.vram_upload(addr, data, size));
                 }),
                 "(i*~)i",
                 nullptr
             });
             natives->push_back({
-                "ppux_cgram_upload",
+                "ppux_write_cgram",
                 (void *) (+[](wasm_exec_env_t exec_env, uint32_t addr, uint8_t *data, uint32_t size) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("ppux_cgram_upload", m->ppux.cgram_upload(addr, data, size));
+                    MEASURE_TIMING_RETURN("ppux_write_cgram", m->ppux.cgram_upload(addr, data, size));
                 }),
                 "(i*~)i",
                 nullptr
