@@ -212,38 +212,25 @@ uint32_t module::register_pc_event(uint32_t pc, uint32_t timeout_nsec) {
     }
 
     uint32_t event_id = ev_user0 + (pc & 0x00ffffffUL);
-
-    auto it = std::find_if(
-        pc_events.begin(),
-        pc_events.end(),
-        [&](const auto &item) {
-            return item.pc == pc;
+    for (int i = 0; i < pc_events.size(); i++) {
+        auto &it = pc_events[i];
+        if (it.pc == pc || it.pc == 0) {
+            it.timeout = std::chrono::nanoseconds(timeout_nsec);
+            it.pc = pc;
+            break;
         }
-    );
-    if (it != pc_events.end()) {
-        it->timeout = std::chrono::nanoseconds(timeout_nsec);
-        return event_id;
     }
-
-    pc_events.emplace_back(
-        pc_event{
-            .timeout = std::chrono::nanoseconds(timeout_nsec),
-            .pc = pc
-        }
-    );
 
     // return the event id:
     return event_id;
 }
 
 void module::unregister_pc_event(uint32_t pc) {
-    auto it = std::find_if(
-        pc_events.begin(),
-        pc_events.end(),
-        [&](const auto &item) {
-            return item.pc == pc;
+    for (int i = 0; i < pc_events.size(); i++) {
+        auto &it = pc_events[i];
+
+        if (it.pc == pc) {
+            it.pc = 0;
         }
-    );
-    if (!(it != pc_events.end())) return;
-    pc_events.erase(it);
+    }
 }

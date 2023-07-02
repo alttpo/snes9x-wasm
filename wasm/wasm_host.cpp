@@ -430,22 +430,22 @@ int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint3
 }
 
 void wasm_host_notify_events(wasm_event_kind events) {
-    for_each_module([=](std::shared_ptr<module> m) {
+    for_each_module([=](const std::shared_ptr<module>& m) {
         m->notify_event(events);
     });
-    for_each_module([=](std::shared_ptr<module> m) {
+    for_each_module([=](const std::shared_ptr<module>& m) {
         m->wait_for_ack_last_event(std::chrono::microseconds(1000));
     });
 }
 
 void wasm_host_debugger_enable(bool enabled) {
-    for_each_module([=](std::shared_ptr<module> m) {
+    for_each_module([=](const std::shared_ptr<module>& m) {
         m->debugger_enable(enabled);
     });
 }
 
 void wasm_host_notify_pc(uint32_t pc) {
-    for_each_module([=](std::shared_ptr<module> m) {
+    for_each_module([=](const std::shared_ptr<module>& m) {
         m->notify_pc(pc);
     });
 }
