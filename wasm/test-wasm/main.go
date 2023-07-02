@@ -138,7 +138,8 @@ func main() {
 		}
 
 		if event == ev_pc {
-			fmt.Printf("Sprite_Main\n")
+			rex.AcknowledgeLastEvent()
+			//fmt.Printf("Sprite_Main\n")
 			continue
 		}
 
