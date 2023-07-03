@@ -341,7 +341,7 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::iterator it, std::vector<uint
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
     //   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx    x = x-coordinate (0..1023) of top-left
-    //   ---o slll     ---- ----     ---- --ww     wwww wwww    y = y-coordinate (0..1023) of top-left
+    //   -o-- slll     ---- ----     ---- --ww     wwww wwww    y = y-coordinate (0..1023) of top-left
     //                                                          w = width in pixels (1..1024)
     //                                                          l = PPU layer
     //                                                          s = main or sub screen; main=0, sub=1
@@ -363,7 +363,7 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::iterator it, std::vector<uint
     auto is_sub = ((*it >> 24) >> 4) & 1;
 
     // overlay pixels (0) or overwrite pixels (1) based on PX_ENABLE flag (1<<31) per pixel:
-    auto is_replace = (((*it >> 24) >> 5) & 1);
+    auto is_replace = (((*it >> 24) >> 7) & 1);
 
     it++;
 
