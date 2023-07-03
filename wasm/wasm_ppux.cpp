@@ -301,7 +301,7 @@ void ppux::render_cmd() {
         //   1111 1111     1111 1111     0000 0000     0000 0000
         // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
         //   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
-        //                                                          s = size of packet in uint32_ts
+        //                                                          s = size of command data in uint32_ts
         if ((*it & (1 << 31)) == 0) {
             wasm_host_stderr_printf("cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.begin());
             cmd.erase(cmd.begin(), cmd.end());
@@ -309,13 +309,14 @@ void ppux::render_cmd() {
         }
 
         auto size = *it & 0xffff;
-        if (size == 0) {
+        auto o = (*it >> 24) & 0x7F;
+        it++;
+
+        // end drawing:
+        if (o == 0) {
             // stop:
             break;
         }
-
-        auto o = (*it >> 24) & 0x7F;
-        it++;
 
         // find start of next opcode:
         opit = it + size;
@@ -327,22 +328,24 @@ void ppux::render_cmd() {
         if (o >= sizeof(opcode_handlers) / sizeof(opcode_handlers[0])) {
             continue;
         }
+
         std::invoke(opcode_handlers[o], this, it, opit);
     }
 }
 
 void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit) {
-    // draw horizontal runs of 16bpp pixels starting at x,y. wrap at
-    // width and proceed to next line until `size-2` pixels in total are
-    // drawn.
+    // draw horizontal runs of 15bpp RGB555 pixels starting at x,y. wrap at width and proceed to next line until
+    // `size-2` pixels in total are drawn.
 
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //   ---o slll     ---- ----     ---- --ww     wwww wwww    o = per pixel, overlay = 0, replace = 1
-    //                                                          s = main or sub screen; main=0, sub=1
+    //   ---o slll     ---- ----     ---- --ww     wwww wwww    o = per pixel overlay = 0, replace = 1
+    //   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx    s = main or sub screen; main=0, sub=1
     //                                                          l = PPU layer
     //                                                          w = width in pixels
+    //                                                          x = x-coordinate (0..1023) of top-left
+    //                                                          y = y-coordinate (0..1023) of top-left
 
     // width up to 1024 where 0 represents 1024 and 1..1023 are normal:
     auto width = *it & 0x03ff;
@@ -498,26 +501,24 @@ void ppux::draw_vram_tile(
     }
 }
 
-void ppux::cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit) {
+void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit) {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //   ---- ----     ---- ----     ---- --xx     xxxx xxxx    x = x coordinate (0..1023)
-    //   ---- ----     ---- ----     ---- --yy     yyyy yyyy    y = y coordinate (0..1023)
-    //   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
-    //   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
-    //   --pp slll     ---- ----     ---- ----     fvhh hwww    w = 8<<w width in pixels
-    //                                                          h = 8<<h height in pixels
+    //   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx    x = x coordinate (0..1023)
+    //   ---- ----     dddd dddd     dddd dddd     dddd dddd    y = y coordinate (0..1023)
+    //   ---- ----     cccc cccc     cccc cccc     cccc cccc    d = bitmap data address in extra ram
+    //   --pp slll     ---- --vf     hhhh hhhh     wwww wwww    c = cgram/palette address in extra ram (points to color 0 of palette)
+    //                                                          w = width in pixels
+    //                                                          h = height in pixels
     //                                                          f = horizontal flip
     //                                                          v = vertical flip
     //                                                          l = PPU layer
     //                                                          s = main or sub screen; main=0, sub=1
     //                                                          p = priority (0..3 for OBJ, 0..1 for BG)
 
-    // width up to 1024 where 0 represents 1024 and 1..1023 are normal:
     auto x0 = *it & 1023;
-    it++;
-    auto y0 = *it & 1023;
+    auto y0 = (*it >> 16) & 1023;
     it++;
     auto bitmap_addr = *it;
     it++;
@@ -527,10 +528,10 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32
     auto bitmap = vram.data() + bitmap_addr;
     auto palette = cgram.data() + cgram_addr;
 
-    auto width = 8 << (*it & 7);
-    auto height = 8 << ((*it >> 3) & 7);
-    auto hflip = (*it & (1 << 7)) == (1 << 7);
-    auto vflip = (*it & (1 << 6)) == (1 << 6);
+    auto width = (*it & 255);
+    auto height = ((*it >> 8) & 255);
+    auto hflip = ((*it >> 16) & 1) == 1;
+    auto vflip = ((*it >> 17) & 1) == 1;
 
     // which ppux layer to render to: (BG1..4, OBJ)
     auto layer = (*it >> 24) & 7;

@@ -86,13 +86,13 @@ private:
     // ppux opcode functions, starting from opcode 1:
     void cmd_bitmap_15bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
 
-    void cmd_vram_tiles(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
+    void cmd_vram_tiles_4bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
 
     static constexpr opcode_handler opcode_handlers[3] = {
         // 0 is the terminate opcode:
         nullptr,
         &ppux::cmd_bitmap_15bpp,
-        &ppux::cmd_vram_tiles
+        &ppux::cmd_vram_tiles_4bpp
     };
 
     static const uint32_t vram_max_size = 65536 * 1024;

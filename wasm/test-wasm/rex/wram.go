@@ -19,7 +19,7 @@ var WRAM wram
 func (r *wram) ReadAt(p []byte, off int64) (n int, err error) {
 	res := wram_read(unsafe.Pointer(&p[0]), uint32(len(p)), uint32(off))
 	if res != 0 {
-		err = fmt.Errorf("unable to read from WRAM at offset $%05x size $%x", off, len(p))
+		err = fmt.Errorf("unable to read from WRAM")
 		return 0, err
 	}
 	return n, nil
@@ -28,7 +28,7 @@ func (r *wram) ReadAt(p []byte, off int64) (n int, err error) {
 func (r *wram) WriteAt(p []byte, off int64) (n int, err error) {
 	res := wram_write(unsafe.Pointer(&p[0]), uint32(len(p)), uint32(off))
 	if res != 0 {
-		err = fmt.Errorf("unable to write to WRAM at offset $%05x size $%x", off, len(p))
+		err = fmt.Errorf("unable to write to WRAM")
 		return 0, err
 	}
 	return n, nil

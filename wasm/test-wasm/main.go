@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"main/rex"
-	"strings"
+	//"strings"
 	"time"
 )
 
@@ -27,7 +27,7 @@ var slots []rex.Socket
 //
 // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
 //
-//	---- ----     ---- --pp     Errr rrgg     gggb bbbb    E = enable pixel
+//	E--- ----     ---- --pp     -rrr rrgg     gggb bbbb    E = enable pixel
 //	                                                       r = red (5-bits)
 //	                                                       g = green (5-bits)
 //	                                                       b = blue (5-bits)
@@ -74,7 +74,7 @@ func main() {
 
 	// read rom header:
 	_, _ = rex.ROM.ReadAt(romTitle[:], 0x7FC0)
-	fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
+	//fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
 
 	// read ROM contents of link's entire sprite sheet:
 	_, _ = rex.ROM.ReadAt(linkSprites[:], 0x08_0000)
@@ -179,25 +179,25 @@ func main() {
 			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
 			//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
 			//                                                          s = size of packet in uint32_ts
-			0b1000_0010_0000_0000_0000_0000_0000_0000+5,
+			0b1000_0010_0000_0000_0000_0000_0000_0000+4,
 			//   MSB                                             LSB
 			//   1111 1111     1111 1111     0000 0000     0000 0000
 			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-			//   ---- ----     ---- ----     ---- --xx     xxxx xxxx    x = x coordinate (0..1023)
-			//   ---- ----     ---- ----     ---- --yy     yyyy yyyy    y = y coordinate (0..1023)
-			//   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
-			//   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
-			//   --pp slll     ---- ----     ---- ----     fvhh hwww    w = 8<<w width in pixels
-			//                                                          h = 8<<h height in pixels
+			//   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx    x = x coordinate (0..1023)
+			//   ---- ----     dddd dddd     dddd dddd     dddd dddd    y = y coordinate (0..1023)
+			//   ---- ----     cccc cccc     cccc cccc     cccc cccc    d = bitmap data address in extra ram
+			//   --pp slll     ---- --vf     hhhh hhhh     wwww wwww    c = cgram/palette address in extra ram (points to color 0 of palette)
+			//                                                          w = width in pixels
+			//                                                          h = height in pixels
 			//                                                          f = horizontal flip
 			//                                                          v = vertical flip
 			//                                                          l = PPU layer
 			//                                                          s = main or sub screen; main=0, sub=1
-			132,
-			132,
+			//                                                          p = priority (0..3 for OBJ, 0..1 for BG)
+			(132<<16)|132,
 			0x0000,
 			0x0000,
-			0b0010_0100_0000_0000_0000_0000_1000_1001,
+			0b0010_0100_0000_0000_0001_0000_0001_0000,
 		)
 		// end of list:
 		cmd = append(cmd, 0b1000_0000_0000_0000_0000_0000_0000_0000)
