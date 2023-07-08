@@ -52,7 +52,7 @@ public:
     std::string name;
 
 public:
-    bool wait_for_event(uint32_t timeout_usec, uint32_t &o_event);
+    bool wait_for_event(uint32_t timeout_nsec, uint32_t &o_event);
 
     void ack_last_event();
 

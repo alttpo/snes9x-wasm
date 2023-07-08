@@ -128,17 +128,17 @@ exec_main:
     trace_printf(1UL << 0, "%s wasm module exited normally\n", name.c_str());
 }
 
-bool module::wait_for_event(uint32_t timeout_usec, uint32_t &o_event) {
-    trace_printf(1UL << 31, "{ wait_for_event(%llu)\n", timeout_usec);
+bool module::wait_for_event(uint32_t timeout_nsec, uint32_t &o_event) {
+    trace_printf(1UL << 31, "{ wait_for_event(%llu)\n", timeout_nsec);
     std::unique_lock<std::mutex> lk(event_mtx);
     if (event_notify_cv.wait_for(
         lk,
-        std::chrono::microseconds(timeout_usec),
+        std::chrono::nanoseconds(timeout_nsec),
         [this]() { return event_triggered; }
     )) {
         event_triggered = false;
         o_event = event;
-        trace_printf(1UL << 31, "} wait_for_event(%llu) -> %lu\n", timeout_usec, o_event);
+        trace_printf(1UL << 31, "} wait_for_event(%llu) -> %lu\n", timeout_nsec, o_event);
         return true;
     }
 

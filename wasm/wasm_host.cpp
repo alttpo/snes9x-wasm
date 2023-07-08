@@ -87,28 +87,28 @@ bool wasm_host_init() {
         // event subsystem (wait for irq, nmi, ppu frame start/end, shutdown, etc.):
         {
             natives->push_back({
-                "event_register_pc_break",
+                "event_register_break",
                 (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc, uint32_t timeout_nsec) -> uint32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("event_register_pc_break", m->register_pc_event(pc, timeout_nsec));
+                    MEASURE_TIMING_RETURN("event_register_break", m->register_pc_event(pc, timeout_nsec));
                 }),
                 "(ii)i",
                 nullptr
             });
             natives->push_back({
-                "event_unregister_pc_break",
+                "event_unregister_break",
                 (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc) -> void {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_DO("event_unregister_pc_break", m->unregister_pc_event(pc));
+                    MEASURE_TIMING_DO("event_unregister_break", m->unregister_pc_event(pc));
                 }),
                 "(i)",
                 nullptr
             });
             natives->push_back({
                 "event_wait_for",
-                (void *) (+[](wasm_exec_env_t exec_env, uint32_t timeout_usec, uint32_t *o_events) -> int32_t {
+                (void *) (+[](wasm_exec_env_t exec_env, uint32_t timeout_nsec, uint32_t *o_events) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("event_wait_for", m->wait_for_event(timeout_usec, *o_events));
+                    MEASURE_TIMING_RETURN("event_wait_for", m->wait_for_event(timeout_nsec, *o_events));
                 }),
                 "(i*)i",
                 nullptr

@@ -117,7 +117,7 @@ func main() {
 		return
 	}
 
-	ev_pc := rex.RegisterPCEvent(0x068328, time.Microsecond*2000)
+	ev_pc := rex.EventRegisterBreak(0x068328, time.Microsecond*2000)
 
 	r = 0
 
@@ -127,7 +127,7 @@ func main() {
 
 		// poll for snes events:
 		var ok bool
-		event, ok = rex.WaitForEvent(time.Microsecond * 1000)
+		event, ok = rex.EventWaitFor(time.Microsecond * 1000)
 		if !ok {
 			continue
 		}
@@ -138,13 +138,13 @@ func main() {
 		}
 
 		if event == ev_pc {
-			rex.AcknowledgeLastEvent()
+			rex.EventAcknowledge()
 			//fmt.Printf("Sprite_Main\n")
 			continue
 		}
 
 		if event != ev_ppu_frame_start && event != ev_ppu_frame_skip {
-			rex.AcknowledgeLastEvent()
+			rex.EventAcknowledge()
 			continue
 		}
 
@@ -212,7 +212,7 @@ func main() {
 		lastFrame = wram[0x1A]
 
 		// unblock emulator:
-		rex.AcknowledgeLastEvent()
+		rex.EventAcknowledge()
 	}
 
 	slots[0].Close()

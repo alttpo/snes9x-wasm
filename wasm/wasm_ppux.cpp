@@ -583,12 +583,12 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::iterator it, std::vector<u
 
 void wasm_host_frame_start() {
     for_each_module(
-        [=](std::shared_ptr<module> m) {
+        [=](const std::shared_ptr<module>& m) {
             m->notify_event(wasm_event_kind::ev_ppu_frame_start);
         }
     );
     for_each_module(
-        [=](std::shared_ptr<module> m) {
+        [=](const std::shared_ptr<module>& m) {
             m->wait_for_ack_last_event(std::chrono::microseconds(2000));
             m->ppux.render_cmd();
         }
@@ -597,7 +597,7 @@ void wasm_host_frame_start() {
 
 void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart) {
     for_each_module(
-        [=](std::shared_ptr<module> m) {
+        [=](const std::shared_ptr<module>& m) {
             ppux &ppux = m->ppux;
             ppux.priority_depth_map[0] = zstart;
             ppux.priority_depth_map[1] = zstart + 4;
@@ -615,7 +615,7 @@ void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart) {
 
 void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
     for_each_module(
-        [=](std::shared_ptr<module> m) {
+        [=](const std::shared_ptr<module>& m) {
             ppux &ppux = m->ppux;
             ppux.priority_depth_map[0] = zl;
             ppux.priority_depth_map[1] = zh;
@@ -633,7 +633,7 @@ void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
 
 void wasm_host_frame_end() {
     for_each_module(
-        [=](std::shared_ptr<module> m) {
+        [=](const std::shared_ptr<module>& m) {
             m->notify_event(wasm_event_kind::ev_ppu_frame_end);
         }
     );
@@ -642,12 +642,12 @@ void wasm_host_frame_end() {
 
 void wasm_host_frame_skip() {
     for_each_module(
-        [=](std::shared_ptr<module> m) {
+        [=](const std::shared_ptr<module>& m) {
             m->notify_event(wasm_event_kind::ev_ppu_frame_skip);
         }
     );
     for_each_module(
-        [=](std::shared_ptr<module> m) {
+        [=](const std::shared_ptr<module>& m) {
             m->wait_for_ack_last_event(std::chrono::microseconds(2000));
         }
     );
