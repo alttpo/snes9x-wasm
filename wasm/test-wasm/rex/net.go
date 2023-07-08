@@ -50,7 +50,7 @@ func net_listen(slot int32) int32
 //go:wasm-module rex
 //export net_accept
 //go:wasmimport rex net_accept
-func net_accept(slot int32, o_ipv4_addr unsafe.Pointer, o_port unsafe.Pointer) int32
+func net_accept(slot int32, o_accepted_slot unsafe.Pointer, o_ipv4_addr unsafe.Pointer, o_port unsafe.Pointer) int32
 
 //go:wasm-module rex
 //export net_poll
@@ -133,12 +133,11 @@ func (s *Socket) Accept(a *Socket) (addr AddrV4, err error) {
 		err = fmt.Errorf("a cannot be nil")
 		return
 	}
-	res := net_accept(s.Slot, unsafe.Pointer(&addr.Addr), unsafe.Pointer(&addr.Port))
+	res := net_accept(s.Slot, unsafe.Pointer(&a.Slot), unsafe.Pointer(&addr.Addr), unsafe.Pointer(&addr.Port))
 	if res < 0 {
 		err = fmt.Errorf("error accepting socket: %d", -res)
 		return
 	}
-	a.Slot = res
 	return
 }
 

@@ -25,7 +25,7 @@ struct net {
     auto connect(int32_t slot, uint32_t ipv4_addr, uint16_t port) -> int32_t;
     auto bind(int32_t slot, uint32_t ipv4_addr, uint16_t port) -> int32_t;
     auto listen(int32_t slot) -> int32_t;
-    auto accept(int32_t slot, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t;
+    auto accept(int32_t slot, int32_t *o_accepted_slot, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t;
     auto poll(net_poll_slot *slots, uint32_t slots_len) -> int32_t;
     auto send(int32_t slot, uint8_t *data, uint32_t len) -> int32_t;
     auto sendto(int32_t slot, uint8_t *data, uint32_t data_len, uint32_t ipv4_addr, uint16_t port) -> int32_t;

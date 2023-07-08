@@ -156,7 +156,7 @@ auto net::listen(int32_t slot) -> int32_t {
     return 0;
 }
 
-auto net::accept(int32_t slot, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t {
+auto net::accept(int32_t slot, int32_t *o_accepted_slot, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32_t {
     auto it = slots.find(slot);
     if (it == slots.end()) {
         return -EBADF;
@@ -179,7 +179,8 @@ auto net::accept(int32_t slot, uint32_t *o_ipv4_addr, uint16_t *o_port) -> int32
         *o_port = ntohs(address.sin_port);
     }
 
-    return allocate_slot(accepted);
+    *o_accepted_slot = allocate_slot(accepted);
+    return 0;
 }
 
 auto net::poll(net_poll_slot *poll_slots, uint32_t poll_slots_len) -> int32_t {
