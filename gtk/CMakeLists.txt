@@ -300,6 +300,9 @@ if(USE_WAMR)
             src/gtk_wasm.cpp
             src/gtk_wasm.h
             )
+
+    list(APPEND INCLUDES ../external/iovm)
+    list(APPEND SOURCES ../external/iovm/iovm.h)
 endif()
 
 list(APPEND SOURCES
