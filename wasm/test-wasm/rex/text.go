@@ -16,9 +16,10 @@ type stdout struct{}
 var Stdout stdout
 
 func (_ stdout) WriteString(s string) (n int, err error) {
-	p := ([]byte)(s)
-	stdout_write(unsafe.Pointer(&p[0]), uint32(len(p)))
-	return len(p), nil
+	p := unsafe.StringData(s)
+	length := len(s)
+	stdout_write(unsafe.Pointer(p), uint32(length))
+	return length, nil
 }
 
 func (_ stdout) Write(p []byte) (n int, err error) {
@@ -30,13 +31,14 @@ type stderr struct{}
 
 var Stderr stderr
 
-func (_ stderr) Write(p []byte) (n int, err error) {
-	stderr_write(unsafe.Pointer(&p[0]), uint32(len(p)))
-	return len(p), nil
+func (_ stderr) WriteString(s string) (n int, err error) {
+	p := unsafe.StringData(s)
+	length := len(s)
+	stderr_write(unsafe.Pointer(p), uint32(length))
+	return length, nil
 }
 
-func (_ stderr) WriteString(s string) (n int, err error) {
-	p := ([]byte)(s)
+func (_ stderr) Write(p []byte) (n int, err error) {
 	stderr_write(unsafe.Pointer(&p[0]), uint32(len(p)))
 	return len(p), nil
 }
