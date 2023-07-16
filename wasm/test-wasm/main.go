@@ -119,6 +119,25 @@ func main() {
 
 	ev_pc := rex.EventRegisterBreak(0x068328, time.Microsecond*2000)
 
+	// load a IOVM1 program and execute it each frame:
+	if err = rex.IOVM1.Init(); err != nil {
+		fmt.Printf("%v\n", err)
+		return
+	}
+
+	vmprog := [...]byte{
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETOFFS, rex.IOVM1_TARGET_WRAM),
+		0x10,
+		0x00,
+		//rex.IOVM1Instruction(rex.IOVM1_OPCODE_WHILE_NEQ, rex.IOVM1_TARGET_WRAM),
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_READ, rex.IOVM1_TARGET_WRAM),
+		0x00, // read 256 bytes
+	}
+	if err = rex.IOVM1.Load(vmprog[:]); err != nil {
+		fmt.Printf("%v\n", err)
+		return
+	}
+
 	r = 0
 
 	lastFrame := uint8(0)

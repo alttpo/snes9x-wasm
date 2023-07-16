@@ -338,7 +338,14 @@ void module::notify_pc(uint32_t pc) {
     {
         // execute opcodes in the iovm until a blocking operation occurs:
         std::unique_lock<std::mutex> lk(vm_mtx);
-        iovm1_exec(&vm);
+        auto res = iovm1_exec(&vm);
+        if (res == IOVM1_SUCCESS) {
+            // auto-reset program on end:
+            auto state = iovm1_get_exec_state(&vm);
+            if (state == IOVM1_STATE_ENDED) {
+                iovm1_exec_reset(&vm);
+            }
+        }
     }
 
     // check for any breakpoints set by wasm module:
