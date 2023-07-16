@@ -228,72 +228,78 @@ static uint8_t *memory_target(iovm1_target target) {
 }
 
 // reads bytes from target.
-extern "C" void iovm1_read_cb(struct iovm1_state_t *cb_state) {
-    auto m = reinterpret_cast<module *>(iovm1_get_userdata(cb_state->vm));
+extern "C" void iovm1_read_cb(struct iovm1_state_t *s) {
+    auto m = reinterpret_cast<module *>(iovm1_get_userdata(s->vm));
 
-    uint8_t *src = memory_target(cb_state->target);
+    uint8_t *src = memory_target(s->target);
     if (!src) {
-        // memory target not defined:
-        cb_state->address += cb_state->len;
-        return;
+        // memory target not defined; fill read buffer with 0s:
+        m->vm_read_buf.emplace(s->len, (uint8_t)0);
+        goto exit;
     }
 
     // read: read from src+address emulated memory and push into module's read queue:
-    auto p = (src + cb_state->address);
-    for (unsigned i = 0; i < cb_state->len; i++) {
-        m->vm_read_buf.push(p[i]);
+    uint8_t *p;
+    p = src + s->address;
+    m->vm_read_buf.emplace(p, p + s->len);
+
+exit:
+    // remove oldest unread buffers to prevent infinite growth:
+    while (m->vm_read_buf.size() > 1024) {
+        m->vm_read_buf.pop();
     }
 
-    cb_state->address += cb_state->len;
+    s->address += s->len;
 }
 
 // writes bytes from procedure memory to target.
-extern "C" void iovm1_write_cb(struct iovm1_state_t *cb_state) {
-    //auto m = reinterpret_cast<module *>(iovm1_get_userdata(cb_state->vm));
+extern "C" void iovm1_write_cb(struct iovm1_state_t *s) {
+    //auto m = reinterpret_cast<module *>(iovm1_get_userdata(s->vm));
 
-    uint8_t *dst = memory_target(cb_state->target);
+    uint8_t *dst = memory_target(s->target);
     if (!dst) {
         // memory target not defined:
-        cb_state->address += cb_state->len;
+        s->address += s->len;
         return;
     }
 
     // write: copy from i_data to dst+address emulated memory:
-    std::copy_n(cb_state->i_data.ptr, cb_state->len, dst + cb_state->address);
+    std::copy_n(s->i_data.ptr + s->i_data.off, s->len, dst + s->address);
 
-    cb_state->address += cb_state->len;
+    s->address += s->len;
 }
 
 // loops while reading a byte from target while it != comparison byte.
-extern "C" void iovm1_while_neq_cb(struct iovm1_state_t *cb_state) {
-    uint8_t *src = memory_target(cb_state->target);
+extern "C" void iovm1_while_neq_cb(struct iovm1_state_t *s) {
+    uint8_t *src = memory_target(s->target);
     if (!src) {
         // memory target not defined:
-        cb_state->completed = true;
+        s->completed = true;
         return;
     }
 
     // completed flag uses inverted logic from the while condition:
-    cb_state->completed = *(src + cb_state->address) == cb_state->comparison;
+    s->completed = *(src + s->address) == s->comparison;
 }
 
 // loops while reading a byte from target while it == comparison byte.
-extern "C" void iovm1_while_eq_cb(struct iovm1_state_t *cb_state) {
-    uint8_t *src = memory_target(cb_state->target);
+extern "C" void iovm1_while_eq_cb(struct iovm1_state_t *s) {
+    uint8_t *src = memory_target(s->target);
     if (!src) {
         // memory target not defined:
-        cb_state->completed = true;
+        s->completed = true;
         return;
     }
 
     // completed flag uses inverted logic from the while condition:
-    cb_state->completed = *(src + cb_state->address) != cb_state->comparison;
+    s->completed = *(src + s->address) != s->comparison;
 }
 
 int32_t module::vm_init() {
     std::unique_lock<std::mutex> lk(vm_mtx);
 
     iovm1_init(&vm);
+    iovm1_set_userdata(&vm, (void *) this);
 
     return IOVM1_SUCCESS;
 }
@@ -319,14 +325,34 @@ int32_t module::vm_reset() {
 int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read) {
     std::unique_lock<std::mutex> lk(vm_mtx);
 
-    uint32_t i;
-    for (i = 0; !vm_read_buf.empty() && i < dst_len; i++) {
-        dst[i] = vm_read_buf.front();
-        vm_read_buf.pop();
+    if (vm_read_buf.empty()) {
+        *o_read = 0;
+        return IOVM1_SUCCESS;
     }
-    *o_read = i;
+
+    auto &v = vm_read_buf.front();
+    if (v.size() < dst_len) {
+        // not enough space to read into:
+        return IOVM1_ERROR_OUT_OF_RANGE;
+    }
+
+    // fill in the buffer:
+    uint32_t i;
+    for (i = 0; i < v.size(); i++) {
+        dst[i] = v[i];
+    }
+    *o_read = v.size();
+
+    vm_read_buf.pop();
 
     return IOVM1_SUCCESS;
+}
+
+void module::vm_ended() {
+    notify_event(ev_iovm_end);
+
+    // wait for wasm to complete its work:
+    wait_for_ack_last_event(std::chrono::nanoseconds(4000000UL));
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -336,14 +362,14 @@ void module::notify_pc(uint32_t pc) {
     // this method is called before every instruction:
 
     {
-        // execute opcodes in the iovm until a blocking operation occurs:
+        // execute opcodes in the iovm until a blocking operation (read, write, while) occurs:
         std::unique_lock<std::mutex> lk(vm_mtx);
-        auto res = iovm1_exec(&vm);
-        if (res == IOVM1_SUCCESS) {
-            // auto-reset program on end:
-            auto state = iovm1_get_exec_state(&vm);
-            if (state == IOVM1_STATE_ENDED) {
-                iovm1_exec_reset(&vm);
+        auto last_state = iovm1_get_exec_state(&vm);
+        if (IOVM1_SUCCESS == iovm1_exec(&vm)) {
+            auto curr_state = iovm1_get_exec_state(&vm);
+            if ((curr_state != last_state) && (curr_state == IOVM1_STATE_ENDED)) {
+                // fire ev_iovm_end event only once:
+                vm_ended();
             }
         }
     }

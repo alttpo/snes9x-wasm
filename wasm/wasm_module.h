@@ -84,6 +84,8 @@ public:
 
     int32_t vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read);
 
+    void vm_ended();
+
 private:
     wasm_module_t mod;
     wasm_module_inst_t module_inst;
@@ -100,13 +102,18 @@ private:
 
     std::array<pc_event, 8> pc_events;
 
+    std::mutex vm_mtx;
+    struct iovm1_t vm{};
+    std::queue<std::vector<uint8_t>> vm_read_buf{};
+
+    friend void iovm1_read_cb(struct iovm1_state_t *s);
+    friend void iovm1_write_cb(struct iovm1_state_t *s);
+    friend void iovm1_while_neq_cb(struct iovm1_state_t *s);
+    friend void iovm1_while_eq_cb(struct iovm1_state_t *s);
+
 public:
     ppux ppux;
     net net;
-
-    std::mutex vm_mtx;
-    struct iovm1_t vm{};
-    std::queue<uint8_t> vm_read_buf;
 
     uint32_t trace_mask = (1 << 0);
 

@@ -14,6 +14,7 @@ enum wasm_event_kind : uint32_t {
     ev_ppu_frame_start,
     ev_ppu_frame_end,
     ev_ppu_frame_skip,
+    ev_iovm_end,
 
     ev_pc_break_start = 1ULL << 31
 };
