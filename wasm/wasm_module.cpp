@@ -331,7 +331,7 @@ int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read) {
     }
 
     auto &v = vm_read_buf.front();
-    if (v.size() < dst_len) {
+    if (v.size() > dst_len) {
         // not enough space to read into:
         return IOVM1_ERROR_OUT_OF_RANGE;
     }
