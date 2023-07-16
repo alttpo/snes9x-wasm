@@ -7,6 +7,7 @@
 #include <utility>
 #include <thread>
 #include <vector>
+#include <queue>
 #include <string>
 
 #ifdef __WIN32__
@@ -22,6 +23,10 @@
 #include "wasm_ppux.h"
 #include "wasm_host.h"
 #include "wasm_net.h"
+
+#define IOVM_NO_IMPL
+#define IOVM1_USE_USERDATA
+#include "iovm.h"
 
 struct pc_event {
     std::chrono::nanoseconds timeout;
@@ -68,6 +73,17 @@ public:
 
     void unregister_pc_event(uint32_t pc);
 
+public:
+    int32_t vm_init();
+
+    int32_t vm_load(const uint8_t *vmprog, uint32_t vmprog_len);
+
+    iovm1_state vm_getstate();
+
+    int32_t vm_reset();
+
+    int32_t vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read);
+
 private:
     wasm_module_t mod;
     wasm_module_inst_t module_inst;
@@ -82,12 +98,15 @@ private:
     uint32_t event = wasm_event_kind::ev_none;
     bool event_triggered = false;
 
-    std::array<pc_event, 16> pc_events;
-    uint32_t last_user_event = 0;
+    std::array<pc_event, 8> pc_events;
 
 public:
     ppux ppux;
     net net;
+
+    std::mutex vm_mtx;
+    struct iovm1_t vm{};
+    std::queue<uint8_t> vm_read_buf;
 
     uint32_t trace_mask = (1 << 0);
 

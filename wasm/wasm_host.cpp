@@ -168,6 +168,55 @@ bool wasm_host_init() {
 #undef FUNC_READ
         }
 
+        // iovm I/O virtual machine subsystem:
+        {
+            natives->push_back({
+                "iovm1_init",
+                ((void*)+[](wasm_exec_env_t exec_env) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    return m->vm_init();
+                }),
+                "()i",
+                nullptr
+            });
+            natives->push_back({
+                "iovm1_load",
+                ((void*)+[](wasm_exec_env_t exec_env, const uint8_t *vmprog, uint32_t vmprog_len) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    return m->vm_load(vmprog, vmprog_len);
+                }),
+                "(*~)i",
+                nullptr
+            });
+            natives->push_back({
+                "iovm1_get_exec_state",
+                ((void*)+[](wasm_exec_env_t exec_env) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    return m->vm_getstate();
+                }),
+                "()i",
+                nullptr
+            });
+            natives->push_back({
+                "iovm1_exec_reset",
+                ((void*)+[](wasm_exec_env_t exec_env) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    return m->vm_reset();
+                }),
+                "()i",
+                nullptr
+            });
+            natives->push_back({
+                "iovm1_read_data",
+                ((void*)+[](wasm_exec_env_t exec_env, uint8_t *dst, uint32_t dst_len, uint32_t *o_read) -> int32_t {
+                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    return m->vm_read_data(dst, dst_len, o_read);
+                }),
+                "(*~*)i",
+                nullptr
+            });
+        }
+
         // ppux (PPU integrated extensions):
         {
             natives->push_back({

@@ -2,16 +2,30 @@
 #include <utility>
 
 #include "wasm_module.h"
+
 extern "C" {
 #include "debug_engine.h"
 }
 //#include "thread_manager.h"
 #include "memmap.h"
 
-module::module(std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p, uint8_t* module_binary_p, uint32_t module_size_p)
-    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), module_binary(module_binary_p), module_size(module_size_p), ppux() {
+#undef IOVM_NO_IMPL
+#define IOVM1_USE_USERDATA
+
+#include "iovm.h"
+
+module::module(
+    std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p,
+    uint8_t *module_binary_p, uint32_t module_size_p
+)
+    : name(std::move(name_p)), mod(mod_p), module_inst(mi_p), exec_env(exec_env_p), module_binary(module_binary_p),
+    module_size(module_size_p), ppux() {
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
+
+    // initialize iovm:
+    iovm1_init(&vm);
+    iovm1_set_userdata(&vm, (void *) this);
 
     trace_printf(1UL << 0, "%s wasm module created\n", name.c_str());
 }
@@ -29,7 +43,9 @@ module::~module() {
 }
 
 [[nodiscard]] std::shared_ptr<module>
-module::create(std::string name, wasm_module_t mod, wasm_module_inst_t module_inst, uint8_t* module_binary, uint32_t module_size) {
+module::create(
+    std::string name, wasm_module_t mod, wasm_module_inst_t module_inst, uint8_t *module_binary, uint32_t module_size
+) {
     auto exec_env = wasm_runtime_create_exec_env(module_inst, 1048576);
     if (!exec_env) {
         wasm_runtime_deinstantiate(module_inst);
@@ -115,13 +131,13 @@ void module::thread_main() {
     );
 #endif
 
-fail:
+    fail:
     const char *ex;
     ex = wasm_runtime_get_exception(module_inst);
     trace_printf(1UL << 0, "%s wasm module encountered exception: %s\n", name.c_str(), ex);
     return;
 
-exec_main:
+    exec_main:
     if (!wasm_runtime_call_wasm(exec_env, func, 0, nullptr)) {
         goto fail;
     }
@@ -193,7 +209,139 @@ void module::debugger_enable(bool enabled) {
     }
 }
 
+////////////////////////////////////////////////////////////////////////
+
+static uint8_t *memory_target(iovm1_target target) {
+    switch (target) {
+        case 0: // WRAM:
+            return Memory.RAM;
+            break;
+        case 1: // SRAM:
+            return Memory.SRAM;
+            break;
+        case 2: // ROM:
+            return Memory.ROM;
+            break;
+        default: // memory target not defined:
+            return nullptr;
+    }
+}
+
+// reads bytes from target.
+extern "C" void iovm1_read_cb(struct iovm1_state_t *cb_state) {
+    auto m = reinterpret_cast<module *>(iovm1_get_userdata(cb_state->vm));
+
+    uint8_t *src = memory_target(cb_state->target);
+    if (!src) {
+        // memory target not defined:
+        cb_state->address += cb_state->len;
+        return;
+    }
+
+    // read: read from src+address emulated memory and push into module's read queue:
+    auto p = (src + cb_state->address);
+    for (unsigned i = 0; i < cb_state->len; i++) {
+        m->vm_read_buf.push(p[i]);
+    }
+
+    cb_state->address += cb_state->len;
+}
+
+// writes bytes from procedure memory to target.
+extern "C" void iovm1_write_cb(struct iovm1_state_t *cb_state) {
+    //auto m = reinterpret_cast<module *>(iovm1_get_userdata(cb_state->vm));
+
+    uint8_t *dst = memory_target(cb_state->target);
+    if (!dst) {
+        // memory target not defined:
+        cb_state->address += cb_state->len;
+        return;
+    }
+
+    // write: copy from i_data to dst+address emulated memory:
+    std::copy_n(cb_state->i_data.ptr, cb_state->len, dst + cb_state->address);
+
+    cb_state->address += cb_state->len;
+}
+
+// loops while reading a byte from target while it != comparison byte.
+extern "C" void iovm1_while_neq_cb(struct iovm1_state_t *cb_state) {
+    uint8_t *src = memory_target(cb_state->target);
+    if (!src) {
+        // memory target not defined:
+        cb_state->completed = true;
+        return;
+    }
+
+    // completed flag uses inverted logic from the while condition:
+    cb_state->completed = *(src + cb_state->address) == cb_state->comparison;
+}
+
+// loops while reading a byte from target while it == comparison byte.
+extern "C" void iovm1_while_eq_cb(struct iovm1_state_t *cb_state) {
+    uint8_t *src = memory_target(cb_state->target);
+    if (!src) {
+        // memory target not defined:
+        cb_state->completed = true;
+        return;
+    }
+
+    // completed flag uses inverted logic from the while condition:
+    cb_state->completed = *(src + cb_state->address) != cb_state->comparison;
+}
+
+int32_t module::vm_init() {
+    std::unique_lock<std::mutex> lk(vm_mtx);
+
+    iovm1_init(&vm);
+
+    return IOVM1_SUCCESS;
+}
+
+int32_t module::vm_load(const uint8_t *vmprog, uint32_t vmprog_len) {
+    std::unique_lock<std::mutex> lk(vm_mtx);
+
+    return iovm1_load(&vm, vmprog, vmprog_len);
+}
+
+iovm1_state module::vm_getstate() {
+    std::unique_lock<std::mutex> lk(vm_mtx);
+
+    return iovm1_get_exec_state(&vm);
+}
+
+int32_t module::vm_reset() {
+    std::unique_lock<std::mutex> lk(vm_mtx);
+
+    return iovm1_exec_reset(&vm);
+}
+
+int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read) {
+    std::unique_lock<std::mutex> lk(vm_mtx);
+
+    uint32_t i;
+    for (i = 0; !vm_read_buf.empty() && i < dst_len; i++) {
+        dst[i] = vm_read_buf.front();
+        vm_read_buf.pop();
+    }
+    *o_read = i;
+
+    return IOVM1_SUCCESS;
+}
+
+////////////////////////////////////////////////////////////////////////
+
+
 void module::notify_pc(uint32_t pc) {
+    // this method is called before every instruction:
+
+    {
+        // execute opcodes in the iovm until a blocking operation occurs:
+        std::unique_lock<std::mutex> lk(vm_mtx);
+        iovm1_exec(&vm);
+    }
+
+    // check for any breakpoints set by wasm module:
     for (const auto &it: pc_events) {
         if (it.pc == pc) {
             // notify wasm of the PC-hit event:
@@ -201,6 +349,8 @@ void module::notify_pc(uint32_t pc) {
 
             // wait for wasm to complete its work:
             wait_for_ack_last_event(it.timeout);
+
+            break;
         }
     }
 }
