@@ -9,10 +9,8 @@ extern "C" {
 //#include "thread_manager.h"
 #include "memmap.h"
 
-#undef IOVM_NO_IMPL
 #define IOVM1_USE_USERDATA
-
-#include "iovm.h"
+#include "iovm.c"
 
 module::module(
     std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p,

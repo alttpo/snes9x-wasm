@@ -24,7 +24,6 @@
 #include "wasm_host.h"
 #include "wasm_net.h"
 
-#define IOVM_NO_IMPL
 #define IOVM1_USE_USERDATA
 #include "iovm.h"
 
