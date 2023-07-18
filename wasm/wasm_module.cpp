@@ -225,72 +225,73 @@ static uint8_t *memory_target(iovm1_target target) {
     }
 }
 
-// reads bytes from target.
-extern "C" void iovm1_read_cb(struct iovm1_state_t *s) {
-    auto m = reinterpret_cast<module *>(iovm1_get_userdata(s->vm));
+extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs) {
+    auto m = reinterpret_cast<module *>(iovm1_get_userdata(vm));
+    uint8_t *mem = memory_target(cbs->t);
 
-    uint8_t *src = memory_target(s->target);
-    if (!src) {
-        // memory target not defined; fill read buffer with 0s:
-        m->vm_read_buf.emplace(s->len, (uint8_t)0);
-        goto exit;
+    switch (cbs->o) {
+        case IOVM1_OPCODE_READ:
+        case IOVM1_OPCODE_READ_N: {
+            if (!mem) {
+                // memory target not defined; fill read buffer with 0s:
+                m->vm_read_buf.emplace(cbs->len, (uint8_t) 0);
+                goto exit_read;
+            }
+
+            // read: read from src+address emulated memory and push into module's read queue:
+            uint8_t *p;
+            p = mem + cbs->a;
+            m->vm_read_buf.emplace(p, p + cbs->len);
+
+        exit_read:
+            // remove oldest unread buffers to prevent infinite growth:
+            while (m->vm_read_buf.size() > 1024) {
+                m->vm_read_buf.pop();
+            }
+
+            cbs->a += cbs->len;
+            cbs->completed = true;
+            break;
+        }
+        case IOVM1_OPCODE_WRITE:
+        case IOVM1_OPCODE_WRITE_N: {
+            if (!mem) {
+                // memory target not defined:
+                goto exit_write;
+            }
+
+            // write: copy from program data to mem+a emulated memory:
+            std::copy_n(vm->m.ptr + cbs->p, cbs->len, mem + cbs->a);
+
+        exit_write:
+            cbs->a += cbs->len;
+            cbs->completed = true;
+            break;
+        }
+        case IOVM1_OPCODE_WHILE_NEQ:
+            if (!mem) {
+                // memory target not defined:
+                cbs->completed = true;
+                break;
+            }
+
+            // completed flag uses inverted logic from the while condition:
+            cbs->completed = *(mem + cbs->a) == cbs->c;
+            break;
+        case IOVM1_OPCODE_WHILE_EQ:
+            if (!mem) {
+                // memory target not defined:
+                cbs->completed = true;
+                break;
+            }
+
+            // completed flag uses inverted logic from the while condition:
+            cbs->completed = *(mem + cbs->a) != cbs->c;
+            break;
+        default:
+            cbs->completed = true;
+            break;
     }
-
-    // read: read from src+address emulated memory and push into module's read queue:
-    uint8_t *p;
-    p = src + s->address;
-    m->vm_read_buf.emplace(p, p + s->len);
-
-exit:
-    // remove oldest unread buffers to prevent infinite growth:
-    while (m->vm_read_buf.size() > 1024) {
-        m->vm_read_buf.pop();
-    }
-
-    s->address += s->len;
-}
-
-// writes bytes from procedure memory to target.
-extern "C" void iovm1_write_cb(struct iovm1_state_t *s) {
-    //auto m = reinterpret_cast<module *>(iovm1_get_userdata(s->vm));
-
-    uint8_t *dst = memory_target(s->target);
-    if (!dst) {
-        // memory target not defined:
-        s->address += s->len;
-        return;
-    }
-
-    // write: copy from i_data to dst+address emulated memory:
-    std::copy_n(s->i_data.ptr + s->i_data.off, s->len, dst + s->address);
-
-    s->address += s->len;
-}
-
-// loops while reading a byte from target while it != comparison byte.
-extern "C" void iovm1_while_neq_cb(struct iovm1_state_t *s) {
-    uint8_t *src = memory_target(s->target);
-    if (!src) {
-        // memory target not defined:
-        s->completed = true;
-        return;
-    }
-
-    // completed flag uses inverted logic from the while condition:
-    s->completed = *(src + s->address) == s->comparison;
-}
-
-// loops while reading a byte from target while it == comparison byte.
-extern "C" void iovm1_while_eq_cb(struct iovm1_state_t *s) {
-    uint8_t *src = memory_target(s->target);
-    if (!src) {
-        // memory target not defined:
-        s->completed = true;
-        return;
-    }
-
-    // completed flag uses inverted logic from the while condition:
-    s->completed = *(src + s->address) != s->comparison;
 }
 
 int32_t module::vm_init() {

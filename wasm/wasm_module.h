@@ -105,10 +105,7 @@ private:
     struct iovm1_t vm{};
     std::queue<std::vector<uint8_t>> vm_read_buf{};
 
-    friend void iovm1_read_cb(struct iovm1_state_t *s);
-    friend void iovm1_write_cb(struct iovm1_state_t *s);
-    friend void iovm1_while_neq_cb(struct iovm1_state_t *s);
-    friend void iovm1_while_eq_cb(struct iovm1_state_t *s);
+    friend void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs);
 
 public:
     ppux ppux;
