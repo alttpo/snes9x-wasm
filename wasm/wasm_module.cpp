@@ -234,14 +234,14 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
         case IOVM1_OPCODE_READ_N: {
             if (!mem) {
                 // memory target not defined; fill read buffer with 0s:
-                m->vm_read_buf.emplace(cbs->len, (uint8_t) 0);
+                m->vm_read_buf.emplace(vm_read{std::vector<uint8_t>(cbs->len, (uint8_t) 0), cbs->a, cbs->t});
                 goto exit_read;
             }
 
             // read: read from src+address emulated memory and push into module's read queue:
             uint8_t *p;
             p = mem + cbs->a;
-            m->vm_read_buf.emplace(p, p + cbs->len);
+            m->vm_read_buf.emplace(vm_read{std::vector<uint8_t>(p, p + cbs->len), cbs->a, cbs->t});
 
         exit_read:
             // remove oldest unread buffers to prevent infinite growth:
@@ -321,26 +321,32 @@ int32_t module::vm_reset() {
     return iovm1_exec_reset(&vm);
 }
 
-int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read) {
+int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target) {
     std::unique_lock<std::mutex> lk(vm_mtx);
 
+    *o_read = 0;
+    *o_addr = -1;
+    *o_target = -1;
+
     if (vm_read_buf.empty()) {
-        *o_read = 0;
         return IOVM1_SUCCESS;
     }
 
     auto &v = vm_read_buf.front();
-    if (v.size() > dst_len) {
+    *o_addr = v.a;
+    *o_target = v.t;
+
+    if (v.buf.size() > dst_len) {
         // not enough space to read into:
         return IOVM1_ERROR_OUT_OF_RANGE;
     }
 
     // fill in the buffer:
     uint32_t i;
-    for (i = 0; i < v.size(); i++) {
-        dst[i] = v[i];
+    for (i = 0; i < v.buf.size(); i++) {
+        dst[i] = v.buf[i];
     }
-    *o_read = v.size();
+    *o_read = v.buf.size();
 
     vm_read_buf.pop();
 

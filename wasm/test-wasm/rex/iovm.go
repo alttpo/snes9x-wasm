@@ -18,7 +18,7 @@ func iovm1_get_exec_state() int32
 func iovm1_exec_reset() int32
 
 //go:wasmimport rex iovm1_read_data
-func iovm1_read_data(dst unsafe.Pointer, dst_len uint32, o_read unsafe.Pointer) int32
+func iovm1_read_data(dst unsafe.Pointer, dst_len uint32, o_read unsafe.Pointer, o_addr unsafe.Pointer, o_target unsafe.Pointer) int32
 
 type iovm1 struct{}
 
@@ -56,8 +56,6 @@ type IOVM1Opcode = byte
 const (
 	IOVM1_OPCODE_END IOVM1Opcode = iota
 	IOVM1_OPCODE_SETADDR
-	IOVM1_OPCODE_SETOFFS
-	IOVM1_OPCODE_SETBANK
 	IOVM1_OPCODE_READ
 	IOVM1_OPCODE_READ_N
 	IOVM1_OPCODE_WRITE
@@ -74,18 +72,28 @@ const (
 	IOVM1_TARGET_ROM
 )
 
-func IOVM1Instruction(opcode IOVM1Opcode, target IOVM1Target) uint8 {
-	return (uint8(opcode) & 31) | (uint8(target&7) << 5)
+type IOVM1Register byte
+
+func IOVM1Instruction(opcode IOVM1Opcode, reg IOVM1Register) uint8 {
+	return (uint8(opcode) & 15) | (uint8(reg&15) << 4)
 }
 
 // Init stops any executing program, erases it, and resets to initial state
-func (v *iovm1) Init() error {
-	return iovm1Errors[iovm1_init()]
+func (v *iovm1) Init() (err error) {
+	res := iovm1_init()
+	if res != IOVM1_SUCCESS {
+		err = iovm1Errors[res]
+	}
+	return
 }
 
 // Load a given program and start executing it immediately on next emulation step
-func (v *iovm1) Load(vmprog []byte) error {
-	return iovm1Errors[iovm1_load(unsafe.Pointer(&vmprog[0]), uint32(len(vmprog)))]
+func (v *iovm1) Load(vmprog []byte) (err error) {
+	res := iovm1_load(unsafe.Pointer(&vmprog[0]), uint32(len(vmprog)))
+	if res != IOVM1_SUCCESS {
+		err = iovm1Errors[res]
+	}
+	return
 }
 
 // ExecState gets the current state of the VM
@@ -94,13 +102,17 @@ func (v *iovm1) ExecState() IOVM1State {
 }
 
 // Reset resets the executing program to the beginning
-func (v *iovm1) Reset() error {
-	return iovm1Errors[iovm1_exec_reset()]
+func (v *iovm1) Reset() (err error) {
+	res := iovm1_exec_reset()
+	if res != IOVM1_SUCCESS {
+		err = iovm1Errors[res]
+	}
+	return
 }
 
 // Read reads data from the queue fed by `read` amd `read_n` instructions executed
-func (v *iovm1) Read(p []byte) (n int, err error) {
-	res := iovm1_read_data(unsafe.Pointer(&p[0]), uint32(len(p)), unsafe.Pointer(&n))
+func (v *iovm1) Read(p []byte) (n int, addr uint32, target uint8, err error) {
+	res := iovm1_read_data(unsafe.Pointer(&p[0]), uint32(len(p)), unsafe.Pointer(&n), unsafe.Pointer(&addr), unsafe.Pointer(&target))
 	if res != IOVM1_SUCCESS {
 		err = iovm1Errors[res]
 	}

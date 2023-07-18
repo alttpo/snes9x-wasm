@@ -129,12 +129,12 @@ func main() {
 	}
 
 	vmprog := [...]byte{
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETOFFS, rex.IOVM1_TARGET_WRAM),
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETADDR, 0),
+		rex.IOVM1_TARGET_WRAM,
 		0x10,
 		0x00,
-		//rex.IOVM1Instruction(rex.IOVM1_OPCODE_WHILE_EQ, rex.IOVM1_TARGET_WRAM),
-		//0x00,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_READ, rex.IOVM1_TARGET_WRAM),
+		0x00,
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_READ, 0),
 		0xF0, // read 240 bytes
 	}
 	if err = rex.IOVM1.Load(vmprog[:]); err != nil {
@@ -168,11 +168,14 @@ func main() {
 		}
 
 		var n int
-		if n, err = rex.IOVM1.Read(buf[:]); err != nil {
+		var addr uint32
+		var target uint8
+		if n, addr, target, err = rex.IOVM1.Read(buf[:]); err != nil {
 			rex.Stdout.WriteString("iovm_read: ")
 			rex.Stdout.WriteString(err.Error())
 			rex.Stdout.WriteString("\n")
 		} else if n > 0 {
+			rex.Stdout.WriteString(fmt.Sprintf("iovm_read: target=%d addr=%06x\n", target, addr))
 			rex.Stdout.WriteString(hex.Dump(buf[:n]))
 			rex.Stdout.WriteString("\n")
 		}

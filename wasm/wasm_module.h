@@ -27,6 +27,12 @@
 #define IOVM1_USE_USERDATA
 #include "iovm.h"
 
+struct vm_read {
+    std::vector<uint8_t>    buf;
+    uint32_t                a;
+    uint8_t                 t;
+};
+
 struct pc_event {
     std::chrono::nanoseconds timeout;
     uint32_t pc;
@@ -81,7 +87,7 @@ public:
 
     int32_t vm_reset();
 
-    int32_t vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read);
+    int32_t vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target);
 
     void vm_ended();
 
@@ -103,7 +109,7 @@ private:
 
     std::mutex vm_mtx;
     struct iovm1_t vm{};
-    std::queue<std::vector<uint8_t>> vm_read_buf{};
+    std::queue<vm_read> vm_read_buf{};
 
     friend void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs);
 

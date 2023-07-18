@@ -208,11 +208,12 @@ bool wasm_host_init() {
             });
             natives->push_back({
                 "iovm1_read_data",
-                ((void*)+[](wasm_exec_env_t exec_env, uint8_t *dst, uint32_t dst_len, uint32_t *o_read) -> int32_t {
+                ((void*)+[](wasm_exec_env_t exec_env, uint8_t *dst, uint32_t dst_len,
+                                     uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    return m->vm_read_data(dst, dst_len, o_read);
+                    return m->vm_read_data(dst, dst_len, o_read, o_addr, o_target);
                 }),
-                "(*~*)i",
+                "(*~***)i",
                 nullptr
             });
         }
