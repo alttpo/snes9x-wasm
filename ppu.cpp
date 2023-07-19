@@ -951,6 +951,13 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 	}
 	else
 	{
+#ifdef EMULATE_FXPAKPRO
+        if (Address >= 0x2c00 && Address <= 0x2dff)
+        {
+            Memory.Extra2C00[Address - 0x2c00] = Byte;
+            return;
+        }
+#endif
 		if (Settings.SuperFX && Address >= 0x3000 && Address <= 0x32ff)
 		{
 			S9xSetSuperFX(Byte, Address);
@@ -1206,7 +1213,13 @@ uint8 S9xGetPPU (uint16 Address)
 	}
 	else
     {
-		if (Settings.SuperFX && Address >= 0x3000 && Address <= 0x32ff)
+#ifdef EMULATE_FXPAKPRO
+        if (Address >= 0x2c00 && Address <= 0x2dff)
+        {
+            return Memory.Extra2C00[Address - 0x2c00];
+        }
+#endif
+        if (Settings.SuperFX && Address >= 0x3000 && Address <= 0x32ff)
 			return (S9xGetSuperFX(Address));
 		else
 		if (Settings.SA1     && Address >= 0x2200)

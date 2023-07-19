@@ -288,7 +288,7 @@ if(USE_WAMR)
 
     list (APPEND LIBS vmlib)
 
-    list (APPEND DEFINES USE_WASM)
+    list (APPEND DEFINES USE_WASM EMULATE_FXPAKPRO)
 
     list(APPEND INCLUDES ../wasm)
     list(APPEND SOURCES

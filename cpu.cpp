@@ -101,6 +101,9 @@ void S9xReset (void)
 	memset(Memory.RAM, 0x55, sizeof(Memory.RAM));
 	memset(Memory.VRAM, 0x00, sizeof(Memory.VRAM));
 	memset(Memory.FillRAM, 0, 0x8000);
+#ifdef EMULATE_FXPAKPRO
+    memset(Memory.Extra2C00, 0, sizeof(Memory.Extra2C00));
+#endif
 
 	S9xResetBSX();
 	S9xResetCPU();

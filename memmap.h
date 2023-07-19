@@ -72,6 +72,9 @@ struct CMemory
 	uint8	*OBC1RAM;
 	uint8	*BSRAM;
 	uint8	*BIOSROM;
+#ifdef EMULATE_FXPAKPRO
+    uint8   Extra2C00[0x200];
+#endif
 
 	uint8	*Map[MEMMAP_NUM_BLOCKS];
 	uint8	*WriteMap[MEMMAP_NUM_BLOCKS];
