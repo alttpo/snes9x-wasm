@@ -129,11 +129,10 @@ func main() {
 	}
 
 	vmprog := [...]byte{
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETADDR, 0),
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETTV, 0),
 		rex.IOVM1_TARGET_WRAM,
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETA8, 0),
 		0x10,
-		0x00,
-		0x00,
 		rex.IOVM1Instruction(rex.IOVM1_OPCODE_READ, 0),
 		0xF0, // read 240 bytes
 	}
