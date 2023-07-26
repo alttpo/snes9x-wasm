@@ -124,6 +124,7 @@ bool wasm_host_init() {
             });
         }
 
+#ifdef REX_ALLOW_DIRECT_MEM_ACCESS
         // memory access:
         {
 #define FUNC_READ(name, start, size) { \
@@ -167,8 +168,10 @@ bool wasm_host_init() {
 #undef FUNC_WRITE
 #undef FUNC_READ
         }
+#endif
 
-        // iovm I/O virtual machine subsystem:
+        // iovm I/O virtual machine subsystem used to perform low-latency memory access similar to how
+        // console flash carts operate:
         {
             natives->push_back({
                 "iovm1_init",
@@ -217,6 +220,23 @@ bool wasm_host_init() {
                 nullptr
             });
         }
+
+#ifdef EMULATE_FXPAKPRO
+        // FX Pak Pro NMI override feature ($2C00) emulation:
+        {
+            natives->push_back({
+                "upload_nmi_routine",
+                ((void*)+[](wasm_exec_env_t exec_env, uint8_t *routine, uint32_t routine_len) -> int32_t {
+                    //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+                    // uploads a 65816 routine to $00:2C00..2DFF
+                    memcpy(Memory.Extra2C00, routine, std::min(routine_len, 0x200U));
+                    return (routine_len > 0x200U);
+                }),
+                "(*~)i",
+                nullptr
+            });
+        }
+#endif
 
         // ppux (PPU integrated extensions):
         {
