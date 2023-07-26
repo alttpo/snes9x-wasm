@@ -13,6 +13,8 @@ extern "C" {
 
 #include "iovm.c"
 
+vm_read::vm_read() : buf(), len(0), a(0), t(0) {}
+
 vm_read::vm_read(
     const std::vector<uint8_t> &buf_p,
     uint16_t len_p,
@@ -217,25 +219,35 @@ void module::debugger_enable(bool enabled) {
 
 ////////////////////////////////////////////////////////////////////////
 
-static uint8_t *memory_target(iovm1_target target) {
+static std::pair<uint8_t *, uint32_t> memory_target(iovm1_target target) {
     switch (target) {
         case 0: // WRAM:
-            return Memory.RAM;
-            break;
+            return {Memory.RAM, sizeof(Memory.RAM)};
         case 1: // SRAM:
-            return Memory.SRAM;
-            break;
+            return {Memory.SRAM, Memory.SRAMStorage.size()};
         case 2: // ROM:
-            return Memory.ROM;
-            break;
+            return {Memory.ROM, Memory.ROMStorage.size()};
+#ifdef EMULATE_FXPAKPRO
+        case 3: // 2C00:
+            return {Memory.Extra2C00, sizeof(Memory.Extra2C00)};
+#endif
         default: // memory target not defined:
-            return nullptr;
+            return {nullptr, 0};
+    }
+}
+
+void module::trim_read_buf() {
+    // remove oldest unread buffers to prevent infinite growth:
+    while (vm_read_buf.size() > 1024) {
+        vm_read_buf.pop();
     }
 }
 
 extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs) {
     auto m = reinterpret_cast<module *>(iovm1_get_userdata(vm));
-    uint8_t *mem = memory_target(cbs->t);
+    auto mt = memory_target(cbs->t);
+    auto mem = mt.first;
+    auto mem_len = mt.second;
 
     if (cbs->o == IOVM1_OPCODE_READ) {
         // read one byte per cycle:
@@ -248,21 +260,17 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
                     cbs->a,
                     cbs->t
                 );
+                m->trim_read_buf();
                 cbs->complete = true;
             } else {
                 // reserve enough space:
-                auto &r = m->vm_read_buf.emplace(
+                m->read_cur = vm_read(
                     std::vector<uint8_t>(),
                     cbs->len,
                     cbs->a,
                     cbs->t
                 );
-                r.buf.reserve(cbs->len);
-            }
-
-            // remove oldest unread buffers to prevent infinite growth:
-            while (m->vm_read_buf.size() > 1024) {
-                m->vm_read_buf.pop();
+                m->read_cur.buf.reserve(cbs->len);
             }
 
             if (!mem) {
@@ -272,13 +280,23 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
 
         // finished with transfer?
         if (cbs->len == 0) {
+            // push out the current read buffer:
+            m->vm_read_buf.push(std::move(m->read_cur));
+            m->trim_read_buf();
             cbs->complete = true;
             return;
         }
 
         // read a byte:
-        auto &r = m->vm_read_buf.back();
-        r.buf.push_back(*(mem + cbs->a++));
+        uint8_t x;
+        if (cbs->a < mem_len) {
+            x = *(mem + cbs->a++);
+        } else {
+            // out of bounds access yields a 0 byte:
+            x = 0;
+            cbs->a++;
+        }
+        m->read_cur.buf.push_back(x);
         cbs->len--;
 
         return;
@@ -298,7 +316,13 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
         }
 
         // write a byte:
-        *(mem + cbs->a++) = cbs->m[cbs->p++];
+        if (cbs->a < mem_len) {
+            *(mem + cbs->a++) = cbs->m[cbs->p++];
+        } else {
+            // out of bounds access:
+            cbs->a++;
+            cbs->p++;
+        }
         cbs->len--;
 
         return;
@@ -308,6 +332,12 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
 
     if (!mem) {
         // memory target not defined:
+        cbs->complete = true;
+        return;
+    }
+
+    if (cbs->a >= mem_len) {
+        // out of range:
         cbs->complete = true;
         return;
     }

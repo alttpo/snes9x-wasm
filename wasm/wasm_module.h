@@ -33,6 +33,7 @@ struct vm_read {
     uint32_t                a;
     uint8_t                 t;
 
+    vm_read();
     vm_read(
         const std::vector<uint8_t> &buf,
         uint16_t                    len,
@@ -113,11 +114,14 @@ private:
     uint32_t event = wasm_event_kind::ev_none;
     bool event_triggered = false;
 
-    std::array<pc_event, 8> pc_events;
+    std::array<pc_event, 8> pc_events{};
 
     std::mutex vm_mtx;
     struct iovm1_t vm{};
+    vm_read read_cur;
     std::queue<vm_read> vm_read_buf{};
+
+    void trim_read_buf();
 
     friend void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs);
 
