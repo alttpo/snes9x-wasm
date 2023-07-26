@@ -1,11 +1,10 @@
-REX_SRC := rex/events.go \
+REX_SRC := \
+ rex/events.go \
+ rex/iovm.go \
+ rex/mem.go \
  rex/net.go \
- rex/oam.go \
  rex/ppux.go \
- rex/rom.go \
- rex/sram.go \
- rex/vram.go \
- rex/wram.go
+ rex/text.go
 
 main.wasm: main.go go.mod go.sum $(REX_SRC)
 # -gc=none

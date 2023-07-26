@@ -4,19 +4,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"main/rex"
+	"unsafe"
+
 	//"strings"
 	"time"
-)
-
-const (
-	ev_none = iota
-	ev_shutdown
-	ev_snes_nmi
-	ev_snes_irq
-	ev_ppu_frame_start
-	ev_ppu_frame_end
-	ev_ppu_frame_skip
-	ev_iovm_end
 )
 
 var slotsArray [8]rex.Socket
@@ -71,17 +62,51 @@ func rotate() {
 
 var wram [0x20000]byte
 
+func blockingRead(m *rex.MemoryTarget, p []byte, addr uint32) (err error) {
+	if err = m.BeginRead(p, addr); err != nil {
+		return
+	}
+
+	// NOTE: this loop consumes events and discards them
+	for {
+		var ok bool
+		var event rex.Event
+		event, ok = rex.EventWaitFor(time.Microsecond * 16000)
+		if !ok {
+			continue
+		}
+		if event == rex.Ev_iovm1_end {
+			break
+		}
+	}
+	return
+}
+
 func main() {
 	var event uint32
+	var err error
 
 	// read rom header:
-	_, _ = rex.ROM.ReadAt(romTitle[:], 0x7FC0)
-	//fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
+	if err = blockingRead(&rex.ROM, romTitle[:], 0x7FC0); err != nil {
+		_, _ = rex.Stderr.WriteString("unable to read ROM header: ")
+		_, _ = rex.Stderr.WriteString(err.Error())
+		_, _ = rex.Stderr.WriteString("\n")
+	} else {
+		//fmt.Printf("rom title: `%s`\n", strings.TrimRight(string(romTitle[:]), " \000"))
+		_, _ = rex.Stdout.WriteString("rom title: `")
+		_, _ = rex.Stdout.WriteString(unsafe.String(&romTitle[0], 21))
+		_, _ = rex.Stdout.WriteString("`\n")
+	}
 
-	// read ROM contents of link's entire sprite sheet:
-	_, _ = rex.ROM.ReadAt(linkSprites[:], 0x08_0000)
-	// upload to ppux vram from rom sprite data:
-	_ = rex.PPUX.VRAM.Upload(0, linkSprites[:])
+	// read ROM contents of Link's entire sprite sheet:
+	if err = blockingRead(&rex.ROM, linkSprites[:], 0x08_0000); err != nil {
+		_, _ = rex.Stderr.WriteString("unable to read ROM sprites: ")
+		_, _ = rex.Stderr.WriteString(err.Error())
+		_, _ = rex.Stderr.WriteString("\n")
+	} else {
+		// upload to ppux vram from rom sprite data:
+		_ = rex.PPUX.VRAM.Upload(0, linkSprites[:])
+	}
 
 	// upload palette to ppux cgram:
 	palette := [0x20]byte{
@@ -92,7 +117,6 @@ func main() {
 
 	// listen on tcp port 25600
 	slots = slotsArray[:1:8]
-	var err error
 	err = rex.TCPSocket(&slots[0])
 	if err != nil {
 		fmt.Printf("%v\n", err)
@@ -120,23 +144,55 @@ func main() {
 	}
 
 	// $068328 Sprite_Main in alttp-jp.sfc
-	ev_pc := rex.EventRegisterBreak(0x068328, time.Microsecond*2000)
+	//ev_pc := rex.EventRegisterBreak(0x068328, time.Microsecond*2000)
 
-	// load a IOVM1 program and execute it each frame:
-	if err = rex.IOVM1.Init(); err != nil {
+	// load a IOVM1 program into vm0 and execute it each frame:
+	if err = rex.IOVM1[0].Init(); err != nil {
 		fmt.Printf("%v\n", err)
 		return
 	}
 
 	vmprog := [...]byte{
+		// setup channel 0 for WRAM read:
 		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETTV, 0),
 		rex.IOVM1_TARGET_WRAM,
 		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETA8, 0),
 		0x10,
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETLEN, 0),
+		0xF0,
+		0x00,
+
+		// setup channel 3 for NMI $2C00 write:
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETTV, 3),
+		rex.IOVM1_TARGET_2C00,
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETA8, 3),
+		0x01, // $2C01
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETLEN, 3),
+		5,
+		0,
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_WRITE, 3),
+		0x00, // 2C01: STZ $2C00
+		0x2C,
+		0x6C, // 2C03: JMP ($FFEA)
+		0xEA,
+		0xFF,
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETA8, 3),
+		0x00, // $2C00
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETLEN, 3),
+		1,
+		0,
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_WRITE, 3),
+		0x9C, // 2C00: STZ $2C00
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETCMPMSK, 3),
+		0x00,
+		0xFF,
+		// wait while [$2C00] != $00
+		rex.IOVM1Instruction(rex.IOVM1_OPCODE_WAIT_WHILE_NEQ, 3),
+
+		// now issue WRAM read on channel 0:
 		rex.IOVM1Instruction(rex.IOVM1_OPCODE_READ, 0),
-		0xF0, // read 240 bytes
 	}
-	if err = rex.IOVM1.Load(vmprog[:]); err != nil {
+	if err = rex.IOVM1[0].Load(vmprog[:]); err != nil {
 		fmt.Printf("%v\n", err)
 		return
 	}
@@ -156,43 +212,42 @@ func main() {
 		}
 
 		// graceful exit condition:
-		if event == ev_shutdown {
+		if event == rex.Ev_shutdown {
 			break
 		}
 
-		if event == ev_pc {
-			rex.EventAcknowledge()
-			//fmt.Printf("Sprite_Main\n")
-			continue
-		}
-
-		var n int
-		var addr uint32
-		var target uint8
-		if n, addr, target, err = rex.IOVM1.Read(buf[:]); err != nil {
-			rex.Stdout.WriteString("iovm_read: ")
-			rex.Stdout.WriteString(err.Error())
-			rex.Stdout.WriteString("\n")
-		} else if n > 0 {
-			rex.Stdout.WriteString(fmt.Sprintf("iovm_read: target=%d addr=%06x\n", target, addr))
-			rex.Stdout.WriteString(hex.Dump(buf[:n]))
-			rex.Stdout.WriteString("\n")
-		}
-
-		if event == ev_iovm_end {
-			// end of IOVM program:
-			err = rex.IOVM1.Reset()
-			if err != nil {
-				rex.Stdout.WriteString("iovm_reset: ")
-				rex.Stdout.WriteString(err.Error())
-				rex.Stdout.WriteString("\n")
+		if event == rex.Ev_iovm0_read_complete {
+			var n uint32
+			var addr uint32
+			var target uint8
+			if n, addr, target, err = rex.IOVM1[0].Read(buf[:]); err != nil {
+				_, _ = rex.Stdout.WriteString("error during iovm_read: ")
+				_, _ = rex.Stdout.WriteString(err.Error())
+				_, _ = rex.Stdout.WriteString("\n")
+			} else if n > 0 {
+				_, _ = rex.Stdout.WriteString(fmt.Sprintf("iovm_read: target=%d addr=%06x\n", target, addr))
+				_, _ = rex.Stdout.WriteString(hex.Dump(buf[:n]))
+				_, _ = rex.Stdout.WriteString("\n")
+				if target == rex.IOVM1_TARGET_WRAM {
+					// copy the read data into our wram copy:
+					copy(wram[addr:addr+n], buf[:n])
+				}
 			}
-			rex.EventAcknowledge()
 			continue
 		}
 
-		if event != ev_ppu_frame_start && event != ev_ppu_frame_skip {
-			rex.EventAcknowledge()
+		if event == rex.Ev_iovm0_end {
+			// end of IOVM program:
+			err = rex.IOVM1[0].Reset()
+			if err != nil {
+				_, _ = rex.Stdout.WriteString("iovm_reset: ")
+				_, _ = rex.Stdout.WriteString(err.Error())
+				_, _ = rex.Stdout.WriteString("\n")
+			}
+			continue
+		}
+
+		if event != rex.Ev_ppu_frame_start && event != rex.Ev_ppu_frame_skip {
 			continue
 		}
 
@@ -252,15 +307,11 @@ func main() {
 		_ = rex.PPUX.CmdWrite(cmd)
 
 		// read some WRAM:
-		_, _ = rex.WRAM.ReadAt(wram[0x0:0x100], 0x0)
 		currFrame := wram[0x1A]
 		if uint8(currFrame-lastFrame) >= 2 {
 			fmt.Printf("%02x -> %02x\n", lastFrame, currFrame)
 		}
 		lastFrame = wram[0x1A]
-
-		// unblock emulator:
-		rex.EventAcknowledge()
 	}
 
 	slots[0].Close()

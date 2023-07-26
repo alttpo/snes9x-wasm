@@ -237,6 +237,12 @@ static std::pair<uint8_t *, uint32_t> memory_target(iovm1_target target) {
         case 3: // 2C00:
             return {Memory.Extra2C00, sizeof(Memory.Extra2C00)};
 #endif
+        case 4: // VRAM:
+            return {Memory.VRAM, sizeof(Memory.VRAM)};
+        case 5: // CGRAM:
+            return {(uint8_t*)PPU.CGDATA, sizeof(PPU.CGDATA)};
+        case 6: // OAM:
+            return {PPU.OAMData, sizeof(PPU.OAMData)};
         default: // memory target not defined:
             return {nullptr, 0};
     }
