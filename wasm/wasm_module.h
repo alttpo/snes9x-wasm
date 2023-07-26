@@ -29,8 +29,16 @@
 
 struct vm_read {
     std::vector<uint8_t>    buf;
+    uint16_t                len;
     uint32_t                a;
     uint8_t                 t;
+
+    vm_read(
+        const std::vector<uint8_t> &buf,
+        uint16_t                    len,
+        uint32_t                    a,
+        uint8_t                     t
+    );
 };
 
 struct pc_event {

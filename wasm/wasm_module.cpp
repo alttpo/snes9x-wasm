@@ -10,7 +10,15 @@ extern "C" {
 #include "memmap.h"
 
 #define IOVM1_USE_USERDATA
+
 #include "iovm.c"
+
+vm_read::vm_read(
+    const std::vector<uint8_t> &buf_p,
+    uint16_t len_p,
+    uint32_t a_p,
+    uint8_t t_p
+) : buf(buf_p), len(len_p), a(a_p), t(t_p) {}
 
 module::module(
     std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p,
@@ -229,69 +237,108 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
     auto m = reinterpret_cast<module *>(iovm1_get_userdata(vm));
     uint8_t *mem = memory_target(cbs->t);
 
-    switch (cbs->o) {
-        case IOVM1_OPCODE_READ:
-        case IOVM1_OPCODE_READ_N: {
+    if (cbs->o == IOVM1_OPCODE_READ) {
+        // read one byte per cycle:
+        if (cbs->initial) {
             if (!mem) {
                 // memory target not defined; fill read buffer with 0s:
-                m->vm_read_buf.emplace(vm_read{std::vector<uint8_t>(cbs->len, (uint8_t) 0), cbs->a, cbs->t});
-                goto exit_read;
+                m->vm_read_buf.emplace(
+                    std::vector<uint8_t>(cbs->len, (uint8_t) 0),
+                    cbs->len,
+                    cbs->a,
+                    cbs->t
+                );
+                cbs->complete = true;
+            } else {
+                // reserve enough space:
+                auto &r = m->vm_read_buf.emplace(
+                    std::vector<uint8_t>(),
+                    cbs->len,
+                    cbs->a,
+                    cbs->t
+                );
+                r.buf.reserve(cbs->len);
             }
 
-            // read: read from src+address emulated memory and push into module's read queue:
-            uint8_t *p;
-            p = mem + cbs->a;
-            m->vm_read_buf.emplace(vm_read{std::vector<uint8_t>(p, p + cbs->len), cbs->a, cbs->t});
-
-        exit_read:
             // remove oldest unread buffers to prevent infinite growth:
             while (m->vm_read_buf.size() > 1024) {
                 m->vm_read_buf.pop();
             }
 
-            cbs->a += cbs->len;
-            cbs->completed = true;
-            break;
+            if (!mem) {
+                return;
+            }
         }
-        case IOVM1_OPCODE_WRITE:
-        case IOVM1_OPCODE_WRITE_N: {
-            if (!mem) {
-                // memory target not defined:
-                goto exit_write;
-            }
 
-            // write: copy from program data to mem+a emulated memory:
-            std::copy_n(vm->m.ptr + cbs->p, cbs->len, mem + cbs->a);
-
-        exit_write:
-            cbs->a += cbs->len;
-            cbs->completed = true;
-            break;
+        // finished with transfer?
+        if (cbs->len == 0) {
+            cbs->complete = true;
+            return;
         }
-        case IOVM1_OPCODE_WHILE_NEQ:
-            if (!mem) {
-                // memory target not defined:
-                cbs->completed = true;
-                break;
-            }
 
-            // completed flag uses inverted logic from the while condition:
-            cbs->completed = *(mem + cbs->a) == cbs->c;
+        // read a byte:
+        auto &r = m->vm_read_buf.back();
+        r.buf.push_back(*(mem + cbs->a++));
+        cbs->len--;
+
+        return;
+    }
+
+    if (cbs->o == IOVM1_OPCODE_WRITE) {
+        // write one byte per cycle:
+        if (!mem) {
+            cbs->complete = true;
+            return;
+        }
+
+        // finished with transfer?
+        if (cbs->len == 0) {
+            cbs->complete = true;
+            return;
+        }
+
+        // write a byte:
+        *(mem + cbs->a++) = cbs->m[cbs->p++];
+        cbs->len--;
+
+        return;
+    }
+
+    // remaining opcodes are wait-while:
+
+    if (!mem) {
+        // memory target not defined:
+        cbs->complete = true;
+        return;
+    }
+
+    // read byte and apply mask:
+    uint8_t b = *(mem + cbs->a) & cbs->msk;
+    bool cond;
+    switch (cbs->o) {
+        case IOVM1_OPCODE_WAIT_WHILE_NEQ:
+            cond = (b != cbs->cmp);
             break;
-        case IOVM1_OPCODE_WHILE_EQ:
-            if (!mem) {
-                // memory target not defined:
-                cbs->completed = true;
-                break;
-            }
-
-            // completed flag uses inverted logic from the while condition:
-            cbs->completed = *(mem + cbs->a) != cbs->c;
+        case IOVM1_OPCODE_WAIT_WHILE_EQ:
+            cond = (b == cbs->cmp);
+            break;
+        case IOVM1_OPCODE_WAIT_WHILE_LT:
+            cond = (b < cbs->cmp);
+            break;
+        case IOVM1_OPCODE_WAIT_WHILE_GT:
+            cond = (b > cbs->cmp);
+            break;
+        case IOVM1_OPCODE_WAIT_WHILE_LTE:
+            cond = (b <= cbs->cmp);
+            break;
+        case IOVM1_OPCODE_WAIT_WHILE_GTE:
+            cond = (b >= cbs->cmp);
             break;
         default:
-            cbs->completed = true;
+            cond = false;
             break;
     }
+    cbs->complete = !cond;
 }
 
 int32_t module::vm_init() {
