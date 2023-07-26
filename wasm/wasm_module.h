@@ -27,19 +27,36 @@
 #define IOVM1_USE_USERDATA
 #include "iovm.h"
 
-struct vm_read {
-    std::vector<uint8_t>    buf;
+struct vm_read_result {
     uint16_t                len;
     uint32_t                a;
     uint8_t                 t;
+    std::vector<uint8_t>    buf;
 
-    vm_read();
-    vm_read(
+    vm_read_result();
+    vm_read_result(
         const std::vector<uint8_t> &buf,
         uint16_t                    len,
         uint32_t                    a,
         uint8_t                     t
     );
+};
+
+class module;
+
+struct vm_inst {
+    module *m;
+    unsigned n;
+
+    std::mutex vm_mtx;
+    struct iovm1_t vm{};
+
+    vm_read_result read_result;
+    std::queue<vm_read_result> read_queue{};
+
+    vm_inst();
+
+    void trim_read_queue();
 };
 
 class module : public std::enable_shared_from_this<module> {
@@ -79,17 +96,15 @@ public:
     void notify_exit();
 
 public:
-    int32_t vm_init();
+    int32_t vm_init(unsigned n);
 
-    int32_t vm_load(const uint8_t *vmprog, uint32_t vmprog_len);
+    int32_t vm_load(unsigned n, const uint8_t *vmprog, uint32_t vmprog_len);
 
-    iovm1_state vm_getstate();
+    iovm1_state vm_getstate(unsigned n);
 
-    int32_t vm_reset();
+    int32_t vm_reset(unsigned n);
 
-    int32_t vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target);
-
-    void vm_ended();
+    int32_t vm_read_data(unsigned n, uint8_t *dst, uint32_t dst_len, uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target);
 
 private:
     wasm_module_t mod;
@@ -107,12 +122,7 @@ private:
     std::condition_variable exit_cv;
     bool exited = false;
 
-    std::mutex vm_mtx;
-    struct iovm1_t vm{};
-    vm_read read_cur;
-    std::queue<vm_read> vm_read_buf{};
-
-    void trim_read_buf();
+    std::array<struct vm_inst, 2> vms{};
 
     friend void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs);
 

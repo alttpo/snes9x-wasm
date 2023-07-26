@@ -148,48 +148,48 @@ bool wasm_host_init() {
         {
             natives->push_back({
                 "iovm1_init",
-                ((void*)+[](wasm_exec_env_t exec_env) -> int32_t {
+                ((void*)+[](wasm_exec_env_t exec_env, uint32_t n) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    return m->vm_init();
+                    return m->vm_init(n);
                 }),
-                "()i",
+                "(i)i",
                 nullptr
             });
             natives->push_back({
                 "iovm1_load",
-                ((void*)+[](wasm_exec_env_t exec_env, const uint8_t *vmprog, uint32_t vmprog_len) -> int32_t {
+                ((void*)+[](wasm_exec_env_t exec_env, uint32_t n, const uint8_t *vmprog, uint32_t vmprog_len) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    return m->vm_load(vmprog, vmprog_len);
+                    return m->vm_load(n, vmprog, vmprog_len);
                 }),
-                "(*~)i",
+                "(i*~)i",
                 nullptr
             });
             natives->push_back({
                 "iovm1_get_exec_state",
-                ((void*)+[](wasm_exec_env_t exec_env) -> int32_t {
+                ((void*)+[](wasm_exec_env_t exec_env, uint32_t n) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    return m->vm_getstate();
+                    return m->vm_getstate(n);
                 }),
-                "()i",
+                "(i)i",
                 nullptr
             });
             natives->push_back({
                 "iovm1_exec_reset",
-                ((void*)+[](wasm_exec_env_t exec_env) -> int32_t {
+                ((void*)+[](wasm_exec_env_t exec_env, uint32_t n) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    return m->vm_reset();
+                    return m->vm_reset(n);
                 }),
-                "()i",
+                "(i)i",
                 nullptr
             });
             natives->push_back({
                 "iovm1_read_data",
-                ((void*)+[](wasm_exec_env_t exec_env, uint8_t *dst, uint32_t dst_len,
+                ((void*)+[](wasm_exec_env_t exec_env, uint32_t n, uint8_t *dst, uint32_t dst_len,
                                      uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    return m->vm_read_data(dst, dst_len, o_read, o_addr, o_target);
+                    return m->vm_read_data(n, dst, dst_len, o_read, o_addr, o_target);
                 }),
-                "(*~***)i",
+                "(i*~***)i",
                 nullptr
             });
         }

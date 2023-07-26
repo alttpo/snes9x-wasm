@@ -14,8 +14,10 @@ enum wasm_event_kind : uint32_t {
     ev_ppu_frame_start,
     ev_ppu_frame_end,
     ev_ppu_frame_skip,
-    ev_iovm_end,
-    ev_iovm_read_complete
+    ev_iovm0_read_complete,
+    ev_iovm1_read_complete,
+    ev_iovm0_end,
+    ev_iovm1_end,
 };
 
 typedef size_t (*wasi_write_cb)(const char *text_begin, const char *text_end);

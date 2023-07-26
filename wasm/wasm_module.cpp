@@ -13,14 +13,16 @@ extern "C" {
 
 #include "iovm.c"
 
-vm_read::vm_read() : buf(), len(0), a(0), t(0) {}
+vm_read_result::vm_read_result() : len(0), a(0), t(0), buf() {}
 
-vm_read::vm_read(
+vm_read_result::vm_read_result(
     const std::vector<uint8_t> &buf_p,
     uint16_t len_p,
     uint32_t a_p,
     uint8_t t_p
-) : buf(buf_p), len(len_p), a(a_p), t(t_p) {}
+) : len(len_p), a(a_p), t(t_p), buf(buf_p) {}
+
+vm_inst::vm_inst() : m(nullptr), n(-1) {}
 
 module::module(
     std::string name_p, wasm_module_t mod_p, wasm_module_inst_t mi_p, wasm_exec_env_t exec_env_p,
@@ -31,9 +33,12 @@ module::module(
     // set user_data to `this`:
     wasm_runtime_set_user_data(exec_env, static_cast<void *>(this));
 
-    // initialize iovm:
-    iovm1_init(&vm);
-    iovm1_set_userdata(&vm, (void *) this);
+    // initialize iovms:
+    for (unsigned n = 0; n < 2; n++) {
+        vms[n].m = this;
+        vms[n].n = n;
+        vm_init(n);
+    }
 
     trace_printf(1UL << 0, "%s wasm module created\n", name.c_str());
 }
@@ -57,20 +62,19 @@ module::create(
     auto exec_env = wasm_runtime_create_exec_env(module_inst, 1048576);
     if (!exec_env) {
         wasm_runtime_deinstantiate(module_inst);
-        module_inst = nullptr;
         wasm_runtime_unload(mod);
-        mod = nullptr;
         return nullptr;
     }
 
-    return std::shared_ptr<module>(new module(
-        std::move(name),
-        mod,
-        module_inst,
-        exec_env,
-        module_binary,
-        module_size
-    ));
+    return std::shared_ptr<module>(
+        new module(
+            std::move(name),
+            mod,
+            module_inst,
+            exec_env,
+            module_binary,
+            module_size
+        ));
 }
 
 void module::start_thread() {
@@ -238,15 +242,16 @@ static std::pair<uint8_t *, uint32_t> memory_target(iovm1_target target) {
     }
 }
 
-void module::trim_read_buf() {
+void vm_inst::trim_read_queue() {
     // remove oldest unread buffers to prevent infinite growth:
-    while (vm_read_buf.size() > 1024) {
-        vm_read_buf.pop();
+    while (read_queue.size() > 1024) {
+        read_queue.pop();
     }
 }
 
 extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs) {
-    auto m = reinterpret_cast<module *>(iovm1_get_userdata(vm));
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
+    auto m = inst->m;
     auto mt = memory_target(cbs->t);
     auto mem = mt.first;
     auto mem_len = mt.second;
@@ -256,35 +261,35 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
         if (cbs->initial) {
             if (!mem) {
                 // memory target not defined; fill read buffer with 0s:
-                m->vm_read_buf.emplace(
+                inst->read_queue.emplace(
                     std::vector<uint8_t>(cbs->len, (uint8_t) 0),
                     cbs->len,
                     cbs->a,
                     cbs->t
                 );
-                m->trim_read_buf();
+                inst->trim_read_queue();
                 cbs->complete = true;
-                m->notify_event(ev_iovm_read_complete);
+                m->notify_event(ev_iovm0_read_complete + inst->n);
                 return;
             }
 
             // reserve enough space:
-            m->read_cur = vm_read(
+            inst->read_result = vm_read_result(
                 std::vector<uint8_t>(),
                 cbs->len,
                 cbs->a,
                 cbs->t
             );
-            m->read_cur.buf.reserve(cbs->len);
+            inst->read_result.buf.reserve(cbs->len);
         }
 
         // finished with transfer?
         if (cbs->len == 0) {
             // push out the current read buffer:
-            m->vm_read_buf.push(std::move(m->read_cur));
-            m->trim_read_buf();
+            inst->read_queue.push(std::move(inst->read_result));
+            inst->trim_read_queue();
             cbs->complete = true;
-            m->notify_event(ev_iovm_read_complete);
+            m->notify_event(ev_iovm0_read_complete + inst->n);
             return;
         }
 
@@ -297,7 +302,7 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
             x = 0;
             cbs->a++;
         }
-        m->read_cur.buf.push_back(x);
+        inst->read_result.buf.push_back(x);
         cbs->len--;
 
         return;
@@ -372,45 +377,67 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
     cbs->complete = !cond;
 }
 
-int32_t module::vm_init() {
-    std::unique_lock<std::mutex> lk(vm_mtx);
+int32_t module::vm_init(unsigned n) {
+    if (n >= vms.size()) {
+        return IOVM1_ERROR_OUT_OF_RANGE;
+    }
 
-    iovm1_init(&vm);
-    iovm1_set_userdata(&vm, (void *) this);
+    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
+
+    iovm1_init(&vms[n].vm);
+    iovm1_set_userdata(&vms[n].vm, (void *) &vms[n]);
 
     return IOVM1_SUCCESS;
 }
 
-int32_t module::vm_load(const uint8_t *vmprog, uint32_t vmprog_len) {
-    std::unique_lock<std::mutex> lk(vm_mtx);
+int32_t module::vm_load(unsigned n, const uint8_t *vmprog, uint32_t vmprog_len) {
+    if (n >= vms.size()) {
+        return IOVM1_ERROR_OUT_OF_RANGE;
+    }
 
-    return iovm1_load(&vm, vmprog, vmprog_len);
+    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
+
+    return iovm1_load(&vms[n].vm, vmprog, vmprog_len);
 }
 
-iovm1_state module::vm_getstate() {
-    std::unique_lock<std::mutex> lk(vm_mtx);
+iovm1_state module::vm_getstate(unsigned n) {
+    if (n >= vms.size()) {
+        return static_cast<iovm1_state>(-1);
+    }
 
-    return iovm1_get_exec_state(&vm);
+    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
+
+    return iovm1_get_exec_state(&vms[n].vm);
 }
 
-int32_t module::vm_reset() {
-    std::unique_lock<std::mutex> lk(vm_mtx);
+int32_t module::vm_reset(unsigned n) {
+    if (n >= vms.size()) {
+        return IOVM1_ERROR_OUT_OF_RANGE;
+    }
 
-    return iovm1_exec_reset(&vm);
+    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
+
+    return iovm1_exec_reset(&vms[n].vm);
 }
 
-int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target) {
-    std::unique_lock<std::mutex> lk(vm_mtx);
+int32_t module::vm_read_data(unsigned n, uint8_t *dst, uint32_t dst_len, uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target) {
+    if (n >= vms.size()) {
+        return IOVM1_ERROR_OUT_OF_RANGE;
+    }
+
+    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
 
     *o_read = 0;
     *o_addr = -1;
     *o_target = -1;
 
-    if (vm_read_buf.empty()) {
+    std::queue<vm_read_result> &rq = vms[n].read_queue;
+
+    if (rq.empty()) {
         return IOVM1_ERROR_NO_DATA;
     }
 
-    auto &v = vm_read_buf.front();
+    auto &v = rq.front();
     *o_addr = v.a;
     *o_target = v.t;
 
@@ -426,13 +453,9 @@ int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read, u
     }
     *o_read = v.buf.size();
 
-    vm_read_buf.pop();
+    rq.pop();
 
     return IOVM1_SUCCESS;
-}
-
-void module::vm_ended() {
-    notify_event(ev_iovm_end);
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -441,15 +464,15 @@ void module::vm_ended() {
 void module::notify_pc(uint32_t pc) {
     // this method is called before every instruction:
 
-    {
+    for (unsigned n = 0; n < 2; n++) {
         // execute opcodes in the iovm until a blocking operation (read, write, while) occurs:
-        std::unique_lock<std::mutex> lk(vm_mtx);
-        auto last_state = iovm1_get_exec_state(&vm);
-        if (IOVM1_SUCCESS == iovm1_exec(&vm)) {
-            auto curr_state = iovm1_get_exec_state(&vm);
+        std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
+        auto last_state = iovm1_get_exec_state(&vms[n].vm);
+        if (IOVM1_SUCCESS == iovm1_exec(&vms[n].vm)) {
+            auto curr_state = iovm1_get_exec_state(&vms[n].vm);
             if ((curr_state != last_state) && (curr_state == IOVM1_STATE_ENDED)) {
-                // fire ev_iovm_end event only once:
-                vm_ended();
+                // fire ev_iovm_end event:
+                notify_event(ev_iovm0_end + n);
             }
         }
     }
