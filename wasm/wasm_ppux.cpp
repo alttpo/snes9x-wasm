@@ -589,7 +589,7 @@ void wasm_host_frame_start() {
     );
     for_each_module(
         [=](const std::shared_ptr<module>& m) {
-            m->wait_for_ack_last_event(std::chrono::microseconds(2000));
+            //m->wait_for_ack_last_event(std::chrono::microseconds(2000));
             m->ppux.render_cmd();
         }
     );
@@ -637,18 +637,12 @@ void wasm_host_frame_end() {
             m->notify_event(wasm_event_kind::ev_ppu_frame_end);
         }
     );
-    // don't wait for ack
 }
 
 void wasm_host_frame_skip() {
     for_each_module(
         [=](const std::shared_ptr<module>& m) {
             m->notify_event(wasm_event_kind::ev_ppu_frame_skip);
-        }
-    );
-    for_each_module(
-        [=](const std::shared_ptr<module>& m) {
-            m->wait_for_ack_last_event(std::chrono::microseconds(2000));
         }
     );
 }

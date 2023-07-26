@@ -87,39 +87,12 @@ bool wasm_host_init() {
         // event subsystem (wait for irq, nmi, ppu frame start/end, shutdown, etc.):
         {
             natives->push_back({
-                "event_register_break",
-                (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc, uint32_t timeout_nsec) -> uint32_t {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_RETURN("event_register_break", m->register_pc_event(pc, timeout_nsec));
-                }),
-                "(ii)i",
-                nullptr
-            });
-            natives->push_back({
-                "event_unregister_break",
-                (void *) (+[](wasm_exec_env_t exec_env, uint32_t pc) -> void {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_DO("event_unregister_break", m->unregister_pc_event(pc));
-                }),
-                "(i)",
-                nullptr
-            });
-            natives->push_back({
                 "event_wait_for",
                 (void *) (+[](wasm_exec_env_t exec_env, uint32_t timeout_nsec, uint32_t *o_events) -> int32_t {
                     auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
                     MEASURE_TIMING_RETURN("event_wait_for", m->wait_for_event(timeout_nsec, *o_events));
                 }),
                 "(i*)i",
-                nullptr
-            });
-            natives->push_back({
-                "event_ack_last",
-                (void *) (+[](wasm_exec_env_t exec_env) -> void {
-                    auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-                    MEASURE_TIMING_DO("event_ack_last", m->ack_last_event());
-                }),
-                "()",
                 nullptr
             });
         }
@@ -416,7 +389,7 @@ void module_shutdown(std::shared_ptr<module> &m) {
     m->notify_event(wasm_event_kind::ev_shutdown);
 
     // TODO: allow a grace period and then forcefully shut down with m->cancel_thread()
-    m->wait_for_ack_last_event(std::chrono::microseconds(16000));
+    m->wait_for_exit();
 
     m.reset();
 }
@@ -487,9 +460,6 @@ int wasm_host_load_module(const std::string &name, uint8_t *module_binary, uint3
 void wasm_host_notify_events(wasm_event_kind events) {
     for_each_module([=](const std::shared_ptr<module>& m) {
         m->notify_event(events);
-    });
-    for_each_module([=](const std::shared_ptr<module>& m) {
-        m->wait_for_ack_last_event(std::chrono::microseconds(1000));
     });
 }
 

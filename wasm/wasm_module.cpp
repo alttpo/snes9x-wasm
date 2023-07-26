@@ -63,7 +63,14 @@ module::create(
         return nullptr;
     }
 
-    return std::shared_ptr<module>(new module(std::move(name), mod, module_inst, exec_env, module_binary, module_size));
+    return std::shared_ptr<module>(new module(
+        std::move(name),
+        mod,
+        module_inst,
+        exec_env,
+        module_binary,
+        module_size
+    ));
 }
 
 void module::start_thread() {
@@ -89,6 +96,8 @@ void module::start_thread() {
 
             m->thread_main();
             wasm_runtime_destroy_thread_env();
+
+            m->notify_exit();
         },
         new std::shared_ptr<module>(shared_from_this())
     ).detach();
@@ -158,10 +167,13 @@ bool module::wait_for_event(uint32_t timeout_nsec, uint32_t &o_event) {
     if (event_notify_cv.wait_for(
         lk,
         std::chrono::nanoseconds(timeout_nsec),
-        [this]() { return event_triggered; }
+        [this]() { return !events.empty(); }
     )) {
-        event_triggered = false;
-        o_event = event;
+        o_event = events.front();
+        events.pop();
+        if (!events.empty()) {
+            event_notify_cv.notify_one();
+        }
         trace_printf(1UL << 31, "} wait_for_event(%llu) -> %lu\n", timeout_nsec, o_event);
         return true;
     }
@@ -169,40 +181,30 @@ bool module::wait_for_event(uint32_t timeout_nsec, uint32_t &o_event) {
     return false;
 }
 
-void module::ack_last_event() {
-    {
-        std::unique_lock<std::mutex> lk(event_mtx);
-        event = 0;
-        event_triggered = false;
-    }
-    event_ack_cv.notify_one();
-    trace_printf(1UL << 31, "ack_last_event()\n");
-}
-
 void module::notify_event(uint32_t event_p) {
     {
         std::unique_lock<std::mutex> lk(event_mtx);
-        event = event_p;
-        event_triggered = true;
+        events.push(event_p);
     }
     event_notify_cv.notify_one();
     trace_printf(1UL << 31, "notify_event(%lu)\n", event_p);
 }
 
-void module::wait_for_ack_last_event(std::chrono::nanoseconds timeout) {
-    if (timeout == std::chrono::nanoseconds::zero()) {
-        return;
-    }
-
-    // wait for ack_last_event call:
-    trace_printf(1UL << 31, "{ wait_for_ack_last_event()\n");
-    std::unique_lock<std::mutex> lk(event_mtx);
-    event_ack_cv.wait_for(
+bool module::wait_for_exit() {
+    std::unique_lock<std::mutex> lk(exit_mtx);
+    return exit_cv.wait_for(
         lk,
-        timeout,
-        [this]() { return !event_triggered; }
+        std::chrono::microseconds(16700),
+        [this] { return exited; }
     );
-    trace_printf(1UL << 31, "} wait_for_ack_last_event()\n");
+}
+
+void module::notify_exit() {
+    {
+        std::unique_lock<std::mutex> lk(exit_mtx);
+        exited = true;
+    }
+    exit_cv.notify_all();
 }
 
 void module::debugger_enable(bool enabled) {
@@ -262,20 +264,18 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
                 );
                 m->trim_read_buf();
                 cbs->complete = true;
-            } else {
-                // reserve enough space:
-                m->read_cur = vm_read(
-                    std::vector<uint8_t>(),
-                    cbs->len,
-                    cbs->a,
-                    cbs->t
-                );
-                m->read_cur.buf.reserve(cbs->len);
-            }
-
-            if (!mem) {
+                m->notify_event(ev_iovm_read_complete);
                 return;
             }
+
+            // reserve enough space:
+            m->read_cur = vm_read(
+                std::vector<uint8_t>(),
+                cbs->len,
+                cbs->a,
+                cbs->t
+            );
+            m->read_cur.buf.reserve(cbs->len);
         }
 
         // finished with transfer?
@@ -284,6 +284,7 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
             m->vm_read_buf.push(std::move(m->read_cur));
             m->trim_read_buf();
             cbs->complete = true;
+            m->notify_event(ev_iovm_read_complete);
             return;
         }
 
@@ -406,7 +407,7 @@ int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read, u
     *o_target = -1;
 
     if (vm_read_buf.empty()) {
-        return IOVM1_SUCCESS;
+        return IOVM1_ERROR_NO_DATA;
     }
 
     auto &v = vm_read_buf.front();
@@ -415,7 +416,7 @@ int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read, u
 
     if (v.buf.size() > dst_len) {
         // not enough space to read into:
-        return IOVM1_ERROR_OUT_OF_RANGE;
+        return IOVM1_ERROR_BUFFER_TOO_SMALL;
     }
 
     // fill in the buffer:
@@ -432,9 +433,6 @@ int32_t module::vm_read_data(uint8_t *dst, uint32_t dst_len, uint32_t *o_read, u
 
 void module::vm_ended() {
     notify_event(ev_iovm_end);
-
-    // wait for wasm to complete its work:
-    wait_for_ack_last_event(std::chrono::nanoseconds(4000000UL));
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -453,57 +451,6 @@ void module::notify_pc(uint32_t pc) {
                 // fire ev_iovm_end event only once:
                 vm_ended();
             }
-        }
-    }
-
-    // check for any breakpoints set by wasm module:
-    for (const auto &it: pc_events) {
-        if (it.pc == pc) {
-            // notify wasm of the PC-hit event:
-            notify_event(ev_pc_break_start + (pc & 0x00ffffff));
-
-            // wait for wasm to complete its work:
-            wait_for_ack_last_event(it.timeout);
-
-            break;
-        }
-    }
-}
-
-uint32_t module::register_pc_event(uint32_t pc, uint32_t timeout_nsec) {
-    // put a 14 millisecond cap on the timeout so it doesn't take an entire 60fps frame (16.67 milliseconds):
-    if (timeout_nsec > 14000000UL) {
-        timeout_nsec = 14000000UL;
-    }
-
-    uint32_t event_id = ev_pc_break_start + (pc & 0x00ffffffUL);
-    int i;
-    for (i = 0; i < pc_events.size(); i++) {
-        auto &it = pc_events[i];
-        if (it.pc == pc || it.pc == 0) {
-            it.timeout = std::chrono::nanoseconds(timeout_nsec);
-            it.pc = pc;
-            i++;
-            break;
-        }
-    }
-    for (; i < pc_events.size(); i++) {
-        auto &it = pc_events[i];
-        if (it.pc == pc) {
-            it.pc = 0;
-        }
-    }
-
-    // return the event id:
-    return event_id;
-}
-
-void module::unregister_pc_event(uint32_t pc) {
-    for (int i = 0; i < pc_events.size(); i++) {
-        auto &it = pc_events[i];
-
-        if (it.pc == pc) {
-            it.pc = 0;
         }
     }
 }

@@ -42,11 +42,6 @@ struct vm_read {
     );
 };
 
-struct pc_event {
-    std::chrono::nanoseconds timeout;
-    uint32_t pc;
-};
-
 class module : public std::enable_shared_from_this<module> {
 public:
     module(
@@ -73,19 +68,15 @@ public:
 public:
     bool wait_for_event(uint32_t timeout_nsec, uint32_t &o_event);
 
-    void ack_last_event();
-
-    void wait_for_ack_last_event(std::chrono::nanoseconds timeout);
-
     void notify_event(uint32_t event_p);
 
     void debugger_enable(bool enabled);
 
     void notify_pc(uint32_t pc);
 
-    uint32_t register_pc_event(uint32_t pc, uint32_t timeout_nsec);
+    bool wait_for_exit();
 
-    void unregister_pc_event(uint32_t pc);
+    void notify_exit();
 
 public:
     int32_t vm_init();
@@ -109,12 +100,12 @@ private:
 
     std::mutex event_mtx;
     std::condition_variable event_notify_cv;
-    std::condition_variable event_ack_cv;
 
-    uint32_t event = wasm_event_kind::ev_none;
-    bool event_triggered = false;
+    std::queue<uint32_t> events{};
 
-    std::array<pc_event, 8> pc_events{};
+    std::mutex exit_mtx;
+    std::condition_variable exit_cv;
+    bool exited = false;
 
     std::mutex vm_mtx;
     struct iovm1_t vm{};
@@ -129,7 +120,7 @@ public:
     ppux ppux;
     net net;
 
-    uint32_t trace_mask = (1 << 0);
+    uint32_t trace_mask = (1UL << 0);
 
     template<typename ... Args>
     void trace_printf(uint32_t flags, const std::string& format, Args ... args) {
