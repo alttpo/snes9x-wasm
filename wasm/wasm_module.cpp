@@ -291,20 +291,30 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
                 cbs->a,
                 cbs->t
             );
-            inst->read_result.buf.reserve(cbs->len);
+            inst->read_result.buf.resize(cbs->len);
+            inst->addr_init = cbs->a;
+            inst->len_init = cbs->len;
+            if (cbs->d) {
+                // reverse direction:
+                cbs->a += cbs->len - 1;
+            }
         }
 
         for (int i = 0; (cbs->len > 0) && (i < bytes_per_cycle); i++) {
             // read a byte:
             uint8_t x;
             if (cbs->a < mem_len) {
-                x = *(mem + cbs->a++);
+                x = *(mem + cbs->a);
             } else {
                 // out of bounds access yields a 0 byte:
                 x = 0;
+            }
+            inst->read_result.buf[cbs->a - inst->addr_init] = x;
+            if (cbs->d) {
+                cbs->a--;
+            } else {
                 cbs->a++;
             }
-            inst->read_result.buf.push_back(x);
             cbs->len--;
         }
 
@@ -326,13 +336,27 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
             cbs->complete = true;
             return;
         }
+        if (cbs->initial) {
+            inst->addr_init = cbs->a;
+            inst->p_init = cbs->p;
+            inst->len_init = cbs->len;
+            if (cbs->d) {
+                // reverse direction:
+                cbs->a += cbs->len - 1;
+                cbs->p += cbs->len - 1;
+            }
+        }
 
         for (int i = 0; (cbs->len > 0) && (i < bytes_per_cycle); i++) {
-            // write a byte:
             if (cbs->a < mem_len) {
-                *(mem + cbs->a++) = cbs->m[cbs->p++];
+                // write a byte:
+                *(mem + cbs->a) = cbs->m[cbs->p];
+            }
+
+            if (cbs->d) {
+                cbs->a--;
+                cbs->p--;
             } else {
-                // out of bounds access:
                 cbs->a++;
                 cbs->p++;
             }
@@ -341,6 +365,8 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
 
         // finished with transfer?
         if (cbs->len == 0) {
+            cbs->a = inst->addr_init + inst->len_init;
+            cbs->p = inst->p_init + inst->len_init;
             cbs->complete = true;
         }
 

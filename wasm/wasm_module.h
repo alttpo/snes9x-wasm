@@ -54,6 +54,10 @@ struct vm_inst {
     vm_read_result read_result;
     std::queue<vm_read_result> read_queue{};
 
+    uint32_t addr_init;
+    uint32_t p_init;
+    uint32_t len_init;
+
     vm_inst();
 
     void trim_read_queue();

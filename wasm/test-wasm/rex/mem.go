@@ -50,7 +50,7 @@ func (m *MemoryTarget) BeginRead(p []byte, addr uint32) (err error) {
 
 	prog := [...]byte{
 		// set target:
-		IOVM1Instruction(IOVM1_OPCODE_SETTV, 0),
+		IOVM1Instruction(IOVM1_OPCODE_SETTDU, 0),
 		m.t,
 		// set address:
 		IOVM1Instruction(IOVM1_OPCODE_SETA24, 0),
@@ -93,7 +93,7 @@ func (m *MemoryTarget) BeginWrite(p []byte, addr uint32) (err error) {
 	prog = append(
 		prog,
 		// set target:
-		IOVM1Instruction(IOVM1_OPCODE_SETTV, 0),
+		IOVM1Instruction(IOVM1_OPCODE_SETTDU, 0),
 		m.t,
 		// set address:
 		IOVM1Instruction(IOVM1_OPCODE_SETA24, 0),
