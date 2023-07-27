@@ -131,6 +131,8 @@ public:
     net net;
 
     uint32_t trace_mask = (1UL << 0);
+    // for debugging:
+    //uint32_t trace_mask = (1UL << 0) | (1UL << 31);
 
     template<typename ... Args>
     void trace_printf(uint32_t flags, const std::string& format, Args ... args) {

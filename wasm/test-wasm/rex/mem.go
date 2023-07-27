@@ -117,3 +117,7 @@ func (m *MemoryTarget) BeginWrite(p []byte, addr uint32) (err error) {
 
 	return nil
 }
+
+func (m *MemoryTarget) Target() IOVM1Target {
+	return m.t
+}

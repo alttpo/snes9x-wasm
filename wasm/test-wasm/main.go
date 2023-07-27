@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/hex"
+	"errors"
 	"fmt"
 	"main/rex"
 	"unsafe"
@@ -62,6 +62,9 @@ func rotate() {
 
 var wram [0x20000]byte
 
+var errReadUnexpectedAddress = errors.New("read unexpected address")
+var errReadUnexpectedTarget = errors.New("read unexpected target")
+
 func blockingRead(m *rex.MemoryTarget, p []byte, addr uint32) (err error) {
 	if err = m.BeginRead(p, addr); err != nil {
 		return
@@ -75,11 +78,25 @@ func blockingRead(m *rex.MemoryTarget, p []byte, addr uint32) (err error) {
 		if !ok {
 			continue
 		}
+
+		if event == rex.Ev_iovm1_read_complete {
+			var chkAddr uint32
+			var chkTarget uint8
+			if _, chkAddr, chkTarget, err = rex.IOVM1[1].Read(p); err != nil {
+				return
+			}
+			if chkAddr != addr {
+				return errReadUnexpectedAddress
+			}
+			if chkTarget != m.Target() {
+				return errReadUnexpectedTarget
+			}
+		}
+
 		if event == rex.Ev_iovm1_end {
-			break
+			return
 		}
 	}
-	return
 }
 
 func main() {
@@ -206,7 +223,7 @@ func main() {
 
 		// poll for snes events:
 		var ok bool
-		event, ok = rex.EventWaitFor(time.Microsecond * 1000)
+		event, ok = rex.EventWaitFor(time.Microsecond * 16600)
 		if !ok {
 			continue
 		}
@@ -224,10 +241,12 @@ func main() {
 				_, _ = rex.Stdout.WriteString("error during iovm_read: ")
 				_, _ = rex.Stdout.WriteString(err.Error())
 				_, _ = rex.Stdout.WriteString("\n")
-			} else if n > 0 {
-				_, _ = rex.Stdout.WriteString(fmt.Sprintf("iovm_read: target=%d addr=%06x\n", target, addr))
-				_, _ = rex.Stdout.WriteString(hex.Dump(buf[:n]))
-				_, _ = rex.Stdout.WriteString("\n")
+				continue
+			}
+			if n > 0 {
+				//_, _ = rex.Stdout.WriteString(fmt.Sprintf("iovm_read: target=%d addr=%06x\n", target, addr))
+				//_, _ = rex.Stdout.WriteString(hex.Dump(buf[:n]))
+				//_, _ = rex.Stdout.WriteString("\n")
 				if target == rex.IOVM1_TARGET_WRAM {
 					// copy the read data into our wram copy:
 					copy(wram[addr:addr+n], buf[:n])
@@ -236,19 +255,15 @@ func main() {
 			continue
 		}
 
-		if event == rex.Ev_iovm0_end {
-			// end of IOVM program:
-			err = rex.IOVM1[0].Reset()
-			if err != nil {
-				_, _ = rex.Stdout.WriteString("iovm_reset: ")
-				_, _ = rex.Stdout.WriteString(err.Error())
-				_, _ = rex.Stdout.WriteString("\n")
-			}
+		if event != rex.Ev_iovm0_end {
 			continue
 		}
 
-		if event != rex.Ev_ppu_frame_start && event != rex.Ev_ppu_frame_skip {
-			continue
+		// end of IOVM program occurs on NMI; reset it:
+		if err = rex.IOVM1[0].Reset(); err != nil {
+			_, _ = rex.Stdout.WriteString("iovm_reset: ")
+			_, _ = rex.Stdout.WriteString(err.Error())
+			_, _ = rex.Stdout.WriteString("\n")
 		}
 
 		// write to bg2 main a rotating test pixel pattern:
