@@ -1,6 +1,5 @@
 
 #ifdef __WIN32__
-#  include <winsock2.h>
 #  include <process.h>
 #else
 #  include <unistd.h>
@@ -64,7 +63,11 @@ auto net::tcp_socket() -> int32_t {
 
     int res = socket_set_nonblocking(fd);
     if (res < 0) {
+#ifdef __WIN32__
+        ::closesocket(fd);
+#else
         ::close(fd);
+#endif
         return res;
     }
 
@@ -75,7 +78,11 @@ auto net::tcp_socket() -> int32_t {
 #else
     if (setsockopt(fd, SOL_SOCKET, TCP_NODELAY, (void *)&flags, sizeof(flags)) < 0) {
 #endif
+#ifdef __WIN32__
+        ::closesocket(fd);
+#else
         ::close(fd);
+#endif
         // TODO: translate to wasi error?
         return -errno;
     }
@@ -92,7 +99,11 @@ auto net::udp_socket() -> int32_t {
 
     int res = socket_set_nonblocking(fd);
     if (res < 0) {
+#ifdef __WIN32__
+        ::closesocket(fd);
+#else
         ::close(fd);
+#endif
         return res;
     }
 

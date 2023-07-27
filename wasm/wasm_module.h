@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <array>
 #include <utility>
 #include <thread>
 #include <vector>
@@ -11,7 +12,7 @@
 #include <string>
 
 #ifdef __WIN32__
-#include <winsock2.h>
+#define WIN32_LEAN_AND_MEAN
 #endif
 
 #include "snes9x.h"

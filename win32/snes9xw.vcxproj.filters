@@ -387,6 +387,9 @@
     <ClInclude Include="..\wasm\wasi_impl.h">
       <Filter>wasm</Filter>
     </ClInclude>
+    <ClInclude Include="..\wasm\shared\platform\platform_internal.h">
+      <Filter>wasm</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\bsx.cpp">
@@ -822,6 +825,9 @@
       <Filter>wasm</Filter>
     </ClCompile>
     <ClCompile Include="..\wasm\wasi_impl.cpp">
+      <Filter>wasm</Filter>
+    </ClCompile>
+    <ClCompile Include="..\wasm\shared\platform\platform_init.cpp">
       <Filter>wasm</Filter>
     </ClCompile>
   </ItemGroup>

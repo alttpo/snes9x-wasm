@@ -161,13 +161,19 @@ typedef uint8_t wasi_filetype_t;
 #define WASI_FILETYPE_SOCKET_STREAM    (6)
 #define WASI_FILETYPE_SYMBOLIC_LINK    (7)
 
-typedef struct wasi_fdstat_t {
+#ifdef _MSC_VER
+#  define ALIGNED(x) __declspec(align(x))
+#else
+#  define ALIGNED(x) __attribute__ ((aligned(x)))
+#endif
+
+typedef struct ALIGNED(8) wasi_fdstat_t {
     wasi_filetype_t fs_filetype;
     wasi_fdflags_t fs_flags;
     uint8_t padding[4];
     wasi_rights_t fs_rights_base;
     wasi_rights_t fs_rights_inheriting;
-} wasi_fdstat_t __attribute__((aligned(8)));
+} wasi_fdstat_t;
 
 typedef uint32_t wasi_clockid_t;
 #define WASI_CLOCK_REALTIME           (0)

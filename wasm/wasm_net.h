@@ -3,6 +3,7 @@
 #define SNES9X_WASM_NET_H
 
 #ifdef __WIN32__
+#include <ws2tcpip.h>
 typedef SOCKET native_socket;
 #else
 typedef int native_socket;

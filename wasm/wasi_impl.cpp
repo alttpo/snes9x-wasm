@@ -1,4 +1,11 @@
 
+#ifdef __WIN32__
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <ws2tcpip.h>
+#include <wincrypt.h>
+#endif
+
 #include <memory>
 #include <thread>
 #include <utility>
@@ -291,15 +298,22 @@ void wasm_host_register_wasi() {
     });
 
     natives->push_back({
-       "random_get",
-       (void *) (+[](wasm_exec_env_t exec_env, void *buf, uint32 buf_len) -> int32_t {
-           //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
-           arc4random_buf(buf, buf_len);
-           return 0;
-       }),
-       "(*~)i",
-       nullptr
-   });
+        "random_get",
+        (void *) (+[](wasm_exec_env_t exec_env, void *buf, uint32 buf_len) -> int32_t {
+            //auto m = reinterpret_cast<module *>(wasm_runtime_get_user_data(exec_env));
+#ifdef __WIN32__
+            HCRYPTPROV ctx;
+            CryptAcquireContext(&ctx, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT);
+            CryptGenRandom(ctx, buf_len, (BYTE *)buf);
+            CryptReleaseContext(ctx, 0);
+#else
+            arc4random_buf(buf, buf_len);
+#endif
+            return 0;
+        }),
+        "(*~)i",
+        nullptr
+    });
 
     natives->push_back({
         "proc_exit",

@@ -117,7 +117,7 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\;$(ProjectDir)..\..\;$(ProjectDir)zlib\src;$(ProjectDir)..\unzip;$(ProjectDir)libpng\src;$(ProjectDir)..\apu\bapu;$(ProjectDir)..\external\glslang;$(ProjectDir)..\external\stb;$(ProjectDir)..\external\vulkan-headers\include;$(ProjectDir)..\external\VulkanMemoryAllocator-Hpp\include;$(ProjectDir)..\external\fmt\include;$(ProjectDir)..\external\imgui;$(ProjectDir)..\wasm;$(ProjectDir)..\external\wamr\core\iwasm\include;$(ProjectDir)..\external\wamr\core\iwasm\libraries\thread-mgr</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\;$(ProjectDir)..\..\;$(ProjectDir)zlib\src;$(ProjectDir)..\unzip;$(ProjectDir)libpng\src;$(ProjectDir)..\apu\bapu;$(ProjectDir)..\external\glslang;$(ProjectDir)..\external\stb;$(ProjectDir)..\external\vulkan-headers\include;$(ProjectDir)..\external\VulkanMemoryAllocator-Hpp\include;$(ProjectDir)..\external\fmt\include;$(ProjectDir)..\external\imgui;$(ProjectDir)..\wasm;$(ProjectDir)..\external\wamr\core\iwasm\include;$(ProjectDir)..\external\wamr\core\iwasm\libraries\thread-mgr;$(ProjectDir)..\external\iovm;$(ProjectDir)..\external\wamr\core\iwasm\libraries\debug-engine;$(ProjectDir)..\external\wamr\core\shared\utils;$(ProjectDir)..\wasm\shared\platform;$(ProjectDir)..\external/wamr/core/shared/platform/include/</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_DEBUG;USE_WASM;ALLOW_CPU_OVERCLOCK;HAVE_LIBPNG;JMA_SUPPORT;ZLIB;UNZIP_SUPPORT;__WIN32__;NETPLAY_SUPPORT;D3D_DEBUG_INFO;DIRECTDRAW_SUPPORT;USE_SLANG;%(PreprocessorDefinitions);VK_USE_PLATFORM_WIN32_KHR;VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1;VMA_DYNAMIC_VULKAN_FUNCTIONS=1;VMA_STATIC_VULKAN_FUNCTIONS=0;VMA_USE_STL_SHARED_MUTEX=0;IMGUI_IMPL_VULKAN_NO_PROTOTYPES</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <StructMemberAlignment>Default</StructMemberAlignment>
@@ -169,7 +169,7 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\;$(ProjectDir)..\..\;$(ProjectDir)zlib\src;$(ProjectDir)..\unzip;$(ProjectDir)libpng\src;$(ProjectDir)..\apu\bapu;$(ProjectDir)..\external\glslang;$(ProjectDir)..\external\stb;$(ProjectDir)..\external\vulkan-headers\include;$(ProjectDir)..\external\VulkanMemoryAllocator-Hpp\include;$(ProjectDir)..\external\fmt\include;$(ProjectDir)..\external\imgui;$(ProjectDir)..\wasm;$(ProjectDir)..\external\wamr\core\iwasm\include;$(ProjectDir)..\external\wamr\core\iwasm\libraries\thread-mgr</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)..\;$(ProjectDir)..\..\;$(ProjectDir)zlib\src;$(ProjectDir)..\unzip;$(ProjectDir)libpng\src;$(ProjectDir)..\apu\bapu;$(ProjectDir)..\external\glslang;$(ProjectDir)..\external\stb;$(ProjectDir)..\external\vulkan-headers\include;$(ProjectDir)..\external\VulkanMemoryAllocator-Hpp\include;$(ProjectDir)..\external\fmt\include;$(ProjectDir)..\external\imgui;$(ProjectDir)..\wasm;$(ProjectDir)..\external\wamr\core\iwasm\include;$(ProjectDir)..\external\wamr\core\iwasm\libraries\thread-mgr;$(ProjectDir)..\external\iovm;$(ProjectDir)..\external\wamr\core\iwasm\libraries\debug-engine;$(ProjectDir)..\external\wamr\core\shared\utils;$(ProjectDir)..\wasm\shared\platform;$(ProjectDir)..\external/wamr/core/shared/platform/include/</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_DEBUG;USE_WASM;ALLOW_CPU_OVERCLOCK;HAVE_LIBPNG;JMA_SUPPORT;ZLIB;UNZIP_SUPPORT;__WIN32__;NETPLAY_SUPPORT;D3D_DEBUG_INFO;DIRECTDRAW_SUPPORT;USE_SLANG;%(PreprocessorDefinitions);VK_USE_PLATFORM_WIN32_KHR;VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1;VMA_DYNAMIC_VULKAN_FUNCTIONS=1;VMA_STATIC_VULKAN_FUNCTIONS=0;VMA_USE_STL_SHARED_MUTEX=0;IMGUI_IMPL_VULKAN_NO_PROTOTYPES</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <StructMemberAlignment>Default</StructMemberAlignment>
@@ -462,6 +462,7 @@
     <ClInclude Include="..\vulkan\vulkan_slang_pipeline.hpp" />
     <ClInclude Include="..\vulkan\vulkan_swapchain.hpp" />
     <ClInclude Include="..\vulkan\vulkan_texture.hpp" />
+    <ClInclude Include="..\wasm\shared\platform\platform_internal.h" />
     <ClInclude Include="..\wasm\wasi_impl.h" />
     <ClInclude Include="..\wasm\wasi_types.h" />
     <ClInclude Include="..\wasm\wasm_host.h" />
@@ -640,6 +641,7 @@
     <ClCompile Include="..\vulkan\vulkan_slang_pipeline.cpp" />
     <ClCompile Include="..\vulkan\vulkan_swapchain.cpp" />
     <ClCompile Include="..\vulkan\vulkan_texture.cpp" />
+    <ClCompile Include="..\wasm\shared\platform\platform_init.cpp" />
     <ClCompile Include="..\wasm\wasi_impl.cpp" />
     <ClCompile Include="..\wasm\wasm_host.cpp" />
     <ClCompile Include="..\wasm\wasm_module.cpp" />
