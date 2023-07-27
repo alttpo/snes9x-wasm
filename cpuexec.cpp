@@ -13,8 +13,8 @@
 #include "snapshot.h"
 #include "movie.h"
 
-#ifdef USE_WASM
-#include "wasm_host.h"
+#ifdef USE_REX
+#include "rex.h"
 #endif
 
 #ifdef DEBUGGER
@@ -70,10 +70,6 @@ void S9xMainLoop (void)
 
 				CHECK_FOR_IRQ_CHANGE();
 				S9xOpcode_NMI();
-
-#ifdef USE_WASM
-                wasm_host_notify_events(wasm_event_kind::ev_snes_nmi);
-#endif
 			}
 		}
 
@@ -104,18 +100,15 @@ void S9xMainLoop (void)
 				CHECK_FOR_IRQ_CHANGE();
 				S9xOpcode_IRQ();
 
-#ifdef USE_WASM
-                wasm_host_notify_events(wasm_event_kind::ev_snes_irq);
-#endif
 			}
 		}
 
 		/* Change IRQ flag for instructions that set it only on last cycle */
 		CHECK_FOR_IRQ_CHANGE();
 
-#ifdef USE_WASM
-        // notify wasm of current 24-bit PC address:
-        wasm_host_notify_pc(Registers.PC.xPBPC);
+#ifdef USE_REX
+        // notify rex of current 24-bit PC address:
+        rex_on_pc(Registers.PC.xPBPC);
 #endif
 
 	#ifdef DEBUGGER

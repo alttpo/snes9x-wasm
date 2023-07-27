@@ -56,8 +56,8 @@
 #include "../debug.h"
 #endif
 
-#ifdef USE_WASM
-#include "wasm_host.h"
+#ifdef USE_REX
+#include "rex.h"
 #endif
 
 #if (((defined(_MSC_VER) && _MSC_VER >= 1300)) || defined(__MINGW32__))
@@ -3302,9 +3302,9 @@ int WINAPI WinMain(
 	void InitSnes9x (void);
 	InitSnes9x ();
 
-#ifdef USE_WASM
-	// initialize wasm runtime:
-	wasm_host_init();
+#ifdef USE_REX
+	// initialize rex:
+	rex_host_init();
 #endif
 
 	if(GUI.FullScreen) {
@@ -3966,10 +3966,6 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 		S9xSaveCheatFile (S9xGetFilename (".cht", CHEAT_DIR).c_str());
 	}
 
-#ifdef USE_WASM
-	wasm_host_unload_all_modules();
-#endif
-
 	if(filename2)
 		Settings.StopEmulation = !LoadROMMulti(filename, filename2);
 	else
@@ -4014,30 +4010,8 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 		SetMenu(GUI.hWnd, NULL);
 	}
 
-#ifdef USE_WASM
-	{
-		auto wasm_filename = S9xGetFilename(".wasm", ROMFILENAME_DIR);
-
-		FILE *fp = fopen(wasm_filename.c_str(), "rb");
-		if (fp) {
-			uint8_t* module_binary;
-			uint32_t module_size;
-
-			fseek(fp, 0, SEEK_END);
-			module_size = ftell(fp);
-			module_binary = new uint8_t[module_size];
-
-			fseek(fp, 0, SEEK_SET);
-			fread(module_binary, module_size, 1, fp);
-
-			fclose(fp);
-
-			wasm_host_load_module(wasm_filename, module_binary, module_size);
-		}
-		else {
-			fprintf(stderr, "wasm: unable to load `%s`\n", wasm_filename.c_str());
-		}
-	}
+#ifdef USE_REX
+	rex_rom_loaded();
 #endif
 
 	return !Settings.StopEmulation;

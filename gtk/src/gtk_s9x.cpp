@@ -29,9 +29,8 @@
 
 #include <iomanip>
 
-#ifdef USE_WASM
-#include "gtk_wasm.h"
-#include "wasm_host.h"
+#ifdef USE_REX
+#include "rex.h"
 #endif
 
 static void S9xThrottle(int);
@@ -140,15 +139,9 @@ int main(int argc, char *argv[])
     Settings.Paused = true;
     S9xNoROMLoaded();
 
-#ifdef USE_WASM
-    // create wasm console window:
-    wasmWindow = new Snes9xWasm;
-    app->signal_startup().connect([&]{
-        app->add_window(*wasmWindow->window.get());
-    });
-
-    // initialize wasm runtime:
-    wasm_host_init();
+#ifdef USE_REX
+    // initialize rex:
+    rex_host_init();
 #endif
 
     if (rom_filename)
@@ -234,34 +227,8 @@ void S9xROMLoaded()
         top_level->enter_fullscreen_mode();
     }
 
-#ifdef USE_WASM
-    // unload existing modules first:
-    wasm_host_unload_all_modules();
-
-    gui_config->rom_loaded_at = std::chrono::steady_clock::now();
-
-    {
-        auto wasm_filename = S9xGetFilename(".wasm", ROMFILENAME_DIR);
-
-        FILE *fp = fopen(wasm_filename.c_str(), "rb");
-        if (fp) {
-            uint8_t *module_binary;
-            uint32_t module_size;
-
-            fseek(fp, 0, SEEK_END);
-            module_size = ftell(fp);
-            module_binary = new uint8_t[module_size];
-
-            fseek(fp, 0, SEEK_SET);
-            fread(module_binary, module_size, 1, fp);
-
-            fclose(fp);
-
-            wasm_host_load_module(wasm_filename, module_binary, module_size);
-        } else {
-            fprintf(stderr, "wasm: unable to load `%s`\n", wasm_filename.c_str());
-        }
-    }
+#ifdef USE_REX
+    rex_rom_loaded();
 #endif
 
     S9xSoundStart();
@@ -271,8 +238,8 @@ void S9xNoROMLoaded()
 {
     S9xSoundStop();
     gui_config->rom_loaded = false;
-#ifdef USE_WASM
-    wasm_host_unload_all_modules();
+#ifdef USE_REX
+    rex_rom_unloaded();
 #endif
     S9xDisplayRefresh();
     top_level->configure_widgets();
@@ -389,10 +356,6 @@ static bool S9xIdleFunc()
 
         S9xNetplayPop();
     }
-
-#if USE_WASM
-    wasmWindow->refresh();
-#endif
 
     return true;
 }
@@ -579,10 +542,6 @@ void S9xExit()
     S9xPortSoundDeinit();
 
     Settings.StopEmulation = true;
-
-#ifdef USE_WASM
-    wasm_host_unload_all_modules();
-#endif
 
     if (gui_config->rom_loaded)
     {

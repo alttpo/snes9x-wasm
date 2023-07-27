@@ -14,7 +14,7 @@ option(USE_XBRZ "Build the XBRZ family of filters" ON)
 option(USE_SYSTEMZIP "Force use of system minizip" ON)
 option(USE_WAYLAND "Build support for Wayland" ON)
 option(DANGEROUS_HACKS "Allow dangerous hacks to be used" ON)
-option(USE_WAMR "Enable WASM integrations through WAMR" ON)
+option(USE_REX "Enable REX (retro extensions)" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -41,7 +41,6 @@ add_compile_definitions(HAVE_LIBPNG
                         DATADIR=\"${DATADIR}\"
                         SNES9XLOCALEDIR=\"${LOCALEDIR}\")
 set(INCLUDES ../apu/bapu ../ src)
-set(SOURCES ../wasm/wasi_impl.cpp ../wasm/wasi_impl.h)
 set(ARGS -Wall -Wno-unused-parameter)
 set(LIBS)
 SET(LINKARGS)
@@ -262,42 +261,14 @@ if(DANGEROUS_HACKS)
     message("Dangerous hacks are enabled. Use at your own risk.")
 endif()
 
-if(USE_WAMR)
-    set (WAMR_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/../external/wamr)
+if(USE_REX)
+    list(APPEND DEFINES USE_REX EMULATE_FXPAKPRO)
 
-    #set (WAMR_BUILD_PLATFORM "darwin")
-    #set (WAMR_BUILD_TARGET "AARCH64")
-    set (WAMR_BUILD_INTERP 1)
-    set (WAMR_BUILD_DEBUG_INTERP 1) # for debugging
-    #set (WAMR_BUILD_FAST_INTERP 1) # if not debugging
-    set (WAMR_DISABLE_HW_BOUND_CHECK 1) # for debugging on M1 macos only
-    #set (WAMR_BUILD_FAST_JIT 1) # no aarch64 support
-    #set (WAMR_BUILD_JIT 1) # need LLVM
-    #set (WAMR_BUILD_AOT 1)
-    set (WAMR_BUILD_LIBC_BUILTIN 1)
-    #set (WAMR_BUILD_LIBC_WASI 1) # disabled due to minimal reimplementation in wasm/wasi_impl.cpp
-    set (WAMR_BUILD_SIMD 1)
-    set (WAMR_BUILD_THREAD_MGR 1)
-    #set (WAMR_BUILD_LIB_WASI_THREADS 1)
-    # point to our custom platform definition to override os_printf et al:
-    set (SHARED_PLATFORM_CONFIG ../wasm/shared/platform/shared_platform.cmake)
-
-    include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
-    add_library(vmlib ${WAMR_RUNTIME_LIB_SOURCE})
-
-    list (APPEND LIBS vmlib)
-
-    list (APPEND DEFINES USE_WASM EMULATE_FXPAKPRO)
-
-    list(APPEND INCLUDES ../wasm)
+    list(APPEND INCLUDES ../rex)
     list(APPEND SOURCES
-            ../wasm/wasm_host.cpp
-            ../wasm/wasi_impl.cpp
-            ../wasm/wasm_module.cpp
-            ../wasm/wasm_ppux.cpp
-            ../wasm/wasm_net.cpp
-            src/gtk_wasm.cpp
-            src/gtk_wasm.h
+            ../rex/rex.cpp
+            ../rex/rex_ppux.cpp
+            ../rex/rex_iovm.cpp
             )
 
     list(APPEND INCLUDES ../external/iovm)

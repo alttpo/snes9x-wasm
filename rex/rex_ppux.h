@@ -1,6 +1,6 @@
 
-#ifndef SNES9X_WASM_PPUX_H
-#define SNES9X_WASM_PPUX_H
+#ifndef SNES9X_REX_PPUX_H
+#define SNES9X_REX_PPUX_H
 
 #include <cstdint>
 #include <vector>
@@ -104,4 +104,4 @@ private:
     void draw_vram_tile(unsigned x0, unsigned y0, unsigned w, unsigned h, const uint8_t *vram, const uint8_t *cgram, PLOT plot);
 };
 
-#endif //SNES9X_WASM_PPUX_H
+#endif //SNES9X_REX_PPUX_H

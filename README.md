@@ -1,18 +1,6 @@
-# WebAssembly
+# REX
 
-This fork of snes9x is able to execute WebAssembly modules in parallel to the emulation core. The goal is to allow easy
-integration of game-enhancing code written in any language which compiles to WebAssembly (e.g. C/C++, Rust, Go, etc.).
-
-WebAssembly modules can take advantage of the following features to enhance existing games:
- * await emulator events per frame (i.e. synchronize WebAssembly execution with SNES game loops)
- * register custom emulator events at specific execution addresses (PC) of the SNES CPU
- * read data from emulated memories
- * write data to emulated memories
- * communicate with external network services
- * render custom graphics integrated into the SNES scene with support for all PPU features (layering, windowing, 
-   color math, etc.)
-
-See [documentation](wasm.md) for WebAssembly host exports.
+See [rex.md](rex.md) for documentation on REX subsystems.
 
 # MacOS build
 This fork enables a working MacOS build of snes9x from the GTK port using cmake instead of XCode.

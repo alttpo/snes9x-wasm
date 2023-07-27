@@ -14,8 +14,8 @@
 #include "screenshot.h"
 #include "display.h"
 
-#ifdef USE_WASM
-#include "wasm_host.h"
+#ifdef USE_REX
+#include "rex.h"
 #endif
 
 extern struct SCheatData		Cheat;
@@ -183,13 +183,13 @@ void S9xStartScreenRefresh (void)
 		memset(GFX.ZBuffer, 0, GFX.ScreenSize);
 		memset(GFX.SubZBuffer, 0, GFX.ScreenSize);
 
-#ifdef USE_WASM
-        wasm_host_frame_start();
+#ifdef USE_REX
+        rex_host_frame_start();
 #endif
 	}
-#ifdef USE_WASM
+#ifdef USE_REX
     else {
-        wasm_host_frame_skip();
+        rex_host_frame_skip();
     }
 #endif
 
@@ -212,8 +212,8 @@ void S9xEndScreenRefresh (void)
 	{
 		FLUSH_REDRAW();
 
-#ifdef USE_WASM
-        wasm_host_frame_end();
+#ifdef USE_REX
+        rex_host_frame_end();
 #endif
 
 		if (GFX.DoInterlace && S9xInterlaceField() == 0)
@@ -327,9 +327,9 @@ static inline void RenderScreen (bool8 sub)
 	uint8	BGActive;
 	int		D;
 
-#ifdef USE_WASM
-#   define DO_BG_PPUX(n, Zh, Zl)    wasm_ppux_render_bg_lines(n, sub, D + Zh, D + Zl);
-#   define DO_OBJ_PPUX()            wasm_ppux_render_obj_lines(sub, D + 4)
+#ifdef USE_REX
+#   define DO_BG_PPUX(n, Zh, Zl)    rex_ppux_render_bg_lines(n, sub, D + Zh, D + Zl);
+#   define DO_OBJ_PPUX()            rex_ppux_render_obj_lines(sub, D + 4)
 #else
 #   define DO_BG_PPUX(n, Zh, Zl)
 #   define DO_OBJ_PPUX()

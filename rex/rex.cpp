@@ -1,0 +1,52 @@
+
+#include "rex.h"
+
+struct rex rex;
+
+void rex_host_init() {}
+
+void rex_rom_loaded() {}
+
+void rex_rom_unloaded() {}
+
+void rex_on_pc(uint32_t pc) {
+    rex.on_pc(pc);
+}
+
+void rex_host_frame_start() {
+    rex.ppux.render_cmd();
+}
+
+void rex_ppux_render_obj_lines(bool sub, uint8_t zstart) {
+    ppux &ppux = rex.ppux;
+    ppux.priority_depth_map[0] = zstart;
+    ppux.priority_depth_map[1] = zstart + 4;
+    ppux.priority_depth_map[2] = zstart + 8;
+    ppux.priority_depth_map[3] = zstart + 12;
+
+    if (sub) {
+        ppux.render_line_sub(ppux::layer::OBJ);
+    } else {
+        ppux.render_line_main(ppux::layer::OBJ);
+    }
+}
+
+void rex_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
+    ppux &ppux = rex.ppux;
+    ppux.priority_depth_map[0] = zl;
+    ppux.priority_depth_map[1] = zh;
+    ppux.priority_depth_map[2] = zl;
+    ppux.priority_depth_map[3] = zh;
+
+    if (sub) {
+        ppux.render_line_sub((ppux::layer) layer);
+    } else {
+        ppux.render_line_main((ppux::layer) layer);
+    }
+}
+
+void rex_host_frame_end() {
+}
+
+void rex_host_frame_skip() {
+}

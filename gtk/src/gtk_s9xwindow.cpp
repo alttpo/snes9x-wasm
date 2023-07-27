@@ -40,11 +40,6 @@
 #include "snapshot.h"
 #include "netplay.h"
 
-#ifdef USE_WASM
-#include "wasm_host.h"
-#include "gtk_wasm.h"
-#endif
-
 static Glib::RefPtr<Gtk::FileFilter> get_save_states_file_filter()
 {
     const char *exts[] = { "*.sst", "*.000", "*.001", "*.002", "*.003", "*.004",
@@ -63,86 +58,6 @@ static Glib::RefPtr<Gtk::FileFilter> get_all_files_filter()
     filter->add_pattern("*.*");
     filter->add_pattern("*");
     return filter;
-}
-
-static size_t snes9x_wasm_append_text(const char *text_begin, const char *text_end) {
-#if 1
-    // true iff the last write ended in a newline:
-    static bool newline = true;
-    static std::mutex mtx;
-
-    auto last_emit = std::chrono::steady_clock::now();
-    auto since = std::chrono::duration_cast<std::chrono::microseconds>(
-        last_emit - gui_config->rom_loaded_at
-    ).count();
-
-    std::unique_lock<std::mutex> lk(mtx);
-
-    // prefix all lines with the same timestamp:
-    const void *s = text_begin;
-    const void *nl;
-    while ((nl = std::memchr(s, '\n', (const char *)text_end - (const char *)s))) {
-        if (newline) {
-            fprintf(stdout, "[%12lld us] ", since);
-        }
-        fwrite(s, 1, ((const char *)nl + 1 - (const char *)s), stdout);
-        s = (const char *)nl + 1;
-        newline = true;
-    }
-
-    // prefix the last line:
-    if (s < text_end) {
-        if (newline) {
-            fprintf(stdout, "[%12lld us] ", since);
-        }
-        fwrite(s, 1, (text_end - (const char *)s), stdout);
-        newline = false;
-    }
-#else
-    static Glib::ustring buf{};
-    static std::mutex buf_mtx{};
-
-    {
-        std::unique_lock<std::mutex> lk(buf_mtx);
-        buf.append(text_begin, text_end - text_begin);
-    }
-
-    Glib::MainContext::get_default()->invoke([]() -> bool {
-        {
-            std::unique_lock<std::mutex> lk(buf_mtx);
-            if (buf.empty()) {
-                return false;
-            }
-
-            auto textBuffer = top_level->wasmTextBuffer;
-            if (!textBuffer) {
-                return false;
-            }
-
-            // append to end of buffer:
-            auto iter = textBuffer->end();
-            textBuffer->insert(iter, buf);
-            buf.clear();
-        }
-
-        {
-            // scroll to end of buffer in wasmWindow's TextView:
-            if (wasmWindow && wasmWindow->auto_scroll) {
-                auto textView = wasmWindow->get_object<Gtk::TextView>("wasm_console_view");
-                if (textView) {
-                    auto textBuffer = top_level->wasmTextBuffer;
-                    auto iter = textBuffer->end();
-                    textView->scroll_to(iter);
-                }
-                wasmWindow->refresh();
-            }
-        }
-
-        return false;
-    });
-#endif
-
-    return text_end - text_begin;
 }
 
 Snes9xWindow::Snes9xWindow(Snes9xConfig *config)
@@ -196,13 +111,6 @@ Snes9xWindow::Snes9xWindow(Snes9xConfig *config)
     window->get_window()->set_cursor();
 
     resize(config->window_width, config->window_height);
-
-#ifdef USE_WASM
-    // redirect wasm stdout/stderr to append to our text buffer:
-    wasmTextBuffer = Gtk::TextBuffer::create();
-    wasm_host_set_wasi_stdout_cb(snes9x_wasm_append_text);
-    wasm_host_set_wasi_stderr_cb(snes9x_wasm_append_text);
-#endif
 }
 
 void Snes9xWindow::connect_signals()
@@ -361,14 +269,6 @@ void Snes9xWindow::connect_signals()
     get_object<Gtk::MenuItem>("open_multicart_item")->signal_activate().connect([&] {
         open_multicart_dialog();
     });
-
-#ifdef USE_WASM
-    get_object<Gtk::MenuItem>("wasm_console_item")->signal_activate().connect([&] {
-        snes9x_wasm_open(this);
-    });
-#else
-    get_object<Gtk::MenuItem>("wasm_console_item")->hide();
-#endif
 }
 
 bool Snes9xWindow::button_press(GdkEventButton *event)

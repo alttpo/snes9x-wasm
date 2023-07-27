@@ -1,11 +1,11 @@
 
-#include "wasm_module.h"
-#include "wasm_ppux.h"
+#include <cassert>
 
 #include "snes9x.h"
 #include "gfx.h"
 #include "tileimpl.h"
-#include <cassert>
+
+#include "rex.h"
 
 ppux::ppux() {
     // initialize ppux layers:
@@ -212,7 +212,7 @@ bool ppux::cmd_write(uint32_t *data, uint32_t size) {
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
             // MSB must be 1 to indicate opcode/size start of frame:
-            wasm_host_stderr_printf(
+            fprintf(stderr,
                 "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
                 it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
@@ -303,7 +303,7 @@ void ppux::render_cmd() {
         //   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
         //                                                          s = size of command data in uint32_ts
         if ((*it & (1 << 31)) == 0) {
-            wasm_host_stderr_printf("cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.begin());
+            fprintf(stderr, "cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.begin());
             cmd.erase(cmd.begin(), cmd.end());
             return;
         }
@@ -367,7 +367,7 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::iterator it, std::vector<uint
 
     it++;
 
-    // copy pixels in; see comment in wasm_ppux.h for uint32_t bits representation:
+    // copy pixels in; see comment in rex_ppux.h for uint32_t bits representation:
     auto x1 = x0 + width;
     auto offs = (y0 * pitch);
     std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
@@ -579,70 +579,4 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::iterator it, std::vector<u
 
     dirty_top = std::min((int) y0, dirty_top);
     dirty_bottom = std::max((int) (y0 + height), dirty_bottom);
-}
-
-void wasm_host_frame_start() {
-    for_each_module(
-        [=](const std::shared_ptr<module>& m) {
-            m->notify_event(wasm_event_kind::ev_ppu_frame_start);
-        }
-    );
-    for_each_module(
-        [=](const std::shared_ptr<module>& m) {
-            //m->wait_for_ack_last_event(std::chrono::microseconds(2000));
-            m->ppux.render_cmd();
-        }
-    );
-}
-
-void wasm_ppux_render_obj_lines(bool sub, uint8_t zstart) {
-    for_each_module(
-        [=](const std::shared_ptr<module>& m) {
-            ppux &ppux = m->ppux;
-            ppux.priority_depth_map[0] = zstart;
-            ppux.priority_depth_map[1] = zstart + 4;
-            ppux.priority_depth_map[2] = zstart + 8;
-            ppux.priority_depth_map[3] = zstart + 12;
-
-            if (sub) {
-                ppux.render_line_sub(ppux::layer::OBJ);
-            } else {
-                ppux.render_line_main(ppux::layer::OBJ);
-            }
-        }
-    );
-}
-
-void wasm_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
-    for_each_module(
-        [=](const std::shared_ptr<module>& m) {
-            ppux &ppux = m->ppux;
-            ppux.priority_depth_map[0] = zl;
-            ppux.priority_depth_map[1] = zh;
-            ppux.priority_depth_map[2] = zl;
-            ppux.priority_depth_map[3] = zh;
-
-            if (sub) {
-                ppux.render_line_sub((ppux::layer) layer);
-            } else {
-                ppux.render_line_main((ppux::layer) layer);
-            }
-        }
-    );
-}
-
-void wasm_host_frame_end() {
-    for_each_module(
-        [=](const std::shared_ptr<module>& m) {
-            m->notify_event(wasm_event_kind::ev_ppu_frame_end);
-        }
-    );
-}
-
-void wasm_host_frame_skip() {
-    for_each_module(
-        [=](const std::shared_ptr<module>& m) {
-            m->notify_event(wasm_event_kind::ev_ppu_frame_skip);
-        }
-    );
 }
