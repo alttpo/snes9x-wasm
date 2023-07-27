@@ -69,11 +69,14 @@ static size_t snes9x_wasm_append_text(const char *text_begin, const char *text_e
 #if 1
     // true iff the last write ended in a newline:
     static bool newline = true;
+    static std::mutex mtx;
 
     auto last_emit = std::chrono::steady_clock::now();
     auto since = std::chrono::duration_cast<std::chrono::microseconds>(
         last_emit - gui_config->rom_loaded_at
     ).count();
+
+    std::unique_lock<std::mutex> lk(mtx);
 
     // prefix all lines with the same timestamp:
     const void *s = text_begin;
