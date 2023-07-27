@@ -265,9 +265,8 @@ endif()
 if(USE_WAMR)
     set (WAMR_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/../external/wamr)
 
-    # TODO: detect platform and target arch
-    set (WAMR_BUILD_PLATFORM "darwin")
-    set (WAMR_BUILD_TARGET "AARCH64")
+    #set (WAMR_BUILD_PLATFORM "darwin")
+    #set (WAMR_BUILD_TARGET "AARCH64")
     set (WAMR_BUILD_INTERP 1)
     set (WAMR_BUILD_DEBUG_INTERP 1) # for debugging
     #set (WAMR_BUILD_FAST_INTERP 1) # if not debugging
