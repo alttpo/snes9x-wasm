@@ -257,15 +257,18 @@ void vm_inst::trim_read_queue() {
     }
 }
 
+static const int bytes_per_cycle = 4;
+
 extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs) {
     auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
     auto m = inst->m;
+
     auto mt = memory_target(cbs->t);
     auto mem = mt.first;
     auto mem_len = mt.second;
 
     if (cbs->o == IOVM1_OPCODE_READ) {
-        // read one byte per cycle:
+        // initialize transfer:
         if (cbs->initial) {
             if (!mem) {
                 // memory target not defined; fill read buffer with 0s:
@@ -291,6 +294,20 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
             inst->read_result.buf.reserve(cbs->len);
         }
 
+        for (int i = 0; (cbs->len > 0) && (i < bytes_per_cycle); i++) {
+            // read a byte:
+            uint8_t x;
+            if (cbs->a < mem_len) {
+                x = *(mem + cbs->a++);
+            } else {
+                // out of bounds access yields a 0 byte:
+                x = 0;
+                cbs->a++;
+            }
+            inst->read_result.buf.push_back(x);
+            cbs->len--;
+        }
+
         // finished with transfer?
         if (cbs->len == 0) {
             // push out the current read buffer:
@@ -298,20 +315,7 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
             inst->trim_read_queue();
             cbs->complete = true;
             m->notify_event(ev_iovm0_read_complete + inst->n);
-            return;
         }
-
-        // read a byte:
-        uint8_t x;
-        if (cbs->a < mem_len) {
-            x = *(mem + cbs->a++);
-        } else {
-            // out of bounds access yields a 0 byte:
-            x = 0;
-            cbs->a++;
-        }
-        inst->read_result.buf.push_back(x);
-        cbs->len--;
 
         return;
     }
@@ -323,21 +327,22 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
             return;
         }
 
+        for (int i = 0; (cbs->len > 0) && (i < bytes_per_cycle); i++) {
+            // write a byte:
+            if (cbs->a < mem_len) {
+                *(mem + cbs->a++) = cbs->m[cbs->p++];
+            } else {
+                // out of bounds access:
+                cbs->a++;
+                cbs->p++;
+            }
+            cbs->len--;
+        }
+
         // finished with transfer?
         if (cbs->len == 0) {
             cbs->complete = true;
-            return;
         }
-
-        // write a byte:
-        if (cbs->a < mem_len) {
-            *(mem + cbs->a++) = cbs->m[cbs->p++];
-        } else {
-            // out of bounds access:
-            cbs->a++;
-            cbs->p++;
-        }
-        cbs->len--;
 
         return;
     }
