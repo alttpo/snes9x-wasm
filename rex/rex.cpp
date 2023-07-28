@@ -3,17 +3,23 @@
 
 struct rex rex;
 
-void rex_host_init() {}
+void rex_host_init() {
+}
 
-void rex_rom_loaded() {}
+void rex_rom_loaded() {
+    rex.start();
+}
 
-void rex_rom_unloaded() {}
+void rex_rom_unloaded() {
+    rex.shutdown();
+}
 
 void rex_on_pc(uint32_t pc) {
     rex.on_pc(pc);
 }
 
 void rex_host_frame_start() {
+    rex.handle_net();
     rex.ppux.render_cmd();
 }
 
@@ -49,4 +55,84 @@ void rex_host_frame_end() {
 }
 
 void rex_host_frame_skip() {
+}
+
+
+void rex::start() {
+    listener = sock::make_tcp();
+    if (!(bool)*listener) {
+        fprintf(stderr, "failed to allocate socket: %s\n", listener->error_text().c_str());
+        return;
+    }
+
+    listener->bind(0x7F000001UL, 0x2C00); // 11264
+    if (!(bool)*listener) {
+        fprintf(stderr, "failed to bind socket: %s\n", listener->error_text().c_str());
+        return;
+    }
+    listener->listen();
+    if (!(bool)*listener) {
+        fprintf(stderr, "failed to listen on socket: %s\n", listener->error_text().c_str());
+        return;
+    }
+
+    all_socks.push_back(listener);
+}
+
+void rex::shutdown() {
+    for (auto &item: clients) {
+        item.reset();
+    }
+    listener.reset();
+}
+
+void rex::handle_net() {
+    int n;
+    int err;
+    if (!sock::poll(all_socks, n, err)) {
+        // TODO
+        fprintf(stderr, "poll failed: %s\n", strerror(err));
+        return;
+    }
+
+    for (auto it = clients.begin(); it != clients.end();) {
+        auto &cl = *it;
+
+        // close errored-out clients and remove them:
+        if (cl->isErrored() || cl->isClosed()) {
+            fprintf(stderr, "client closed\n");
+            cl.reset();
+            all_socks.erase(all_socks.begin() + 1 + (it - clients.begin()));
+            it = clients.erase(it);
+            assert(all_socks.size() >= 1);
+            continue;
+        }
+        if (!cl->isReadAvailable()) {
+            it++;
+            continue;
+        }
+
+        // read available data:
+        ssize_t n;
+        uint8_t data[8192];
+        cl->recv(data, sizeof(data), n);
+        // TODO
+        fprintf(stderr, "received data from client\n");
+        it++;
+    }
+
+    if (listener->isReadAvailable()) {
+        uint32_t ip;
+        uint16_t port;
+
+        auto accepted = listener->accept(ip, port);
+        if (!(bool)*accepted) {
+            fprintf(stderr, "failed to accept socket: %s\n", listener->error_text().c_str());
+            return;
+        }
+
+        fprintf(stderr, "accepted connection from %08x:%04x\n", ip, port);
+        all_socks.push_back(accepted);
+        clients.push_back(accepted);
+    }
 }

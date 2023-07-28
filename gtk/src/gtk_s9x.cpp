@@ -136,13 +136,13 @@ int main(int argc, char *argv[])
     gui_config->rebind_keys();
     top_level->update_accelerators();
 
-    Settings.Paused = true;
-    S9xNoROMLoaded();
-
 #ifdef USE_REX
     // initialize rex:
     rex_host_init();
 #endif
+
+    Settings.Paused = true;
+    S9xNoROMLoaded();
 
     if (rom_filename)
     {

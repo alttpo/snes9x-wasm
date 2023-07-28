@@ -269,6 +269,7 @@ if(USE_REX)
             ../rex/rex.cpp
             ../rex/rex_ppux.cpp
             ../rex/rex_iovm.cpp
+            ../rex/sock.cpp
             )
 
     list(APPEND INCLUDES ../external/iovm)

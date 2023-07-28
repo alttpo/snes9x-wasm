@@ -4,6 +4,7 @@
 
 #include "rex_ppux.h"
 #include "rex_iovm.h"
+#include "sock.h"
 
 struct rex {
     struct ppux ppux;
@@ -22,6 +23,18 @@ struct rex {
     friend void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs);
 
     void on_pc(uint32_t pc);
+
+    void start();
+
+    void shutdown();
+
+    void handle_net();
+
+private:
+    sock_sp listener;
+    std::vector<sock_sp> clients;
+
+    std::vector<sock_sp> all_socks;
 };
 
 void rex_host_init();
