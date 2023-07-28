@@ -13,7 +13,10 @@
 #include "rex.h"
 
 #define IOVM1_USE_USERDATA
+
 #include "iovm.c"
+#include "rex_iovm.h"
+
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -21,12 +24,15 @@ vm_read_result::vm_read_result() : len(0), a(0), t(0), buf() {}
 
 vm_read_result::vm_read_result(
     const std::vector<uint8_t> &buf_p,
-    uint16_t len_p,
+    uint32_t len_p,
     uint32_t a_p,
     uint8_t t_p
 ) : len(len_p), a(a_p), t(t_p), buf(buf_p) {}
 
-vm_inst::vm_inst() : m(nullptr), n(-1) {}
+
+vm_inst::vm_inst(vm_notifier *notifier_p) :
+    notifier(notifier_p)
+{}
 
 static std::pair<uint8_t *, uint32_t> memory_target(iovm1_target target) {
     switch (target) {
@@ -43,7 +49,7 @@ static std::pair<uint8_t *, uint32_t> memory_target(iovm1_target target) {
         case 4: // VRAM:
             return {Memory.VRAM, sizeof(Memory.VRAM)};
         case 5: // CGRAM:
-            return {(uint8_t*)PPU.CGDATA, sizeof(PPU.CGDATA)};
+            return {(uint8_t *) PPU.CGDATA, sizeof(PPU.CGDATA)};
         case 6: // OAM:
             return {PPU.OAMData, sizeof(PPU.OAMData)};
         default: // memory target not defined:
@@ -51,19 +57,14 @@ static std::pair<uint8_t *, uint32_t> memory_target(iovm1_target target) {
     }
 }
 
-void vm_inst::trim_read_queue() {
-    // remove oldest unread buffers to prevent infinite growth:
-    while (read_queue.size() > 1024) {
-        read_queue.pop();
-    }
-}
-
 static const int bytes_per_cycle = 4;
 
 extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs) {
     auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
-    auto m = inst->m;
+    inst->opcode_cb(cbs);
+}
 
+void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
     auto mt = memory_target(cbs->t);
     auto mem = mt.first;
     auto mem_len = mt.second;
@@ -73,28 +74,28 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
         if (cbs->initial) {
             if (!mem) {
                 // memory target not defined; fill read buffer with 0s:
-                inst->read_queue.emplace(
-                    std::vector<uint8_t>(cbs->len, (uint8_t) 0),
-                    cbs->len,
-                    cbs->a,
-                    cbs->t
-                );
-                inst->trim_read_queue();
                 cbs->complete = true;
-                //TODO: m->notify_event(ev_iovm0_read_complete + inst->n);
+                notifier->vm_read_complete(
+                    vm_read_result{
+                        std::vector<uint8_t>(cbs->len, (uint8_t) 0),
+                        cbs->len,
+                        cbs->a,
+                        cbs->t
+                    }
+                );
                 return;
             }
 
             // reserve enough space:
-            inst->read_result = vm_read_result(
+            read_result = vm_read_result(
                 std::vector<uint8_t>(),
                 cbs->len,
                 cbs->a,
                 cbs->t
             );
-            inst->read_result.buf.resize(cbs->len);
-            inst->addr_init = cbs->a;
-            inst->len_init = cbs->len;
+            read_result.buf.resize(cbs->len);
+            addr_init = cbs->a;
+            len_init = cbs->len;
             if (cbs->d) {
                 // reverse direction:
                 cbs->a += cbs->len - 1;
@@ -110,7 +111,7 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
                 // out of bounds access yields a 0 byte:
                 x = 0;
             }
-            inst->read_result.buf[cbs->a - inst->addr_init] = x;
+            read_result.buf[cbs->a - addr_init] = x;
             if (cbs->d) {
                 cbs->a--;
             } else {
@@ -122,10 +123,8 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
         // finished with transfer?
         if (cbs->len == 0) {
             // push out the current read buffer:
-            inst->read_queue.push(std::move(inst->read_result));
-            inst->trim_read_queue();
             cbs->complete = true;
-            //TODO: m->notify_event(ev_iovm0_read_complete + inst->n);
+            notifier->vm_read_complete(std::move(read_result));
         }
 
         return;
@@ -138,9 +137,9 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
             return;
         }
         if (cbs->initial) {
-            inst->addr_init = cbs->a;
-            inst->p_init = cbs->p;
-            inst->len_init = cbs->len;
+            addr_init = cbs->a;
+            p_init = cbs->p;
+            len_init = cbs->len;
             if (cbs->d) {
                 // reverse direction:
                 cbs->a += cbs->len - 1;
@@ -166,8 +165,8 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
 
         // finished with transfer?
         if (cbs->len == 0) {
-            cbs->a = inst->addr_init + inst->len_init;
-            cbs->p = inst->p_init + inst->len_init;
+            cbs->a = addr_init + len_init;
+            cbs->p = p_init + len_init;
             cbs->complete = true;
         }
 
@@ -217,100 +216,43 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
     cbs->complete = !cond;
 }
 
-int32_t rex::vm_init(unsigned n) {
-    if (n >= vms.size()) {
-        return IOVM1_ERROR_OUT_OF_RANGE;
-    }
+int32_t vm_inst::vm_init() {
+    std::unique_lock<std::mutex> lk(vm_mtx);
 
-    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
-
-    iovm1_init(&vms[n].vm);
-    iovm1_set_userdata(&vms[n].vm, (void *) &vms[n]);
+    iovm1_init(&vm);
+    iovm1_set_userdata(&vm, (void *) this);
 
     return IOVM1_SUCCESS;
 }
 
-int32_t rex::vm_load(unsigned n, const uint8_t *vmprog, uint32_t vmprog_len) {
-    if (n >= vms.size()) {
-        return IOVM1_ERROR_OUT_OF_RANGE;
-    }
+int32_t vm_inst::vm_load(const uint8_t *vmprog, uint32_t vmprog_len) {
+    std::unique_lock<std::mutex> lk(vm_mtx);
 
-    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
-
-    return iovm1_load(&vms[n].vm, vmprog, vmprog_len);
+    return iovm1_load(&vm, vmprog, vmprog_len);
 }
 
-iovm1_state rex::vm_getstate(unsigned n) {
-    if (n >= vms.size()) {
-        return static_cast<iovm1_state>(-1);
-    }
+iovm1_state vm_inst::vm_getstate() {
+    std::unique_lock<std::mutex> lk(vm_mtx);
 
-    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
-
-    return iovm1_get_exec_state(&vms[n].vm);
+    return iovm1_get_exec_state(&vm);
 }
 
-int32_t rex::vm_reset(unsigned n) {
-    if (n >= vms.size()) {
-        return IOVM1_ERROR_OUT_OF_RANGE;
-    }
+int32_t vm_inst::vm_reset() {
+    std::unique_lock<std::mutex> lk(vm_mtx);
 
-    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
-
-    return iovm1_exec_reset(&vms[n].vm);
+    return iovm1_exec_reset(&vm);
 }
 
-int32_t rex::vm_read_data(unsigned n, uint8_t *dst, uint32_t dst_len, uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target) {
-    if (n >= vms.size()) {
-        return IOVM1_ERROR_OUT_OF_RANGE;
-    }
-
-    std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
-
-    *o_read = 0;
-    *o_addr = -1;
-    *o_target = -1;
-
-    std::queue<vm_read_result> &rq = vms[n].read_queue;
-
-    if (rq.empty()) {
-        return IOVM1_ERROR_NO_DATA;
-    }
-
-    auto &v = rq.front();
-    *o_addr = v.a;
-    *o_target = v.t;
-
-    if (v.buf.size() > dst_len) {
-        // not enough space to read into:
-        return IOVM1_ERROR_BUFFER_TOO_SMALL;
-    }
-
-    // fill in the buffer:
-    uint32_t i;
-    for (i = 0; i < v.buf.size(); i++) {
-        dst[i] = v.buf[i];
-    }
-    *o_read = v.buf.size();
-
-    rq.pop();
-
-    return IOVM1_SUCCESS;
-}
-
-void rex::on_pc(uint32_t pc) {
+void vm_inst::on_pc(uint32_t pc) {
     // this method is called before every instruction:
 
-    for (unsigned n = 0; n < 2; n++) {
-        // execute opcodes in the iovm until a blocking operation (read, write, while) occurs:
-        std::unique_lock<std::mutex> lk(vms[n].vm_mtx);
-        auto last_state = iovm1_get_exec_state(&vms[n].vm);
-        if (IOVM1_SUCCESS == iovm1_exec(&vms[n].vm)) {
-            auto curr_state = iovm1_get_exec_state(&vms[n].vm);
-            if ((curr_state != last_state) && (curr_state == IOVM1_STATE_ENDED)) {
-                // fire ev_iovm_end event:
-                //TODO: notify_event(ev_iovm0_end + n);
-            }
+    // execute opcodes in the iovm until a blocking operation (read, write, while) occurs:
+    std::unique_lock<std::mutex> lk(vm_mtx);
+    auto last_state = iovm1_get_exec_state(&vm);
+    if (IOVM1_SUCCESS == iovm1_exec(&vm)) {
+        auto curr_state = iovm1_get_exec_state(&vm);
+        if ((curr_state != last_state) && (curr_state == IOVM1_STATE_ENDED)) {
+            notifier->vm_ended();
         }
     }
 }

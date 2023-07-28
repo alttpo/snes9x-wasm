@@ -2,26 +2,22 @@
 #ifndef SNES9X_REX_H
 #define SNES9X_REX_H
 
+#include <cstdint>
+#include <algorithm>
+#include <utility>
+
+#ifdef __WIN32__
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#include "snes9x.h"
+#include "memmap.h"
+
 #include "rex_ppux.h"
 #include "rex_iovm.h"
-#include "sock.h"
+#include "rex_client.h"
 
 struct rex {
-    struct ppux ppux;
-    std::array<struct vm_inst, 2> vms;
-
-    int32_t vm_init(unsigned n);
-
-    int32_t vm_load(unsigned n, const uint8_t *vmprog, uint32_t vmprog_len);
-
-    iovm1_state vm_getstate(unsigned n);
-
-    int32_t vm_reset(unsigned n);
-
-    int32_t vm_read_data(unsigned n, uint8_t *dst, uint32_t dst_len, uint32_t *o_read, uint32_t *o_addr, uint8_t *o_target);
-
-    friend void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs);
-
     void on_pc(uint32_t pc);
 
     void start();
@@ -30,11 +26,17 @@ struct rex {
 
     void handle_net();
 
-private:
-    sock_sp listener;
-    std::vector<sock_sp> clients;
+    void frame_start();
 
-    std::vector<sock_sp> all_socks;
+    void ppux_render_obj_lines(bool sub, uint8_t zstart);
+
+    void ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl);
+
+private:
+    std::vector<rex_client_sp> clients;
+
+    sock_sp listener;
+    std::vector<sock_wp> all_socks;
 };
 
 void rex_host_init();

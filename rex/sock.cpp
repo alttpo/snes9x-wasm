@@ -4,7 +4,6 @@
 #ifdef __WIN32__
 #  include <process.h>
 #else
-
 #  include <unistd.h>
 #  include <sys/types.h>
 
@@ -244,7 +243,7 @@ auto sock::accept(uint32_t &o_ipv4_addr, uint16_t &o_port) -> sock_sp {
     return std::make_shared<sock>(accepted);
 }
 
-auto sock::poll(const std::vector<sock_sp> &socks, int &n, int &err) -> bool {
+auto sock::poll(const std::vector<sock_wp> &socks, int &n, int &err) -> bool {
 #ifdef __WIN32__
     std::vector<WSAPOLLFD> pollfds;
 #else
@@ -252,7 +251,16 @@ auto sock::poll(const std::vector<sock_sp> &socks, int &n, int &err) -> bool {
 #endif
     pollfds.reserve(socks.size());
 
-    for (const auto &ps: socks) {
+    std::vector<sock_sp> locked;
+    locked.reserve(socks.size());
+
+    for (const auto &ws: socks) {
+        auto ps = ws.lock();
+        if (!ps) {
+            continue;
+        }
+        locked.emplace_back(ps);
+
         ps->events |= (short)POLLIN;
         pollfds.push_back({ps->fd, ps->events, ps->revents});
     }
@@ -268,7 +276,7 @@ auto sock::poll(const std::vector<sock_sp> &socks, int &n, int &err) -> bool {
     }
 
     for (int i = 0; i < pollfds.size(); i++) {
-        socks[i]->revents = pollfds[i].revents;
+        locked[i]->revents = pollfds[i].revents;
     }
 
     return true;

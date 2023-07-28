@@ -14,6 +14,7 @@ typedef int native_socket_t;
 
 class sock {
     using sock_sp = std::shared_ptr<sock>;
+    using sock_wp = std::weak_ptr<sock>;
 
     native_socket_t fd;
 
@@ -39,7 +40,7 @@ public:
 
     static auto make_udp() -> sock_sp;
 
-    static auto poll(const std::vector<sock_sp> &socks, int &n, int &err) -> bool;
+    static auto poll(const std::vector<sock_wp> &socks, int &n, int &err) -> bool;
 
     auto connect(uint32_t ipv4_addr, uint16_t port) -> bool;
     auto bind(uint32_t ipv4_addr, uint16_t port) -> bool;
@@ -65,5 +66,6 @@ public:
 };
 
 using sock_sp = std::shared_ptr<sock>;
+using sock_wp = std::weak_ptr<sock>;
 
 #endif //SNES9X_REX_SOCK_H
