@@ -7,6 +7,7 @@
 #include <mutex>
 
 #include "snes9x.h"
+#include "rex_proto.h"
 
 struct ppux {
     ppux();
@@ -69,10 +70,9 @@ struct ppux {
     int dirty_bottom = MAX_SNES_HEIGHT - 1;
 
 public:
-    bool cmd_write(uint32_t *data, uint32_t size);
-
-    bool vram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
-    bool cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
+    rex_cmd_result cmd_upload(uint32_t *data, uint32_t size);
+    rex_cmd_result vram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
+    rex_cmd_result cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
 
     void render_cmd();
 

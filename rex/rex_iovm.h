@@ -11,6 +11,8 @@
 #include <queue>
 #include <string>
 
+#include "rex_proto.h"
+
 #define IOVM1_USE_USERDATA
 #include "iovm.h"
 
@@ -53,13 +55,13 @@ class vm_inst {
 public:
     explicit vm_inst(vm_notifier *notifier);
 
-    int32_t vm_init();
+    rex_cmd_result vm_init();
 
-    int32_t vm_load(const uint8_t *vmprog, uint32_t vmprog_len);
+    rex_cmd_result vm_load(const uint8_t *vmprog, uint32_t vmprog_len);
 
     iovm1_state vm_getstate();
 
-    int32_t vm_reset();
+    rex_cmd_result vm_reset();
 
     void on_pc(uint32_t pc);
 

@@ -2,6 +2,7 @@
 #include <utility>
 
 #include "rex.h"
+#include "rex_proto.h"
 
 rex_client::rex_client(sock_sp s_p) :
     s(std::move(s_p)),
@@ -175,82 +176,91 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
     }
 
     // c=0 is command/response channel:
-    bool success;
-    switch (m.at(0)) {
-        case 1: // iovm: load & execute program
-            if (m.size() <= 1+1) {
+    rex_cmd_result result;
+    auto cmd = static_cast<rex_cmd>(m.at(0));
+    switch (cmd) {
+        case cmd_iovm_exec: // iovm: load & execute program
+            if (m.size() <= 1 + 1) {
+                send_message(0, {cmd, res_msg_bad_request});
                 fprintf(stderr, "message too short\n");
                 return;
             }
 
             vmi.vm_init();
-            vmi.vm_load(&m.at(1), m.size() - 1);
-            send_message(0, {1});
+            result = vmi.vm_load(&m.at(1), m.size() - 1);
+            send_message(0, {cmd, result});
             break;
-        case 2: // iovm: reset
+        case cmd_iovm_reset: // iovm: reset
             if (m.size() > 1) {
+                send_message(0, {cmd, res_msg_bad_request});
                 fprintf(stderr, "message too long\n");
                 return;
             }
-            vmi.vm_reset();
-            send_message(0, {2});
+            result = vmi.vm_reset();
+            send_message(0, {cmd, result});
             break;
-        case 3: // iovm: getstate
+        case cmd_iovm_getstate: // iovm: getstate
             if (m.size() > 1) {
+                send_message(0, {cmd, res_msg_bad_request});
                 fprintf(stderr, "message too long\n");
                 return;
             }
-            send_message(0, {3, static_cast<uint8_t>(vmi.vm_getstate())});
+            send_message(0, {cmd, res_success, static_cast<uint8_t>(vmi.vm_getstate())});
             break;
-        case 4: // ppux: load & execute program
-            if (m.size() <= 1+4) {
+        case cmd_ppux_exec: // ppux: load & execute program
+            if   (m.size() <= 1 + 4) {
+                send_message(0, {cmd, res_msg_bad_request});
                 fprintf(stderr, "message too short\n");
                 return;
             }
-            if ( ((m.size() - 1) & 3) != 0 ) {
+            if (((m.size() - 1) & 3) != 0) {
+                send_message(0, {cmd, res_msg_bad_request});
                 fprintf(stderr, "message data size must be multiple of 4 bytes\n");
                 return;
             }
-            success = ppux.cmd_write(
-                (uint32_t *)&m.at(1),
+            result = ppux.cmd_upload(
+                (uint32_t *) &m.at(1),
                 (m.size() - 1) / sizeof(uint32_t)
             );
-            send_message(0, {4, static_cast<unsigned char>(success ? 1 : 0)});
+            send_message(0, {cmd, result});
             break;
-        case 5: { // ppux: vram upload
+        case cmd_ppux_vram_upload: { // ppux: vram upload
             // TODO: possibly stream in each frame instead of waiting for the complete message
-            if (m.size() <= 1+4) {
+            if (m.size() <= 1 + 4) {
+                send_message(0, {cmd, res_msg_bad_request});
                 fprintf(stderr, "message too short\n");
                 return;
             }
             auto p = m.cbegin() + 1;
             uint32_t addr = *p++;
-            addr |= (uint32_t)*p++ << 8;
-            addr |= (uint32_t)*p++ << 16;
-            addr |= (uint32_t)*p++ << 24;
+            addr |= (uint32_t) *p++ << 8;
+            addr |= (uint32_t) *p++ << 16;
+            addr |= (uint32_t) *p++ << 24;
             // size is implicit in remaining length of message
-            success = ppux.vram_upload(addr, &*p, m.cend() - p);
-            send_message(0, {5, static_cast<unsigned char>(success ? 1 : 0)});
+            result = ppux.vram_upload(addr, &*p, m.cend() - p);
+            send_message(0, {cmd, result});
             break;
         }
-        case 6: { // ppux: cgram upload
+        case cmd_ppux_cgram_upload: { // ppux: cgram upload
             // TODO: possibly stream in each frame instead of waiting for the complete message
-            if (m.size() <= 1+4) {
+            if (m.size() <= 1 + 4) {
+                send_message(0, {cmd, res_msg_bad_request});
                 fprintf(stderr, "message too short\n");
                 return;
             }
             auto p = m.cbegin() + 1;
             uint32_t addr = *p++;
-            addr |= (uint32_t)*p++ << 8;
-            addr |= (uint32_t)*p++ << 16;
-            addr |= (uint32_t)*p++ << 24;
+            addr |= (uint32_t) *p++ << 8;
+            addr |= (uint32_t) *p++ << 16;
+            addr |= (uint32_t) *p++ << 24;
             // size is implicit in remaining length of message
-            success = ppux.cgram_upload(addr, &*p, m.cend() - p);
-            send_message(0, {6, static_cast<unsigned char>(success ? 1 : 0)});
+            result = ppux.cgram_upload(addr, &*p, m.cend() - p);
+            send_message(0, {cmd, result});
             break;
         }
         default:
             // discard unknown messages
+            send_message(0, {cmd, res_cmd_unknown});
             break;
     }
 }

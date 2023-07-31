@@ -16,6 +16,7 @@
 
 #include "iovm.c"
 #include "rex_iovm.h"
+#include "rex_proto.h"
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -216,19 +217,28 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
     cbs->complete = !cond;
 }
 
-int32_t vm_inst::vm_init() {
+rex_cmd_result vm_inst::vm_init() {
     std::unique_lock<std::mutex> lk(vm_mtx);
 
     iovm1_init(&vm);
     iovm1_set_userdata(&vm, (void *) this);
 
-    return IOVM1_SUCCESS;
+    return res_success;
 }
 
-int32_t vm_inst::vm_load(const uint8_t *vmprog, uint32_t vmprog_len) {
+rex_cmd_result vm_inst::vm_load(const uint8_t *vmprog, uint32_t vmprog_len) {
     std::unique_lock<std::mutex> lk(vm_mtx);
 
-    return iovm1_load(&vm, vmprog, vmprog_len);
+    auto res = iovm1_load(&vm, vmprog, vmprog_len);
+    switch (res) {
+        case IOVM1_SUCCESS:
+            return res_success;
+        case IOVM1_ERROR_VM_INVALID_OPERATION_FOR_STATE:
+            return res_cmd_precondition_failed;
+        case IOVM1_ERROR_OUT_OF_RANGE:
+        default:
+            return res_cmd_error;
+    }
 }
 
 iovm1_state vm_inst::vm_getstate() {
@@ -237,10 +247,18 @@ iovm1_state vm_inst::vm_getstate() {
     return iovm1_get_exec_state(&vm);
 }
 
-int32_t vm_inst::vm_reset() {
+rex_cmd_result vm_inst::vm_reset() {
     std::unique_lock<std::mutex> lk(vm_mtx);
 
-    return iovm1_exec_reset(&vm);
+    auto res = iovm1_exec_reset(&vm);
+    switch (res) {
+        case IOVM1_SUCCESS:
+            return res_success;
+        case IOVM1_ERROR_VM_INVALID_OPERATION_FOR_STATE:
+            return res_cmd_precondition_failed;
+        default:
+            return res_cmd_error;
+    }
 }
 
 void vm_inst::on_pc(uint32_t pc) {

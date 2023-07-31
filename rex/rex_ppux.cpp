@@ -193,7 +193,7 @@ void ppux::render_line_sub(ppux::layer layer) {
     }
 }
 
-bool ppux::cmd_write(uint32_t *data, uint32_t size) {
+rex_cmd_result ppux::cmd_upload(uint32_t *data, uint32_t size) {
     // size is counted in uint32_t units.
 
     // append the uint32_ts:
@@ -216,7 +216,7 @@ bool ppux::cmd_write(uint32_t *data, uint32_t size) {
                 "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
                 it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
-            return false;
+            return res_cmd_bad_request;
         }
 
         auto size = *it & 0xffff;
@@ -237,7 +237,7 @@ bool ppux::cmd_write(uint32_t *data, uint32_t size) {
 
     // did we find the end?
     if (endit == cmdNext.end()) {
-        return false;
+        return res_cmd_bad_request;
     }
 
     // atomically copy cmdNext to cmd and clear cmdNext:
@@ -247,27 +247,27 @@ bool ppux::cmd_write(uint32_t *data, uint32_t size) {
         cmdNext.erase(cmdNext.begin(), cmdNext.end());
     }
 
-    return true;
+    return res_success;
 }
 
-bool ppux::vram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
+rex_cmd_result ppux::vram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
     uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
     if (maxaddr >= vram_max_size) {
-        return false;
+        return res_msg_bad_request;
     }
 
     std::copy_n(data, size, vram.begin() + addr);
-    return true;
+    return res_success;
 }
 
-bool ppux::cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
+rex_cmd_result ppux::cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
     uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
     if (maxaddr >= vram_max_size) {
-        return false;
+        return res_msg_bad_request;
     }
 
     std::copy_n(data, size, cgram.begin() + addr);
-    return true;
+    return res_success;
 }
 
 void ppux::render_cmd() {
