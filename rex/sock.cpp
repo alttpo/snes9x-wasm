@@ -261,7 +261,7 @@ auto sock::poll(const std::vector<sock_wp> &socks, int &n, int &err) -> bool {
         }
         locked.emplace_back(ps);
 
-        ps->events |= (short)POLLIN;
+        ps->events = (short)POLLIN;
         pollfds.push_back({ps->fd, ps->events, ps->revents});
     }
 
@@ -273,6 +273,9 @@ auto sock::poll(const std::vector<sock_wp> &socks, int &n, int &err) -> bool {
     if (n < 0) {
         err = get_last_error();
         return false;
+    }
+    if (n == 0) {
+        return true;
     }
 
     for (int i = 0; i < pollfds.size(); i++) {
