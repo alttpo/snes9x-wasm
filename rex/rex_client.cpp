@@ -116,7 +116,7 @@ void rex_client::vm_read_complete(vm_read_result &&result) {
 }
 
 void rex_client::recv_frame(uint8_t c, uint8_t f, uint8_t l, uint8_t buf[63]) {
-    printf("recv_frame[c=%d,f=%d]: %d bytes\n", c, f, l);
+    //printf("recv_frame[c=%d,f=%d]: %d bytes\n", c, f, l);
 
     // append buffer data to message for this channel:
     msgIn[c].insert(msgIn[c].end(), buf, buf + l);
