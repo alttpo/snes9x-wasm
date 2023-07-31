@@ -4,18 +4,24 @@
 
 #include "sock.h"
 
+using v8 = std::vector<uint8_t>;
+
 class rex_client : public vm_notifier {
     sock_sp s;
 
-    uint8_t rbuf[64]{};
+    uint8_t rbuf[64]{}; // recv frame data
     uint8_t rh{};   // head
     uint8_t rt{};   // tail
     bool    rf{};   // read frame header?
     uint8_t rx{};   // frame header byte
     uint8_t rl{};   // frame length
 
+    // sx must be immediately prior to sbuf in memory:
     uint8_t sx{};   // send header byte
-    uint8_t sbuf[63]{};
+    uint8_t sbuf[63]{}; // send frame data
+
+    // received messages per channel:
+    v8    msgIn[2]{};
 
 public:
     struct ppux ppux{};
@@ -35,6 +41,9 @@ public: // vm_notifier
 
     void recv_frame(uint8_t c, uint8_t f, uint8_t l, uint8_t buf[63]);
     bool send_frame(uint8_t c, uint8_t f, uint8_t l);
+
+    void send_message(uint8_t c, const v8 &msg);
+    void recv_message(uint8_t c, const v8 &msg);
 };
 
 using rex_client_sp = std::shared_ptr<rex_client>;

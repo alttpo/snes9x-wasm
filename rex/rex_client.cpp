@@ -82,20 +82,22 @@ bool rex_client::handle_net() {
 }
 
 void rex_client::vm_ended() {
-    // vn_ended message type:
-    sbuf[0] = 1;
-    send_frame(1, 1, 1);
+    // vm_ended message type:
+    send_message(1, {1});
 }
 
 void rex_client::vm_read_complete(vm_read_result &&result) {
+    v8 msg;
+    msg.reserve(7 + result.len);
+
     // vm_read_complete message type:
-    sbuf[0] = 2;
+    msg.push_back(2);
     // memory target:
-    sbuf[1] = result.t;
+    msg.push_back(result.t);
     // 24-bit address:
-    sbuf[2] = (result.a & 0xFF);
-    sbuf[3] = ((result.a >> 8) & 0xFF);
-    sbuf[4] = ((result.a >> 16) & 0xFF);
+    msg.push_back((result.a & 0xFF));
+    msg.push_back(((result.a >> 8) & 0xFF));
+    msg.push_back(((result.a >> 16) & 0xFF));
     // 16-bit length (0 -> 65536, else 1..65535):
     uint16_t elen;
     if (result.len == 65536) {
@@ -103,42 +105,47 @@ void rex_client::vm_read_complete(vm_read_result &&result) {
     } else {
         elen = result.len;
     }
-    sbuf[5] = (elen & 0xFF);
-    sbuf[6] = ((elen >> 8) & 0xFF);
-    int r = 7;
+    msg.push_back((elen & 0xFF));
+    msg.push_back(((elen >> 8) & 0xFF));
 
     // data follows:
-    uint8_t *p = result.buf.data();
-    while (result.len > (63 - r)) {
-        ssize_t frame_size = 63 - r;
-        memcpy(sbuf + r, p, frame_size);
-        send_frame(1, 0, frame_size);
+    msg.insert(msg.end(), result.buf.begin(), result.buf.end());
 
-        result.len -= frame_size;
-        p += frame_size;
-
-        // don't need the leading bytes in the following frame(s):
-        r = 0;
-    }
-
-    {
-        assert(result.len <= 63 - r);
-        memcpy(sbuf + r, p, result.len);
-        send_frame(1, 1, r + result.len);
-    }
+    send_message(1, msg);
 }
 
 void rex_client::recv_frame(uint8_t c, uint8_t f, uint8_t l, uint8_t buf[63]) {
     printf("recv_frame[c=%d,f=%d]: %d bytes\n", c, f, l);
-    switch (c) {
-        case 0: // command channel:
 
-            break;
-        case 1: // notification channel:
-            break;
-        default: // no other channels possible
-            assert(false);
-            break;
+    // append buffer data to message for this channel:
+    msgIn[c].insert(msgIn[c].end(), buf, buf + l);
+    if (f) {
+        // if final frame bit is set, process the entire message:
+        recv_message(c, msgIn[c]);
+        // clear out message for next:
+        msgIn[c].clear();
+    }
+}
+
+void rex_client::send_message(uint8_t c, const v8 &msg) {
+    size_t len = msg.size();
+    const uint8_t *p = msg.data();
+
+    // send non-final frames:
+    const ssize_t frame_size = 63;
+    while (len > frame_size) {
+        memcpy(sbuf, p, frame_size);
+        send_frame(c, 0, frame_size);
+
+        len -= frame_size;
+        p += frame_size;
+    }
+
+    {
+        // send final frame:
+        assert(len <= 63);
+        memcpy(sbuf, p, len);
+        send_frame(c, 1, len);
     }
 }
 
@@ -155,4 +162,95 @@ bool rex_client::send_frame(uint8_t c, uint8_t f, uint8_t l) {
         return false;
     }
     return true;
+}
+
+void rex_client::recv_message(uint8_t c, const v8 &m) {
+    if (c != 0) {
+        // discard messages not on channel 0:
+        return;
+    }
+    if (m.empty()) {
+        // discard empty messages:
+        return;
+    }
+
+    // c=0 is command/response channel:
+    bool success;
+    switch (m.at(0)) {
+        case 1: // iovm: load & execute program
+            if (m.size() <= 1+1) {
+                fprintf(stderr, "message too short\n");
+                return;
+            }
+
+            vmi.vm_init();
+            vmi.vm_load(&m.at(1), m.size() - 1);
+            send_message(0, {1});
+            break;
+        case 2: // iovm: reset
+            if (m.size() > 1) {
+                fprintf(stderr, "message too long\n");
+                return;
+            }
+            vmi.vm_reset();
+            send_message(0, {2});
+            break;
+        case 3: // iovm: getstate
+            if (m.size() > 1) {
+                fprintf(stderr, "message too long\n");
+                return;
+            }
+            send_message(0, {3, static_cast<uint8_t>(vmi.vm_getstate())});
+            break;
+        case 4: // ppux: load & execute program
+            if (m.size() <= 1+4) {
+                fprintf(stderr, "message too short\n");
+                return;
+            }
+            if ( ((m.size() - 1) & 3) != 0 ) {
+                fprintf(stderr, "message data size must be multiple of 4 bytes\n");
+                return;
+            }
+            success = ppux.cmd_write(
+                (uint32_t *)&m.at(1),
+                (m.size() - 1) / sizeof(uint32_t)
+            );
+            send_message(0, {4, static_cast<unsigned char>(success ? 1 : 0)});
+            break;
+        case 5: { // ppux: vram upload
+            // TODO: possibly stream in each frame instead of waiting for the complete message
+            if (m.size() <= 1+4) {
+                fprintf(stderr, "message too short\n");
+                return;
+            }
+            auto p = m.cbegin() + 1;
+            uint32_t addr = *p++;
+            addr |= (uint32_t)*p++ << 8;
+            addr |= (uint32_t)*p++ << 16;
+            addr |= (uint32_t)*p++ << 24;
+            // size is implicit in remaining length of message
+            success = ppux.vram_upload(addr, &*p, m.cend() - p);
+            send_message(0, {5, static_cast<unsigned char>(success ? 1 : 0)});
+            break;
+        }
+        case 6: { // ppux: cgram upload
+            // TODO: possibly stream in each frame instead of waiting for the complete message
+            if (m.size() <= 1+4) {
+                fprintf(stderr, "message too short\n");
+                return;
+            }
+            auto p = m.cbegin() + 1;
+            uint32_t addr = *p++;
+            addr |= (uint32_t)*p++ << 8;
+            addr |= (uint32_t)*p++ << 16;
+            addr |= (uint32_t)*p++ << 24;
+            // size is implicit in remaining length of message
+            success = ppux.cgram_upload(addr, &*p, m.cend() - p);
+            send_message(0, {6, static_cast<unsigned char>(success ? 1 : 0)});
+            break;
+        }
+        default:
+            // discard unknown messages
+            break;
+    }
 }

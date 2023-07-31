@@ -71,8 +71,8 @@ struct ppux {
 public:
     bool cmd_write(uint32_t *data, uint32_t size);
 
-    bool vram_upload(uint32_t addr, uint8_t *data, uint32_t size);
-    bool cgram_upload(uint32_t addr, uint8_t *data, uint32_t size);
+    bool vram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
+    bool cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
 
     void render_cmd();
 

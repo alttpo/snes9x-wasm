@@ -250,7 +250,7 @@ bool ppux::cmd_write(uint32_t *data, uint32_t size) {
     return true;
 }
 
-bool ppux::vram_upload(uint32_t addr, uint8_t *data, uint32_t size) {
+bool ppux::vram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
     uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
     if (maxaddr >= vram_max_size) {
         return false;
@@ -260,7 +260,7 @@ bool ppux::vram_upload(uint32_t addr, uint8_t *data, uint32_t size) {
     return true;
 }
 
-bool ppux::cgram_upload(uint32_t addr, uint8_t *data, uint32_t size) {
+bool ppux::cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
     uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
     if (maxaddr >= vram_max_size) {
         return false;
