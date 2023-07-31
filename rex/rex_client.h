@@ -7,14 +7,15 @@
 class rex_client : public vm_notifier {
     sock_sp s;
 
-    uint8_t rbuf[32]{};
+    uint8_t rbuf[64]{};
     uint8_t rh{};   // head
     uint8_t rt{};   // tail
     bool    rf{};   // read frame header?
     uint8_t rx{};   // frame header byte
     uint8_t rl{};   // frame length
 
-    uint8_t sbuf[32]{};
+    uint8_t sx{};   // send header byte
+    uint8_t sbuf[63]{};
 
 public:
     struct ppux ppux{};
@@ -32,8 +33,8 @@ public: // vm_notifier
     void vm_ended() override;
     void vm_read_complete(vm_read_result &&result) override;
 
-    void recv_frame(uint8_t c, uint8_t m, uint8_t l, uint8_t buf[32]);
-    bool send_frame(uint8_t c, uint8_t m, uint8_t l);
+    void recv_frame(uint8_t c, uint8_t f, uint8_t l, uint8_t buf[63]);
+    bool send_frame(uint8_t c, uint8_t f, uint8_t l);
 };
 
 using rex_client_sp = std::shared_ptr<rex_client>;

@@ -28,7 +28,7 @@ bool rex_client::handle_net() {
 
     // read available bytes:
     ssize_t n;
-    if (!s->recv(rbuf + rt, 32 - rt, n)) {
+    if (!s->recv(rbuf + rt, 64 - rt, n)) {
         fprintf(stderr, "unable to read\n");
         return false;
     }
@@ -42,12 +42,12 @@ bool rex_client::handle_net() {
     while (rh < rt) {
         if (!rf) {
             // [7654 3210]
-            //  ccml llll   c = channel (0..3)
-            //              m = more data follows (frame unfinished)
-            //              l = length of frame (0..31)
+            //  cfll llll   c = channel (0..1)
+            //              f = final frame of message
+            //              l = length of frame (0..63)
             rx = rbuf[rh++];
             // determine length of frame:
-            rl = rx & 31;
+            rl = rx & 63;
             // read the frame header byte:
             rf = true;
         }
@@ -58,9 +58,9 @@ bool rex_client::handle_net() {
         }
 
         // handle this current frame:
-        uint8_t c = rx >> 6;
-        uint8_t m = (rx >> 5) & 1;
-        recv_frame(c, m, rl, rbuf + rh);
+        uint8_t c = (rx >> 7) & 1;
+        uint8_t f = (rx >> 6) & 1;
+        recv_frame(c, f, rl, rbuf + rh);
 
         rf = false;
         rh += rl;
@@ -83,47 +83,70 @@ bool rex_client::handle_net() {
 
 void rex_client::vm_ended() {
     // vn_ended message type:
-    sbuf[1] = 1;
-    send_frame(1, 0, 1);
+    sbuf[0] = 1;
+    send_frame(1, 1, 1);
 }
 
 void rex_client::vm_read_complete(vm_read_result &&result) {
     // vm_read_complete message type:
-    sbuf[1] = 2;
-    sbuf[2] = result.t;
-    sbuf[3] = (result.a & 0xFF);
-    sbuf[4] = ((result.a >> 8) & 0xFF);
-    sbuf[5] = ((result.a >> 16) & 0xFF);
-    int r = 5;
+    sbuf[0] = 2;
+    // memory target:
+    sbuf[1] = result.t;
+    // 24-bit address:
+    sbuf[2] = (result.a & 0xFF);
+    sbuf[3] = ((result.a >> 8) & 0xFF);
+    sbuf[4] = ((result.a >> 16) & 0xFF);
+    // 16-bit length (0 -> 65536, else 1..65535):
+    uint16_t elen;
+    if (result.len == 65536) {
+        elen = 0;
+    } else {
+        elen = result.len;
+    }
+    sbuf[5] = (elen & 0xFF);
+    sbuf[6] = ((elen >> 8) & 0xFF);
+    int r = 7;
 
+    // data follows:
     uint8_t *p = result.buf.data();
-    while (result.len > (31 - r)) {
-        ssize_t frame_size = 31 - r;
-        memcpy(sbuf + 1 + r, p, frame_size);
-        send_frame(1, 1, frame_size);
+    while (result.len > (63 - r)) {
+        ssize_t frame_size = 63 - r;
+        memcpy(sbuf + r, p, frame_size);
+        send_frame(1, 0, frame_size);
 
         result.len -= frame_size;
         p += frame_size;
 
-        // don't need the leading 5 bytes in the following frames:
+        // don't need the leading bytes in the following frame(s):
         r = 0;
     }
 
     {
-        assert(result.len <= 31 - r);
-        memcpy(sbuf + 1 + r, p, result.len);
-        send_frame(1, 0, r + result.len);
+        assert(result.len <= 63 - r);
+        memcpy(sbuf + r, p, result.len);
+        send_frame(1, 1, r + result.len);
     }
 }
 
-void rex_client::recv_frame(uint8_t c, uint8_t m, uint8_t l, uint8_t buf[32]) {
-    printf("recv_frame[c=%d,m=%d]: %d bytes\n", c, m, l);
+void rex_client::recv_frame(uint8_t c, uint8_t f, uint8_t l, uint8_t buf[63]) {
+    printf("recv_frame[c=%d,f=%d]: %d bytes\n", c, f, l);
+    switch (c) {
+        case 0: // command channel:
+
+            break;
+        case 1: // notification channel:
+            break;
+        default: // no other channels possible
+            assert(false);
+            break;
+    }
 }
 
-bool rex_client::send_frame(uint8_t c, uint8_t m, uint8_t l) {
+bool rex_client::send_frame(uint8_t c, uint8_t f, uint8_t l) {
     ssize_t n;
-    sbuf[0] = ((c & 3) << 6) | ((m & 1) << 5) | (l & 31);
-    if (!s->send(sbuf, l + 1, n)) {
+    // relies on sx being immediately prior to sbuf in memory:
+    sx = ((c & 1) << 7) | ((f & 1) << 6) | (l & 63);
+    if (!s->send(&sx, l + 1, n)) {
         fprintf(stderr, "error sending\n");
         return false;
     }
