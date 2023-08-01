@@ -3,6 +3,7 @@
 
 #ifdef __WIN32__
 #  include <process.h>
+#  define SOCKOPT_VALUE_CAST (const char *)
 #else
 #  include <unistd.h>
 #  include <sys/types.h>
@@ -15,6 +16,8 @@
 #  ifdef __SVR4
 #    include <sys/stropts.h>
 #  endif
+
+#  define SOCKOPT_VALUE_CAST (void *)
 #endif
 
 sock::sock(native_socket_t fd_p) : fd(fd_p)
@@ -129,12 +132,8 @@ auto sock::socket_set_nonblocking() -> bool {
 
 auto sock::socket_set_tcpnodelay() -> bool {
     int flags = 1;
-#ifdef __WIN32__
-    if (::setsockopt(fd, SOL_SOCKET, TCP_NODELAY, (const char *)&flags, sizeof(flags)) < 0) {
-#else
-    if (::setsockopt(fd, SOL_SOCKET, TCP_NODELAY, (void *) &flags, sizeof(flags)) < 0) {
-#endif
-        capture_error("setsockopt");
+    if (::setsockopt(fd, SOL_SOCKET, TCP_NODELAY, SOCKOPT_VALUE_CAST &flags, sizeof(flags)) < 0) {
+        capture_error("setsockopt(TCP_NODELAY)");
         return false;
     }
 
@@ -202,6 +201,12 @@ auto sock::connect(uint32_t ipv4_addr, uint16_t port) -> bool {
 }
 
 auto sock::bind(uint32_t ipv4_addr, uint16_t port) -> bool {
+    const int enable = 1;
+    if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, SOCKOPT_VALUE_CAST &enable, sizeof(int)) < 0) {
+        capture_error("setsockopt(SO_REUSEADDR)");
+        return false;
+    }
+
     struct sockaddr_in address{};
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
@@ -226,8 +231,8 @@ auto sock::listen() -> bool {
 }
 
 auto sock::accept(uint32_t &o_ipv4_addr, uint16_t &o_port) -> sock_sp {
-    socklen_t address_len = 0;
     struct sockaddr_in address{};
+    socklen_t address_len = sizeof(address);
     memset(&address, 0, sizeof(address));
 
     auto accepted = ::accept(fd, (struct sockaddr *) &address, &address_len);
