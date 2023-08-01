@@ -21,16 +21,6 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-vm_read_result::vm_read_result() : len(0), a(0), t(0), buf() {}
-
-vm_read_result::vm_read_result(
-    const std::vector<uint8_t> &buf_p,
-    uint32_t len_p,
-    uint32_t a_p,
-    uint8_t t_p
-) : len(len_p), a(a_p), t(t_p), buf(buf_p) {}
-
-
 vm_inst::vm_inst(vm_notifier *notifier_p) :
     notifier(notifier_p)
 {}
@@ -74,27 +64,14 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
         // initialize transfer:
         if (cbs->initial) {
             if (!mem) {
-                // memory target not defined; fill read buffer with 0s:
+                // memory target not defined:
                 cbs->complete = true;
-                notifier->vm_read_complete(
-                    vm_read_result{
-                        std::vector<uint8_t>(cbs->len, (uint8_t) 0),
-                        cbs->len,
-                        cbs->a,
-                        cbs->t
-                    }
-                );
+                notifier->vm_notify_read_fail(cbs->tdu, cbs->a, cbs->len);
                 return;
             }
 
             // reserve enough space:
-            read_result = vm_read_result(
-                std::vector<uint8_t>(),
-                cbs->len,
-                cbs->a,
-                cbs->t
-            );
-            read_result.buf.resize(cbs->len);
+            notifier->vm_notify_read_start(cbs->tdu, cbs->a, cbs->len);
             addr_init = cbs->a;
             len_init = cbs->len;
             if (cbs->d) {
@@ -112,7 +89,7 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
                 // out of bounds access yields a 0 byte:
                 x = 0;
             }
-            read_result.buf[cbs->a - addr_init] = x;
+            notifier->vm_notify_read_byte(x);
             if (cbs->d) {
                 cbs->a--;
             } else {
@@ -125,7 +102,7 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
         if (cbs->len == 0) {
             // push out the current read buffer:
             cbs->complete = true;
-            notifier->vm_read_complete(std::move(read_result));
+            notifier->vm_notify_read_end();
         }
 
         return;
@@ -215,6 +192,10 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
             break;
     }
     cbs->complete = !cond;
+
+    if (cbs->complete) {
+        notifier->vm_notify_wait_complete(cbs->o, cbs->tdu, cbs->a, b);
+    }
 }
 
 rex_cmd_result vm_inst::vm_init() {
@@ -270,7 +251,7 @@ void vm_inst::on_pc(uint32_t pc) {
     if (IOVM1_SUCCESS == iovm1_exec(&vm)) {
         auto curr_state = iovm1_get_exec_state(&vm);
         if ((curr_state != last_state) && (curr_state == IOVM1_STATE_ENDED)) {
-            notifier->vm_ended();
+            notifier->vm_notify_ended();
         }
     }
 }

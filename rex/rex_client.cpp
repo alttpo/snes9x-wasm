@@ -82,37 +82,70 @@ bool rex_client::handle_net() {
     return true;
 }
 
-void rex_client::vm_ended() {
-    // vm_ended message type:
-    send_message(1, {1});
+void rex_client::vm_notify_read_fail(uint8_t tdu, uint32_t addr, uint32_t len) {
+    // vm_read_complete message type:
+    sbuf[dri++] = 2;
+    sbuf[dri++] = res_cmd_bad_request;
+
+    send_frame(1, 1, dri);
+    dri = 0;
 }
 
-void rex_client::vm_read_complete(vm_read_result &&result) {
-    v8 msg;
-    msg.reserve(7 + result.len);
-
+void rex_client::vm_notify_read_start(uint8_t tdu, uint32_t addr, uint32_t len) {
     // vm_read_complete message type:
-    msg.push_back(2);
+    sbuf[dri++] = 2;
+    sbuf[dri++] = res_success;
     // memory target:
-    msg.push_back(result.t);
+    sbuf[dri++] = tdu;
     // 24-bit address:
-    msg.push_back((result.a & 0xFF));
-    msg.push_back(((result.a >> 8) & 0xFF));
-    msg.push_back(((result.a >> 16) & 0xFF));
+    sbuf[dri++] = (addr & 0xFF);
+    sbuf[dri++] = ((addr >> 8) & 0xFF);
+    sbuf[dri++] = ((addr >> 16) & 0xFF);
     // 16-bit length (0 -> 65536, else 1..65535):
     uint16_t elen;
-    if (result.len == 65536) {
+    if (len == 65536) {
         elen = 0;
     } else {
-        elen = result.len;
+        elen = len;
     }
-    msg.push_back((elen & 0xFF));
-    msg.push_back(((elen >> 8) & 0xFF));
+    sbuf[dri++] = (elen & 0xFF);
+    sbuf[dri++] = ((elen >> 8) & 0xFF);
 
-    // data follows:
-    msg.insert(msg.end(), result.buf.begin(), result.buf.end());
+    // send start frame instantly:
+    send_frame(1, 0, dri);
+    dri = 0;
+}
 
-    send_message(1, msg);
+void rex_client::vm_notify_read_byte(uint8_t x) {
+    sbuf[dri++] = x;
+    if (dri >= 63) {
+        send_frame(1, 0, dri);
+        dri = 0;
+    }
+}
+
+void rex_client::vm_notify_read_end() {
+    // send the final frame:
+    send_frame(1, 1, dri);
+    dri = 0;
+}
+
+void rex_client::vm_notify_wait_complete(iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) {
+    // vm_wait_complete message type:
+    sbuf[dri++] = 3;
+    sbuf[dri++] = res_success;
+
+    send_frame(1, 1, dri);
+    dri = 0;
+}
+
+void rex_client::vm_notify_ended() {
+    // vm_ended message type:
+    sbuf[dri++] = 1;
+    sbuf[dri++] = res_success;
+
+    send_frame(1, 1, dri);
+    dri = 0;
 }
 
 void rex_client::recv_frame(uint8_t c, uint8_t f, uint8_t l, uint8_t buf[63]) {
@@ -144,7 +177,7 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
 
     {
         // send final frame:
-        assert(len <= 63);
+        assert(len <= frame_size);
         memcpy(sbuf, p, len);
         send_frame(c, 1, len);
     }
@@ -208,7 +241,7 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             send_message(0, {cmd, res_success, static_cast<uint8_t>(vmi.vm_getstate())});
             break;
         case cmd_ppux_exec: // ppux: load & execute program
-            if   (m.size() <= 1 + 4) {
+            if (m.size() <= 1 + 4) {
                 send_message(0, {cmd, res_msg_bad_request});
                 fprintf(stderr, "message too short\n");
                 return;

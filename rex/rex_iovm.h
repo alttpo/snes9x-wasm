@@ -16,27 +16,19 @@
 #define IOVM1_USE_USERDATA
 #include "iovm.h"
 
-struct vm_read_result {
-    uint32_t len;
-    uint32_t a;
-    uint8_t t;
-    std::vector<uint8_t> buf;
-
-    vm_read_result();
-
-    vm_read_result(
-        const std::vector<uint8_t> &buf,
-        uint32_t len,
-        uint32_t a,
-        uint8_t t
-    );
-};
-
 class vm_notifier {
 public:
-    virtual void vm_read_complete(vm_read_result &&result) = 0;
+    virtual void vm_notify_read_fail(uint8_t tdu, uint32_t addr, uint32_t len) = 0;
 
-    virtual void vm_ended() = 0;
+    virtual void vm_notify_read_start(uint8_t tdu, uint32_t addr, uint32_t len) = 0;
+
+    virtual void vm_notify_read_byte(uint8_t x) = 0;
+
+    virtual void vm_notify_read_end() = 0;
+
+    virtual void vm_notify_wait_complete(iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) = 0;
+
+    virtual void vm_notify_ended() = 0;
 };
 
 class vm_inst {
@@ -46,8 +38,6 @@ class vm_inst {
 
     uint32_t p_init{};
     uint32_t len_init{};
-
-    vm_read_result read_result;
 
     std::mutex vm_mtx;
     struct iovm1_t vm{};
