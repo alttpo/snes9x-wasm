@@ -216,7 +216,7 @@ rex_cmd_result ppux::cmd_upload(uint32_t *data, uint32_t size) {
                 "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
                 it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
-            return res_cmd_bad_request;
+            return rex_ppux_invalid_opcode;
         }
 
         auto size = *it & 0xffff;
@@ -237,7 +237,7 @@ rex_cmd_result ppux::cmd_upload(uint32_t *data, uint32_t size) {
 
     // did we find the end?
     if (endit == cmdNext.end()) {
-        return res_cmd_bad_request;
+        return rex_ppux_missing_end;
     }
 
     // atomically copy cmdNext to cmd and clear cmdNext:
@@ -247,27 +247,27 @@ rex_cmd_result ppux::cmd_upload(uint32_t *data, uint32_t size) {
         cmdNext.erase(cmdNext.begin(), cmdNext.end());
     }
 
-    return res_success;
+    return rex_success;
 }
 
 rex_cmd_result ppux::vram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
     uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
     if (maxaddr >= vram_max_size) {
-        return res_msg_bad_request;
+        return rex_ppux_address_out_of_range;
     }
 
     std::copy_n(data, size, vram.begin() + addr);
-    return res_success;
+    return rex_success;
 }
 
 rex_cmd_result ppux::cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
     uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
     if (maxaddr >= vram_max_size) {
-        return res_msg_bad_request;
+        return rex_ppux_address_out_of_range;
     }
 
     std::copy_n(data, size, cgram.begin() + addr);
-    return res_success;
+    return rex_success;
 }
 
 void ppux::render_cmd() {

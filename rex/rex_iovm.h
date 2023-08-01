@@ -18,15 +18,23 @@
 
 class vm_notifier {
 public:
-    virtual void vm_notify_read_fail(uint8_t tdu, uint32_t addr, uint32_t len) = 0;
+    virtual void vm_notify_fail(uint32_t pc, iovm1_opcode o, rex_cmd_result result) = 0;
 
-    virtual void vm_notify_read_start(uint8_t tdu, uint32_t addr, uint32_t len) = 0;
+    virtual void vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) = 0;
 
     virtual void vm_notify_read_byte(uint8_t x) = 0;
 
     virtual void vm_notify_read_end() = 0;
 
-    virtual void vm_notify_wait_complete(iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) = 0;
+    virtual void vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) = 0;
+
+#ifdef NOTIFY_WRITE_BYTE
+    virtual void vm_notify_write_byte(uint8_t x) = 0;
+#endif
+
+    virtual void vm_notify_write_end() = 0;
+
+    virtual void vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) = 0;
 
     virtual void vm_notify_ended() = 0;
 };
