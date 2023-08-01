@@ -264,6 +264,9 @@ endif()
 if(USE_REX)
     list(APPEND DEFINES USE_REX EMULATE_FXPAKPRO)
 
+    list(APPEND INCLUDES ../external/msg)
+    list(APPEND SOURCES ../external/msg/incoming.c ../external/msg/outgoing.c)
+
     list(APPEND INCLUDES ../rex)
     list(APPEND SOURCES
             ../rex/rex.cpp
