@@ -13,75 +13,6 @@ void rex_client::on_pc(uint32_t pc) {
     vmi.on_pc(pc);
 }
 
-bool rex_client::handle_net() {
-    // close errored-out clients and remove them:
-    if (s->isErrored()) {
-        fprintf(stderr, "client errored: %s\n", s->error_text().c_str());
-        return false;
-    }
-    if (s->isClosed()) {
-        fprintf(stderr, "client closed\n");
-        return false;
-    }
-    if (!s->isReadAvailable()) {
-        return true;
-    }
-
-    // read available bytes:
-    ssize_t n;
-    if (!s->recv(rbuf + rt, 64 - rt, n)) {
-        fprintf(stderr, "unable to read\n");
-        return false;
-    }
-    if (n == 0) {
-        // EOF?
-        fprintf(stderr, "eof?\n");
-        return false;
-    }
-    rt += n;
-
-    while (rh < rt) {
-        if (!rf) {
-            // [7654 3210]
-            //  cfll llll   c = channel (0..1)
-            //              f = final frame of message
-            //              l = length of frame (0..63)
-            rx = rbuf[rh++];
-            // determine length of frame:
-            rl = rx & 63;
-            // read the frame header byte:
-            rf = true;
-        }
-
-        if (rh + rl > rt) {
-            // not enough data for frame:
-            return true;
-        }
-
-        // handle this current frame:
-        uint8_t c = (rx >> 7) & 1;
-        uint8_t f = (rx >> 6) & 1;
-        recv_frame(c, f, rl, rbuf + rh);
-
-        rf = false;
-        rh += rl;
-
-        if (rh >= rt) {
-            // buffer is empty:
-            rh = 0;
-            rt = 0;
-            return true;
-        }
-
-        // remaining bytes begin the next frame:
-        memmove(rbuf, rbuf + rh, rt - rh);
-        rt -= rh;
-        rh = 0;
-    }
-
-    return true;
-}
-
 ///////////////////////////////////
 
 void rex_client::vm_notify_ended() {
@@ -214,19 +145,6 @@ void rex_client::vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t td
 
 ///////////////////////////////////
 
-void rex_client::recv_frame(uint8_t c, uint8_t f, uint8_t l, uint8_t buf[63]) {
-    //printf("recv_frame[c=%d,f=%d]: %d bytes\n", c, f, l);
-
-    // append buffer data to message for this channel:
-    msgIn[c].insert(msgIn[c].end(), buf, buf + l);
-    if (f) {
-        // if final frame bit is set, process the entire message:
-        recv_message(c, msgIn[c]);
-        // clear out message for next:
-        msgIn[c].clear();
-    }
-}
-
 void rex_client::send_message(uint8_t c, const v8 &msg) {
     size_t len = msg.size();
     const uint8_t *p = msg.data();
@@ -252,7 +170,7 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
 bool rex_client::send_frame(uint8_t c, uint8_t f, uint8_t l) {
     ssize_t n;
     // relies on sx being immediately prior to sbuf in memory:
-    sx = ((c & 1) << 7) | ((f & 1) << 6) | (l & 63);
+    sx = ((f & 1) << 7) | ((c & 1) << 6) | (l & 63);
     if (!s->send(&sx, l + 1, n)) {
         fprintf(stderr, "error sending\n");
         return false;
@@ -262,6 +180,88 @@ bool rex_client::send_frame(uint8_t c, uint8_t f, uint8_t l) {
         return false;
     }
     return true;
+}
+
+bool rex_client::handle_net() {
+    // close errored-out clients and remove them:
+    if (s->isErrored()) {
+        fprintf(stderr, "client errored: %s\n", s->error_text().c_str());
+        return false;
+    }
+    if (s->isClosed()) {
+        fprintf(stderr, "client closed\n");
+        return false;
+    }
+    if (!s->isReadAvailable()) {
+        return true;
+    }
+
+    // read available bytes:
+    ssize_t n;
+    if (!s->recv(rbuf + rt, 64 - rt, n)) {
+        fprintf(stderr, "unable to read\n");
+        return false;
+    }
+    if (n == 0) {
+        // EOF?
+        fprintf(stderr, "eof?\n");
+        return false;
+    }
+    rt += n;
+
+    while (rh < rt) {
+        if (!rf) {
+            // [7654 3210]
+            //  fcll llll   f = final frame of message
+            //              c = channel (0..1)
+            //              l = length of frame (0..63)
+            rx = rbuf[rh++];
+            // determine length of frame:
+            rl = rx & 63;
+            // read the frame header byte:
+            rf = true;
+        }
+
+        if (rh + rl > rt) {
+            // not enough data for frame:
+            return true;
+        }
+
+        // handle this current frame:
+        uint8_t f = (rx >> 7) & 1;
+        uint8_t c = (rx >> 6) & 1;
+        recv_frame(c, f, rl, rbuf + rh);
+
+        rf = false;
+        rh += rl;
+
+        if (rh >= rt) {
+            // buffer is empty:
+            rh = 0;
+            rt = 0;
+            return true;
+        }
+
+        // remaining bytes begin the next frame:
+        memmove(rbuf, rbuf + rh, rt - rh);
+        rt -= rh;
+        rh = 0;
+    }
+
+    return true;
+}
+
+void rex_client::recv_frame(uint8_t c, uint8_t f, uint8_t l, uint8_t buf[63]) {
+    //printf("recv_frame[c=%d,f=%d]: %d bytes\n", c, f, l);
+
+    // append buffer data to message for this channel:
+    msgIn[c].insert(msgIn[c].end(), buf, buf + l);
+    if (f) {
+        // if final frame bit is set, process the entire message:
+        recv_message(c, msgIn[c]);
+        // clear out message for next:
+        msgIn[c].clear();
+    }
 }
 
 void rex_client::recv_message(uint8_t c, const v8 &m) {
