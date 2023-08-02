@@ -6,7 +6,37 @@
 
 rex_client::rex_client(sock_sp s_p) :
     s(std::move(s_p)),
-    vmi(static_cast<vm_notifier *>(this)) {
+    vmi(static_cast<vm_notifier *>(this))
+{
+    frame_incoming_init(
+        &fi,
+        (void *)this,
+        +[](struct frame_incoming *fr, uint8_t *buf, long size, long *n) {
+            auto self = static_cast<rex_client *>(fr->opaque);
+            return self->s->recv(buf, size, *n);
+        },
+        +[](struct frame_incoming *fr, uint8_t *buf, uint8_t len, uint8_t chn, bool fin) {
+            auto self = static_cast<rex_client *>(fr->opaque);
+            self->recv_frame(buf, len, chn, fin);
+        }
+    );
+
+    frame_outgoing_init(
+        &fo[0],
+        (void *)this,
+        +[](struct frame_outgoing *fr, uint8_t *buf, size_t size, long *n) {
+            auto self = static_cast<rex_client *>(fr->opaque);
+            return self->s->send(buf, size, *n);
+        }
+    );
+    frame_outgoing_init(
+        &fo[1],
+        (void *)this,
+        +[](struct frame_outgoing *fr, uint8_t *buf, size_t size, long *n) {
+            auto self = static_cast<rex_client *>(fr->opaque);
+            return self->s->send(buf, size, *n);
+        }
+    );
 }
 
 void rex_client::on_pc(uint32_t pc) {
@@ -17,43 +47,42 @@ void rex_client::on_pc(uint32_t pc) {
 
 void rex_client::vm_notify_ended() {
     // vm_ended message type:
-    sbuf[dri++] = rex_notify_iovm_end;
+    frame_outgoing_append(&fo[1], rex_notify_iovm_end);
 
-    send_frame(1, 1, dri);
-    dri = 0;
+    frame_outgoing_send(&fo[1], 1, true);
 }
 
 void rex_client::vm_notify_fail(uint32_t pc, iovm1_opcode o, rex_cmd_result result) {
     // vm_read_complete message type:
-    sbuf[dri++] = rex_notify_iovm_opcode_fail;
+    *fo[1].p++ = rex_notify_iovm_opcode_fail;
+    *fo[1].p++ = rex_notify_iovm_opcode_fail;
     // pc:
-    sbuf[dri++] = pc & 0xFF;
-    sbuf[dri++] = (pc >> 8) & 0xFF;
-    sbuf[dri++] = (pc >> 16) & 0xFF;
-    sbuf[dri++] = (pc >> 24) & 0xFF;
+    *fo[1].p++ = pc & 0xFF;
+    *fo[1].p++ = (pc >> 8) & 0xFF;
+    *fo[1].p++ = (pc >> 16) & 0xFF;
+    *fo[1].p++ = (pc >> 24) & 0xFF;
     // opcode:
-    sbuf[dri++] = o;
+    *fo[1].p++ = o;
     // result:
-    sbuf[dri++] = result;
+    *fo[1].p++ = result;
 
-    send_frame(1, 1, dri);
-    dri = 0;
+    frame_outgoing_send(&fo[1], 1, true);
 }
 
 void rex_client::vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) {
     // vm_read_complete message type:
-    sbuf[dri++] = rex_notify_iovm_read;
+    *fo[1].p++ = rex_notify_iovm_read;
     // pc:
-    sbuf[dri++] = pc & 0xFF;
-    sbuf[dri++] = (pc >> 8) & 0xFF;
-    sbuf[dri++] = (pc >> 16) & 0xFF;
-    sbuf[dri++] = (pc >> 24) & 0xFF;
+    *fo[1].p++ = pc & 0xFF;
+    *fo[1].p++ = (pc >> 8) & 0xFF;
+    *fo[1].p++ = (pc >> 16) & 0xFF;
+    *fo[1].p++ = (pc >> 24) & 0xFF;
     // memory target:
-    sbuf[dri++] = tdu;
+    *fo[1].p++ = tdu;
     // 24-bit address:
-    sbuf[dri++] = (addr & 0xFF);
-    sbuf[dri++] = ((addr >> 8) & 0xFF);
-    sbuf[dri++] = ((addr >> 16) & 0xFF);
+    *fo[1].p++ = (addr & 0xFF);
+    *fo[1].p++ = ((addr >> 8) & 0xFF);
+    *fo[1].p++ = ((addr >> 16) & 0xFF);
     // 16-bit length (0 -> 65536, else 1..65535):
     uint16_t elen;
     if (len == 65536) {
@@ -61,42 +90,39 @@ void rex_client::vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, u
     } else {
         elen = len;
     }
-    sbuf[dri++] = (elen & 0xFF);
-    sbuf[dri++] = ((elen >> 8) & 0xFF);
+    *fo[1].p++ = (elen & 0xFF);
+    *fo[1].p++ = ((elen >> 8) & 0xFF);
 
     // send start frame instantly:
-    send_frame(1, 0, dri);
-    dri = 0;
+    frame_outgoing_send(&fo[1], 1, false);
 }
 
 void rex_client::vm_notify_read_byte(uint8_t x) {
-    sbuf[dri++] = x;
-    if (dri >= 63) {
-        send_frame(1, 0, dri);
-        dri = 0;
+    *fo[1].p++ = x;
+    if (frame_outgoing_len(&fo[1]) >= 63) {
+        frame_outgoing_send(&fo[1], 1, false);
     }
 }
 
 void rex_client::vm_notify_read_end() {
     // send the final frame:
-    send_frame(1, 1, dri);
-    dri = 0;
+    frame_outgoing_send(&fo[1], 1, true);
 }
 
 void rex_client::vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) {
     // vm_read_complete message type:
-    sbuf[dri++] = rex_notify_iovm_write;
+    *fo[1].p++ = rex_notify_iovm_write;
     // pc:
-    sbuf[dri++] = pc & 0xFF;
-    sbuf[dri++] = (pc >> 8) & 0xFF;
-    sbuf[dri++] = (pc >> 16) & 0xFF;
-    sbuf[dri++] = (pc >> 24) & 0xFF;
+    *fo[1].p++ = pc & 0xFF;
+    *fo[1].p++ = (pc >> 8) & 0xFF;
+    *fo[1].p++ = (pc >> 16) & 0xFF;
+    *fo[1].p++ = (pc >> 24) & 0xFF;
     // memory target:
-    sbuf[dri++] = tdu;
+    *fo[1].p++ = tdu;
     // 24-bit address:
-    sbuf[dri++] = (addr & 0xFF);
-    sbuf[dri++] = ((addr >> 8) & 0xFF);
-    sbuf[dri++] = ((addr >> 16) & 0xFF);
+    *fo[1].p++ = (addr & 0xFF);
+    *fo[1].p++ = ((addr >> 8) & 0xFF);
+    *fo[1].p++ = ((addr >> 16) & 0xFF);
     // 16-bit length (0 -> 65536, else 1..65535):
     uint16_t elen;
     if (len == 65536) {
@@ -104,12 +130,11 @@ void rex_client::vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, 
     } else {
         elen = len;
     }
-    sbuf[dri++] = (elen & 0xFF);
-    sbuf[dri++] = ((elen >> 8) & 0xFF);
+    *fo[1].p++ = (elen & 0xFF);
+    *fo[1].p++ = ((elen >> 8) & 0xFF);
 
     // send start frame instantly:
-    send_frame(1, 0, dri);
-    dri = 0;
+    frame_outgoing_send(&fo[1], 1, false);
 }
 
 #ifdef NOTIFY_WRITE_BYTE
@@ -118,29 +143,27 @@ void rex_client::vm_notify_write_byte(uint8_t x) {}
 
 void rex_client::vm_notify_write_end() {
     // send the final frame:
-    send_frame(1, 1, dri);
-    dri = 0;
+    frame_outgoing_send(&fo[1], 1, true);
 }
 
 void rex_client::vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) {
-    sbuf[dri++] = rex_notify_iovm_wait;
+    *fo[1].p++ = rex_notify_iovm_wait;
     // pc:
-    sbuf[dri++] = pc & 0xFF;
-    sbuf[dri++] = (pc >> 8) & 0xFF;
-    sbuf[dri++] = (pc >> 16) & 0xFF;
-    sbuf[dri++] = (pc >> 24) & 0xFF;
+    *fo[1].p++ = pc & 0xFF;
+    *fo[1].p++ = (pc >> 8) & 0xFF;
+    *fo[1].p++ = (pc >> 16) & 0xFF;
+    *fo[1].p++ = (pc >> 24) & 0xFF;
     // memory target:
-    sbuf[dri++] = tdu;
+    *fo[1].p++ = tdu;
     // 24-bit address:
-    sbuf[dri++] = (addr & 0xFF);
-    sbuf[dri++] = ((addr >> 8) & 0xFF);
-    sbuf[dri++] = ((addr >> 16) & 0xFF);
+    *fo[1].p++ = (addr & 0xFF);
+    *fo[1].p++ = ((addr >> 8) & 0xFF);
+    *fo[1].p++ = ((addr >> 16) & 0xFF);
     // last value read:
-    sbuf[dri++] = x;
+    *fo[1].p++ = x;
 
     // send final frame:
-    send_frame(1, 1, dri);
-    dri = 0;
+    frame_outgoing_send(&fo[1], 1, true);
 }
 
 ///////////////////////////////////
@@ -152,8 +175,8 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
     // send non-final frames:
     const ssize_t frame_size = 63;
     while (len > frame_size) {
-        memcpy(sbuf, p, frame_size);
-        send_frame(c, 0, frame_size);
+        frame_outgoing_append_bytes(&fo[c], p, frame_size);
+        frame_outgoing_send(&fo[c], c, false);
 
         len -= frame_size;
         p += frame_size;
@@ -162,24 +185,9 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
     {
         // send final frame:
         assert(len <= frame_size);
-        memcpy(sbuf, p, len);
-        send_frame(c, 1, len);
+        frame_outgoing_append_bytes(&fo[c], p, len);
+        frame_outgoing_send(&fo[c], c, true);
     }
-}
-
-bool rex_client::send_frame(uint8_t c, uint8_t f, uint8_t l) {
-    ssize_t n;
-    // relies on sx being immediately prior to sbuf in memory:
-    sx = ((f & 1) << 7) | ((c & 1) << 6) | (l & 63);
-    if (!s->send(&sx, l + 1, n)) {
-        fprintf(stderr, "error sending\n");
-        return false;
-    }
-    if (n != l + 1) {
-        fprintf(stderr, "incomplete send\n");
-        return false;
-    }
-    return true;
 }
 
 bool rex_client::handle_net() {
@@ -196,71 +204,19 @@ bool rex_client::handle_net() {
         return true;
     }
 
-    // read available bytes:
-    ssize_t n;
-    if (!s->recv(rbuf + rt, 64 - rt, n)) {
-        fprintf(stderr, "unable to read\n");
-        return false;
-    }
-    if (n == 0) {
-        // EOF?
-        fprintf(stderr, "eof?\n");
-        return false;
-    }
-    rt += n;
-
-    while (rh < rt) {
-        if (!rf) {
-            // [7654 3210]
-            //  fcll llll   f = final frame of message
-            //              c = channel (0..1)
-            //              l = length of frame (0..63)
-            rx = rbuf[rh++];
-            // determine length of frame:
-            rl = rx & 63;
-            // read the frame header byte:
-            rf = true;
-        }
-
-        if (rh + rl > rt) {
-            // not enough data for frame:
-            return true;
-        }
-
-        // handle this current frame:
-        uint8_t f = (rx >> 7) & 1;
-        uint8_t c = (rx >> 6) & 1;
-        recv_frame(c, f, rl, rbuf + rh);
-
-        rf = false;
-        rh += rl;
-
-        if (rh >= rt) {
-            // buffer is empty:
-            rh = 0;
-            rt = 0;
-            return true;
-        }
-
-        // remaining bytes begin the next frame:
-        memmove(rbuf, rbuf + rh, rt - rh);
-        rt -= rh;
-        rh = 0;
-    }
-
-    return true;
+    return frame_incoming_read(&fi);
 }
 
-void rex_client::recv_frame(uint8_t c, uint8_t f, uint8_t l, uint8_t buf[63]) {
+void rex_client::recv_frame(uint8_t buf[63], uint8_t len, uint8_t chn, uint8_t fin) {
     //printf("recv_frame[c=%d,f=%d]: %d bytes\n", c, f, l);
 
     // append buffer data to message for this channel:
-    msgIn[c].insert(msgIn[c].end(), buf, buf + l);
-    if (f) {
+    msgIn[chn].insert(msgIn[chn].end(), buf, buf + len);
+    if (fin) {
         // if final frame bit is set, process the entire message:
-        recv_message(c, msgIn[c]);
+        recv_message(chn, msgIn[chn]);
         // clear out message for next:
-        msgIn[c].clear();
+        msgIn[chn].clear();
     }
 }
 

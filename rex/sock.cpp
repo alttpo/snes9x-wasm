@@ -290,7 +290,7 @@ auto sock::poll(const std::vector<sock_wp> &socks, int &n, int &err) -> bool {
     return true;
 }
 
-auto sock::send(uint8_t *data, uint32_t len, ssize_t &n) -> bool {
+auto sock::send(uint8_t *data, size_t len, long &n) -> bool {
 #ifdef __WIN32__
     n = ::send(fd, (const char *)data, len, 0);
 #else
@@ -304,7 +304,7 @@ auto sock::send(uint8_t *data, uint32_t len, ssize_t &n) -> bool {
     return true;
 }
 
-auto sock::sendto(uint8_t *data, uint32_t len, uint32_t ipv4_addr, uint16_t port, ssize_t &n) -> bool {
+auto sock::sendto(uint8_t *data, size_t len, uint32_t ipv4_addr, uint16_t port, long &n) -> bool {
     struct sockaddr_in address{};
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
@@ -324,7 +324,7 @@ auto sock::sendto(uint8_t *data, uint32_t len, uint32_t ipv4_addr, uint16_t port
     return true;
 }
 
-auto sock::recv(uint8_t *data, uint32_t len, ssize_t &n) -> bool {
+auto sock::recv(uint8_t *data, size_t len, long &n) -> bool {
 #ifdef __WIN32__
     n = ::recv(fd, (char*)data, len, 0);
 #else
@@ -338,7 +338,7 @@ auto sock::recv(uint8_t *data, uint32_t len, ssize_t &n) -> bool {
     return true;
 }
 
-auto sock::recvfrom(uint8_t *data, uint32_t len, uint32_t &o_ipv4_addr, uint16_t &o_port, ssize_t &n) -> bool {
+auto sock::recvfrom(uint8_t *data, size_t len, uint32_t &o_ipv4_addr, uint16_t &o_port, long &n) -> bool {
     socklen_t address_len;
     struct sockaddr_in address{};
     memset(&address, 0, sizeof(address));

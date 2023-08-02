@@ -47,11 +47,11 @@ public:
     auto listen() -> bool;
     auto accept(uint32_t &o_ipv4_addr, uint16_t &o_port) -> sock_sp;
 
-    auto send(uint8_t *data, uint32_t len, ssize_t &n) -> bool;
-    auto sendto(uint8_t *data, uint32_t data_len, uint32_t ipv4_addr, uint16_t port, ssize_t &n) -> bool;
+    auto send(uint8_t *data, size_t len, long &n) -> bool;
+    auto sendto(uint8_t *data, size_t data_len, uint32_t ipv4_addr, uint16_t port, long &n) -> bool;
 
-    auto recv(uint8_t *data, uint32_t len, ssize_t &n) -> bool;
-    auto recvfrom(uint8_t *data, uint32_t data_len, uint32_t &o_ipv4_addr, uint16_t &o_port, ssize_t &n) -> bool;
+    auto recv(uint8_t *data, size_t len, long &n) -> bool;
+    auto recvfrom(uint8_t *data, size_t data_len, uint32_t &o_ipv4_addr, uint16_t &o_port, long &n) -> bool;
 
     auto close() -> bool;
 
