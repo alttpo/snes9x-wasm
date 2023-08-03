@@ -50,6 +50,8 @@ class vm_inst {
     std::mutex vm_mtx;
     struct iovm1_t vm{};
 
+    uint32_t cycles;
+
 public:
     explicit vm_inst(vm_notifier *notifier);
 

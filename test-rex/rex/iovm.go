@@ -33,9 +33,9 @@ type IOVM1Result = int32
 const (
 	IOVM1_SUCCESS IOVM1Result = iota
 
-	IOVM1_ERROR_VM_INVALID_OPERATION_FOR_STATE
-	IOVM1_ERROR_VM_UNKNOWN_OPCODE
-	IOVM1_ERROR_VM_INVALID_MEMORY_ACCESS
+	IOVM1_ERROR_INVALID_OPERATION_FOR_STATE
+	IOVM1_ERROR_UNKNOWN_OPCODE
+	IOVM1_ERROR_INVALID_MEMORY_ACCESS
 )
 
 const (
@@ -46,9 +46,9 @@ const (
 
 var iovm1Errors = map[IOVM1Result]error{
 	IOVM1_SUCCESS: nil,
-	IOVM1_ERROR_VM_INVALID_OPERATION_FOR_STATE: errors.New("invalid operation for current state"),
-	IOVM1_ERROR_VM_UNKNOWN_OPCODE:              errors.New("unknown opcode"),
-	IOVM1_ERROR_VM_INVALID_MEMORY_ACCESS:       errors.New("invalid memory access"),
+	IOVM1_ERROR_INVALID_OPERATION_FOR_STATE: errors.New("invalid operation for current state"),
+	IOVM1_ERROR_UNKNOWN_OPCODE:              errors.New("unknown opcode"),
+	IOVM1_ERROR_INVALID_MEMORY_ACCESS:       errors.New("invalid memory access"),
 	IOVM1_ERROR_OUT_OF_RANGE:                   errors.New("out of range"),
 	IOVM1_ERROR_NO_DATA:                        errors.New("no data"),
 	IOVM1_ERROR_BUFFER_TOO_SMALL:               errors.New("buffer too small"),

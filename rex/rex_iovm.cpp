@@ -204,6 +204,21 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
             notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_address_out_of_range);
             return;
         }
+
+        // default the timeout to 1 frame if not set:
+        if (cbs->tim == 0) {
+            // 1364 master cycles * 262 scanlines = 357368 cycles / frame
+            cbs->tim = 357368;
+        }
+        // offset the timeout with the current cycle count:
+        cbs->tim += cycles;
+    }
+
+    // check timeout:
+    if (cycles >= cbs->tim) {
+        cbs->result = IOVM1_ERROR_TIMED_OUT;
+        cbs->complete = true;
+        return;
     }
 
     // read byte and apply mask:
@@ -281,8 +296,12 @@ rex_cmd_result vm_inst::vm_reset() {
 void vm_inst::on_pc(uint32_t pc) {
     // this method is called before every instruction:
 
-    // execute opcodes in the iovm until a blocking operation (read, write, while) occurs:
+    // execute opcodes in the iovm:
     std::unique_lock<std::mutex> lk(vm_mtx);
+
+    // capture master cycle count from snes9x global:
+    cycles = (uint32_t) CPU.Cycles;
+
     auto last_state = iovm1_get_exec_state(&vm);
     if (IOVM1_SUCCESS == iovm1_exec(&vm)) {
         auto curr_state = iovm1_get_exec_state(&vm);
