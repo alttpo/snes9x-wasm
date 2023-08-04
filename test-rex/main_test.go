@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/hex"
+	"strings"
 	"testing"
 	"testrex/rex"
+	"unsafe"
 )
 
 func TestIOVM(t *testing.T) {
@@ -42,4 +44,73 @@ func TestIOVM(t *testing.T) {
 		rex.IOVM1Instruction(rex.IOVM1_OPCODE_READ, 0),
 	}
 	t.Log("\n" + hex.Dump(vmprog[:]))
+}
+
+func TestPPUX(t *testing.T) {
+	var cmdWords [(1 + 2 + 8*7) + (1 + 5) + 1 + 10]uint32
+
+	// write to bg2 main a rotating test pixel pattern:
+	cmd := cmdWords[:0]
+	cmd = append(cmd,
+		//   MSB                                             LSB
+		//   1111 1111     1111 1111     0000 0000     0000 0000
+		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+		//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
+		//                                                          s = size of packet in uint32_ts
+		0b1000_0001_0000_0000_0000_0000_0000_0000+(8*7)+2,
+		//   MSB                                             LSB
+		//   1111 1111     1111 1111     0000 0000     0000 0000
+		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+		//   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx
+		uint32((110<<16)|(118+r)),
+		//   MSB                                             LSB
+		//   1111 1111     1111 1111     0000 0000     0000 0000
+		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+		//   -o-- slll     ---- ----     ---- --ww     wwww wwww
+		// w = 8, l = 1 (BG2), s = 0, o = 0
+		0b0000_0000_0000_0001_0000_0000_0000_0000+8,
+	)
+	for y := int64(0); y < 7; y++ {
+		rotate()
+		cmd = append(cmd, rotatingPixels[:]...)
+	}
+	cmd = append(cmd,
+		//   MSB                                             LSB
+		//   1111 1111     1111 1111     0000 0000     0000 0000
+		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+		//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
+		//                                                          s = size of packet in uint32_ts
+		0b1000_0010_0000_0000_0000_0000_0000_0000+4,
+		//   MSB                                             LSB
+		//  1111 1111     1111 1111     0000 0000     0000 0000
+		//[ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+		//  ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx    x = x coordinate (0..1023)
+		//  --pp slll     ---- --vf     hhhh hhhh     wwww wwww    y = y coordinate (0..1023)
+		//  ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
+		//  ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
+		//                                                         w = width in pixels
+		//                                                         h = height in pixels
+		//                                                         f = horizontal flip
+		//                                                         v = vertical flip
+		//                                                         l = PPU layer
+		//                                                         s = main or sub screen; main=0, sub=1
+		//                                                         p = priority (0..3 for OBJ, 0..1 for BG)
+		(132<<16)|132,
+		0b0010_0100_0000_0000_0001_0000_0001_0000,
+		0x0000,
+		0x0000,
+	)
+	// end of list:
+	cmd = append(cmd, 0b1000_0000_0000_0000_0000_0000_0000_0000)
+
+	cmdBytes := unsafe.Slice((*byte)(unsafe.Pointer(&cmd[0])), len(cmd)*4)
+	t.Logf("%d\n", len(cmdBytes))
+
+	sb := &strings.Builder{}
+	he := hex.NewEncoder(sb)
+	for i := range cmdBytes {
+		_, _ = he.Write(cmdBytes[i : i+1])
+		sb.WriteByte(' ')
+	}
+	t.Log("\n" + sb.String())
 }
