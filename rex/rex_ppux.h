@@ -9,6 +9,13 @@
 #include "snes9x.h"
 #include "rex_proto.h"
 
+enum ppux_error {
+    PPUX_SUCCESS,
+    PPUX_INVALID_OPCODE,
+    PPUX_MISSING_END,
+    PPUX_ADDRESS_OUT_OF_RANGE,
+};
+
 struct ppux {
     ppux();
 
@@ -70,9 +77,9 @@ struct ppux {
     int dirty_bottom = MAX_SNES_HEIGHT - 1;
 
 public:
-    rex_cmd_result cmd_upload(uint32_t *data, uint32_t size);
-    rex_cmd_result vram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
-    rex_cmd_result cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
+    ppux_error cmd_upload(uint32_t *data, uint32_t size);
+    ppux_error vram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
+    ppux_error cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size);
 
     void render_cmd();
 

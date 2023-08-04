@@ -33,9 +33,7 @@ public:
     bool handle_net();
 
 public: // vm_notifier
-    void vm_notify_ended() override;
-
-    void vm_notify_fail(uint32_t pc, iovm1_opcode o, rex_cmd_result result) override;
+    void vm_notify_ended(uint32_t pc, iovm1_opcode o, enum iovm1_error result) override;
 
     void vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) override;
     void vm_notify_read_byte(uint8_t x) override;

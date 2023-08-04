@@ -18,7 +18,7 @@
 
 class vm_notifier {
 public:
-    virtual void vm_notify_fail(uint32_t pc, iovm1_opcode o, rex_cmd_result result) = 0;
+    virtual void vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result) = 0;
 
     virtual void vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) = 0;
 
@@ -35,8 +35,6 @@ public:
     virtual void vm_notify_write_end() = 0;
 
     virtual void vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) = 0;
-
-    virtual void vm_notify_ended() = 0;
 };
 
 class vm_inst {
@@ -55,13 +53,13 @@ class vm_inst {
 public:
     explicit vm_inst(vm_notifier *notifier);
 
-    rex_cmd_result vm_init();
+    iovm1_error vm_init();
 
-    rex_cmd_result vm_load(const uint8_t *vmprog, uint32_t vmprog_len);
+    iovm1_error vm_load(const uint8_t *vmprog, uint32_t vmprog_len);
 
     iovm1_state vm_getstate();
 
-    rex_cmd_result vm_reset();
+    iovm1_error vm_reset();
 
     void on_pc(uint32_t pc);
 

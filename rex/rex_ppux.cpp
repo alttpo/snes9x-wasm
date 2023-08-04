@@ -193,7 +193,7 @@ void ppux::render_line_sub(ppux::layer layer) {
     }
 }
 
-rex_cmd_result ppux::cmd_upload(uint32_t *data, uint32_t size) {
+ppux_error ppux::cmd_upload(uint32_t *data, uint32_t size) {
     // size is counted in uint32_t units.
 
     // append the uint32_ts:
@@ -216,7 +216,7 @@ rex_cmd_result ppux::cmd_upload(uint32_t *data, uint32_t size) {
                 "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
                 it - cmdNext.begin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
-            return rex_ppux_invalid_opcode;
+            return PPUX_INVALID_OPCODE;
         }
 
         auto size = *it & 0xffff;
@@ -237,7 +237,7 @@ rex_cmd_result ppux::cmd_upload(uint32_t *data, uint32_t size) {
 
     // did we find the end?
     if (endit == cmdNext.end()) {
-        return rex_ppux_missing_end;
+        return PPUX_MISSING_END;
     }
 
     // atomically copy cmdNext to cmd and clear cmdNext:
@@ -247,27 +247,27 @@ rex_cmd_result ppux::cmd_upload(uint32_t *data, uint32_t size) {
         cmdNext.erase(cmdNext.begin(), cmdNext.end());
     }
 
-    return rex_success;
+    return PPUX_SUCCESS;
 }
 
-rex_cmd_result ppux::vram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
+ppux_error ppux::vram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
     uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
     if (maxaddr >= vram_max_size) {
-        return rex_ppux_address_out_of_range;
+        return PPUX_ADDRESS_OUT_OF_RANGE;
     }
 
     std::copy_n(data, size, vram.begin() + addr);
-    return rex_success;
+    return PPUX_SUCCESS;
 }
 
-rex_cmd_result ppux::cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
+ppux_error ppux::cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size) {
     uint64_t maxaddr = (uint64_t) addr + (uint64_t) size;
     if (maxaddr >= vram_max_size) {
-        return rex_ppux_address_out_of_range;
+        return PPUX_ADDRESS_OUT_OF_RANGE;
     }
 
     std::copy_n(data, size, cgram.begin() + addr);
-    return rex_success;
+    return PPUX_SUCCESS;
 }
 
 void ppux::render_cmd() {

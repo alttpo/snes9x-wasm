@@ -45,17 +45,11 @@ void rex_client::on_pc(uint32_t pc) {
 
 ///////////////////////////////////
 
-void rex_client::vm_notify_ended() {
+void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, enum iovm1_error result) {
     // vm_ended message type:
-    frame_outgoing_append(&fo[1], rex_notify_iovm_end);
-
-    frame_outgoing_send(&fo[1], 1, true);
-}
-
-void rex_client::vm_notify_fail(uint32_t pc, iovm1_opcode o, rex_cmd_result result) {
-    // vm_read_complete message type:
-    *fo[1].p++ = rex_notify_iovm_opcode_fail;
-    *fo[1].p++ = rex_notify_iovm_opcode_fail;
+    *fo[1].p++ = rex_notify_iovm_end;
+    // result:
+    *fo[1].p++ = result;
     // pc:
     *fo[1].p++ = pc & 0xFF;
     *fo[1].p++ = (pc >> 8) & 0xFF;
@@ -63,8 +57,6 @@ void rex_client::vm_notify_fail(uint32_t pc, iovm1_opcode o, rex_cmd_result resu
     *fo[1].p++ = (pc >> 24) & 0xFF;
     // opcode:
     *fo[1].p++ = o;
-    // result:
-    *fo[1].p++ = result;
 
     frame_outgoing_send(&fo[1], 1, true);
 }
@@ -231,58 +223,59 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
     }
 
     // c=0 is command/response channel:
-    rex_cmd_result result;
+    rex_cmd_result result = rex_success;
+    iovm1_error vmerr;
+    ppux_error ppuxerr;
     auto cmd = static_cast<rex_cmd>(m.at(0));
     switch (cmd) {
         case rex_cmd_iovm_exec: // iovm: load & execute program
             if (m.size() <= 1 + 1) {
-                send_message(0, {cmd, rex_msg_bad_request});
+                send_message(0, {cmd, rex_msg_too_short});
                 fprintf(stderr, "message too short\n");
                 return;
             }
 
             vmi.vm_init();
-            result = vmi.vm_load(&m.at(1), m.size() - 1);
-            send_message(0, {cmd, result});
+            vmerr = vmi.vm_load(&m.at(1), m.size() - 1);
+            if (vmerr != IOVM1_SUCCESS) {
+                result = rex_cmd_error;
+            }
+            send_message(0, {cmd, result, static_cast<uint8_t>(vmerr)});
             break;
         case rex_cmd_iovm_reset: // iovm: reset
-            if (m.size() > 1) {
-                send_message(0, {cmd, rex_msg_bad_request});
-                fprintf(stderr, "message too long\n");
-                return;
+            vmerr = vmi.vm_reset();
+            if (vmerr != IOVM1_SUCCESS) {
+                result = rex_cmd_error;
             }
-            result = vmi.vm_reset();
-            send_message(0, {cmd, result});
+            send_message(0, {cmd, result, static_cast<uint8_t>(vmerr)});
             break;
         case rex_cmd_iovm_getstate: // iovm: getstate
-            if (m.size() > 1) {
-                send_message(0, {cmd, rex_msg_bad_request});
-                fprintf(stderr, "message too long\n");
-                return;
-            }
             send_message(0, {cmd, rex_success, static_cast<uint8_t>(vmi.vm_getstate())});
             break;
         case rex_cmd_ppux_exec: // ppux: load & execute program
             if (m.size() <= 1 + 4) {
-                send_message(0, {cmd, rex_msg_bad_request});
+                send_message(0, {cmd, rex_msg_too_short});
                 fprintf(stderr, "message too short\n");
                 return;
             }
             if (((m.size() - 1) & 3) != 0) {
-                send_message(0, {cmd, rex_msg_bad_request});
+                send_message(0, {cmd, rex_msg_too_short});
                 fprintf(stderr, "message data size must be multiple of 4 bytes\n");
                 return;
             }
-            result = ppux.cmd_upload(
+            ppuxerr = ppux.cmd_upload(
                 (uint32_t *) &m.at(1),
                 (m.size() - 1) / sizeof(uint32_t)
             );
-            send_message(0, {cmd, result});
+            if (ppuxerr != PPUX_SUCCESS) {
+                result = rex_cmd_error;
+            }
+            send_message(0, {cmd, result, static_cast<uint8_t>(ppuxerr)});
             break;
         case rex_cmd_ppux_vram_upload: { // ppux: vram upload
             // TODO: possibly stream in each frame instead of waiting for the complete message
             if (m.size() <= 1 + 4) {
-                send_message(0, {cmd, rex_msg_bad_request});
+                send_message(0, {cmd, rex_msg_too_short});
                 fprintf(stderr, "message too short\n");
                 return;
             }
@@ -292,14 +285,17 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             addr |= (uint32_t) *p++ << 16;
             addr |= (uint32_t) *p++ << 24;
             // size is implicit in remaining length of message
-            result = ppux.vram_upload(addr, &*p, m.cend() - p);
-            send_message(0, {cmd, result});
+            ppuxerr = ppux.vram_upload(addr, &*p, m.cend() - p);
+            if (ppuxerr != PPUX_SUCCESS) {
+                result = rex_cmd_error;
+            }
+            send_message(0, {cmd, result, static_cast<uint8_t>(ppuxerr)});
             break;
         }
         case rex_cmd_ppux_cgram_upload: { // ppux: cgram upload
             // TODO: possibly stream in each frame instead of waiting for the complete message
             if (m.size() <= 1 + 4) {
-                send_message(0, {cmd, rex_msg_bad_request});
+                send_message(0, {cmd, rex_msg_too_short});
                 fprintf(stderr, "message too short\n");
                 return;
             }
@@ -309,8 +305,11 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             addr |= (uint32_t) *p++ << 16;
             addr |= (uint32_t) *p++ << 24;
             // size is implicit in remaining length of message
-            result = ppux.cgram_upload(addr, &*p, m.cend() - p);
-            send_message(0, {cmd, result});
+            ppuxerr = ppux.cgram_upload(addr, &*p, m.cend() - p);
+            if (ppuxerr != PPUX_SUCCESS) {
+                result = rex_cmd_error;
+            }
+            send_message(0, {cmd, result, static_cast<uint8_t>(ppuxerr)});
             break;
         }
         default:

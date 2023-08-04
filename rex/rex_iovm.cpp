@@ -72,19 +72,19 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
             if (!mem) {
                 // memory target not defined:
                 cbs->complete = true;
-                notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_undefined);
+                cbs->result = IOVM1_ERROR_MEMORY_TARGET_UNDEFINED;
                 return;
             }
             if (!readable) {
                 // memory target not readable:
                 cbs->complete = true;
-                notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_not_readable);
+                cbs->result = IOVM1_ERROR_MEMORY_TARGET_NOT_READABLE;
                 return;
             }
             if (cbs->a + cbs->len > mem_len) {
                 // memory target address out of range:
                 cbs->complete = true;
-                notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_address_out_of_range);
+                cbs->result = IOVM1_ERROR_MEMORY_TARGET_ADDRESS_OUT_OF_RANGE;
                 return;
             }
 
@@ -126,19 +126,19 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
             if (!mem) {
                 // memory target not defined:
                 cbs->complete = true;
-                notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_undefined);
+                cbs->result = IOVM1_ERROR_MEMORY_TARGET_UNDEFINED;
                 return;
             }
             if (!writable) {
-                // memory target not readable:
+                // memory target not writable:
                 cbs->complete = true;
-                notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_not_writable);
+                cbs->result = IOVM1_ERROR_MEMORY_TARGET_NOT_WRITABLE;
                 return;
             }
             if (cbs->a + cbs->len > mem_len) {
                 // memory target address out of range:
                 cbs->complete = true;
-                notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_address_out_of_range);
+                cbs->result = IOVM1_ERROR_MEMORY_TARGET_ADDRESS_OUT_OF_RANGE;
                 return;
             }
 
@@ -189,19 +189,19 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
         if (!mem) {
             // memory target not defined:
             cbs->complete = true;
-            notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_undefined);
+            cbs->result = IOVM1_ERROR_MEMORY_TARGET_UNDEFINED;
             return;
         }
         if (!readable) {
             // memory target not readable:
             cbs->complete = true;
-            notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_not_readable);
+            cbs->result = IOVM1_ERROR_MEMORY_TARGET_NOT_READABLE;
             return;
         }
         if (cbs->a >= mem_len) {
             // out of range:
             cbs->complete = true;
-            notifier->vm_notify_fail(cbs->p, cbs->o, rex_iovm_memory_target_address_out_of_range);
+            cbs->result = IOVM1_ERROR_MEMORY_TARGET_ADDRESS_OUT_OF_RANGE;
             return;
         }
 
@@ -216,8 +216,8 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
 
     // check timeout:
     if (cycles >= cbs->tim) {
-        cbs->result = IOVM1_ERROR_TIMED_OUT;
         cbs->complete = true;
+        cbs->result = IOVM1_ERROR_TIMED_OUT;
         return;
     }
 
@@ -254,25 +254,19 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
     }
 }
 
-rex_cmd_result vm_inst::vm_init() {
+iovm1_error vm_inst::vm_init() {
     std::unique_lock<std::mutex> lk(vm_mtx);
 
     iovm1_init(&vm);
     iovm1_set_userdata(&vm, (void *) this);
 
-    return rex_success;
+    return IOVM1_SUCCESS;
 }
 
-rex_cmd_result vm_inst::vm_load(const uint8_t *vmprog, uint32_t vmprog_len) {
+iovm1_error vm_inst::vm_load(const uint8_t *vmprog, uint32_t vmprog_len) {
     std::unique_lock<std::mutex> lk(vm_mtx);
 
-    auto res = iovm1_load(&vm, vmprog, vmprog_len);
-    switch (res) {
-        case IOVM1_SUCCESS:
-            return rex_success;
-        default:
-            return rex_iovm_internal_error;
-    }
+    return iovm1_load(&vm, vmprog, vmprog_len);
 }
 
 iovm1_state vm_inst::vm_getstate() {
@@ -281,16 +275,10 @@ iovm1_state vm_inst::vm_getstate() {
     return iovm1_get_exec_state(&vm);
 }
 
-rex_cmd_result vm_inst::vm_reset() {
+iovm1_error vm_inst::vm_reset() {
     std::unique_lock<std::mutex> lk(vm_mtx);
 
-    auto res = iovm1_exec_reset(&vm);
-    switch (res) {
-        case IOVM1_SUCCESS:
-            return rex_success;
-        default:
-            return rex_iovm_internal_error;
-    }
+    return iovm1_exec_reset(&vm);
 }
 
 void vm_inst::on_pc(uint32_t pc) {
@@ -303,10 +291,10 @@ void vm_inst::on_pc(uint32_t pc) {
     cycles = (uint32_t) CPU.Cycles;
 
     auto last_state = iovm1_get_exec_state(&vm);
-    if (IOVM1_SUCCESS == iovm1_exec(&vm)) {
-        auto curr_state = iovm1_get_exec_state(&vm);
-        if ((curr_state != last_state) && (curr_state == IOVM1_STATE_ENDED)) {
-            notifier->vm_notify_ended();
-        }
+    auto result = iovm1_exec(&vm);
+    auto curr_state = iovm1_get_exec_state(&vm);
+
+    if ((curr_state != last_state) && (curr_state >= IOVM1_STATE_ENDED)) {
+        notifier->vm_notify_ended(vm.m.off, vm.cbs.o, result);
     }
 }
