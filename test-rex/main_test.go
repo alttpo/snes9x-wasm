@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
+	"io"
 	"strings"
 	"testing"
 	"testrex/rex"
@@ -106,11 +108,22 @@ func TestPPUX(t *testing.T) {
 	cmdBytes := unsafe.Slice((*byte)(unsafe.Pointer(&cmd[0])), len(cmd)*4)
 	t.Logf("%d\n", len(cmdBytes))
 
-	sb := &strings.Builder{}
+	frames := bytes.Buffer{}
+	fw := rex.NewFrameWriter(&frames, 0)
+	// ppux_exec:
+	fw.Write([]byte{0x03})
+	io.Copy(fw, bytes.NewReader(cmdBytes))
+	fw.Close()
+
+	sb := toHex(&strings.Builder{}, frames.Bytes())
+	t.Log("\n" + sb.String())
+}
+
+func toHex(sb *strings.Builder, b []byte) *strings.Builder {
 	he := hex.NewEncoder(sb)
-	for i := range cmdBytes {
-		_, _ = he.Write(cmdBytes[i : i+1])
+	for i := range b {
+		_, _ = he.Write(b[i : i+1])
 		sb.WriteByte(' ')
 	}
-	t.Log("\n" + sb.String())
+	return sb
 }
