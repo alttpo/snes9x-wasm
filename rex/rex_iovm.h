@@ -18,7 +18,7 @@
 
 class vm_notifier {
 public:
-    virtual void vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result) = 0;
+    virtual void vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result, iovm1_state state) = 0;
 
     virtual void vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) = 0;
 

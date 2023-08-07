@@ -40,16 +40,22 @@ rex_client::rex_client(sock_sp s_p) :
 }
 
 void rex_client::on_pc(uint32_t pc) {
+    if (!vm_running) {
+        return;
+    }
+
     vmi.on_pc(pc);
 }
 
 ///////////////////////////////////
 
-void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, enum iovm1_error result) {
+void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result, iovm1_state state) {
     if (result == IOVM1_SUCCESS) {
         // auto-restart on success:
         if ((vmi_flags & rex_iovm_flag_auto_restart_on_end) != 0) {
             vmi.vm_reset();
+        } else {
+            vm_running = false;
         }
 
         // notification behavior:
@@ -60,6 +66,8 @@ void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, enum iovm1_error r
         // auto-restart on error:
         if ((vmi_flags & rex_iovm_flag_auto_restart_on_error) != 0) {
             vmi.vm_reset();
+        } else {
+            vm_running = false;
         }
 
         // notification behavior:
@@ -264,15 +272,14 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
     auto p = m.cbegin() + 1;
     unsigned long size = m.size() - 1;
     switch (cmd) {
-        case rex_cmd_iovm_exec: { // iovm: load & execute program
-            if (size <= 1) {
+        case rex_cmd_iovm_load: { // iovm: load program
+            if (size < 1) {
                 send_message(0, {cmd, rex_msg_too_short});
                 fprintf(stderr, "message too short\n");
                 return;
             }
 
             vmi.vm_init();
-            vmi_flags = (rex_iovm_flags) *p++;
             vmerr = vmi.vm_load(&*p, m.cend() - p);
             if (vmerr != IOVM1_SUCCESS) {
                 result = rex_cmd_error;
@@ -280,6 +287,24 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             send_message(0, {cmd, result, static_cast<uint8_t>(vmerr)});
             break;
         }
+        case rex_cmd_iovm_start: // iovm: start
+            vm_running = true;
+            send_message(0, {cmd, rex_success});
+            break;
+        case rex_cmd_iovm_stop: // iovm: stop
+            vm_running = false;
+            send_message(0, {cmd, rex_success});
+            break;
+        case rex_cmd_iovm_flags: // iovm: set flags
+            if (size < 1) {
+                send_message(0, {cmd, rex_msg_too_short});
+                fprintf(stderr, "message too short\n");
+                return;
+            }
+
+            vmi_flags = (rex_iovm_flags) *p++;
+            send_message(0, {cmd, rex_success});
+            break;
         case rex_cmd_iovm_reset: // iovm: reset
             vmerr = vmi.vm_reset();
             if (vmerr != IOVM1_SUCCESS) {

@@ -24,7 +24,9 @@ public:
     struct ppux ppux{};
 
     vm_inst vmi;
-    rex_iovm_flags vmi_flags;
+    rex_iovm_flags vmi_flags = static_cast<rex_iovm_flags>(rex_iovm_flag_notify_end | rex_iovm_flag_notify_error);
+
+    bool vm_running{};
 
 public:
     explicit rex_client(sock_sp s);
@@ -35,7 +37,7 @@ public:
     bool handle_net();
 
 public: // vm_notifier
-    void vm_notify_ended(uint32_t pc, iovm1_opcode o, enum iovm1_error result) override;
+    void vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result, iovm1_state state) override;
 
     void vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) override;
     void vm_notify_read_byte(uint8_t x) override;

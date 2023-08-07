@@ -295,6 +295,6 @@ void vm_inst::on_pc(uint32_t pc) {
     auto curr_state = iovm1_get_exec_state(&vm);
 
     if ((curr_state != last_state) && (curr_state >= IOVM1_STATE_ENDED)) {
-        notifier->vm_notify_ended(vm.m.off, vm.cbs.o, result);
+        notifier->vm_notify_ended(vm.m.off, vm.cbs.o, result, curr_state);
     }
 }

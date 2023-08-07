@@ -6,10 +6,13 @@
 
 // command request type on channel 0 (incoming):
 enum rex_cmd : uint8_t {
-    rex_cmd_iovm_exec,
+    rex_cmd_iovm_load,
+    rex_cmd_iovm_start,
+    rex_cmd_iovm_stop,
     rex_cmd_iovm_reset,
+    rex_cmd_iovm_flags,
     rex_cmd_iovm_getstate,
-    rex_cmd_ppux_exec,
+    rex_cmd_ppux_exec = 16,
     rex_cmd_ppux_vram_upload,
     rex_cmd_ppux_cgram_upload
 };
