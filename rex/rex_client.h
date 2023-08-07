@@ -22,7 +22,9 @@ class rex_client : public vm_notifier {
 
 public:
     struct ppux ppux{};
+
     vm_inst vmi;
+    rex_iovm_flags vmi_flags;
 
 public:
     explicit rex_client(sock_sp s);

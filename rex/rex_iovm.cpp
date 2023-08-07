@@ -255,7 +255,7 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
 }
 
 iovm1_error vm_inst::vm_init() {
-    std::unique_lock<std::mutex> lk(vm_mtx);
+    std::lock_guard lk(vm_mtx);
 
     iovm1_init(&vm);
     iovm1_set_userdata(&vm, (void *) this);
@@ -264,19 +264,19 @@ iovm1_error vm_inst::vm_init() {
 }
 
 iovm1_error vm_inst::vm_load(const uint8_t *vmprog, uint32_t vmprog_len) {
-    std::unique_lock<std::mutex> lk(vm_mtx);
+    std::lock_guard lk(vm_mtx);
 
     return iovm1_load(&vm, vmprog, vmprog_len);
 }
 
 iovm1_state vm_inst::vm_getstate() {
-    std::unique_lock<std::mutex> lk(vm_mtx);
+    std::lock_guard lk(vm_mtx);
 
     return iovm1_get_exec_state(&vm);
 }
 
 iovm1_error vm_inst::vm_reset() {
-    std::unique_lock<std::mutex> lk(vm_mtx);
+    std::lock_guard lk(vm_mtx);
 
     return iovm1_exec_reset(&vm);
 }
@@ -285,7 +285,7 @@ void vm_inst::on_pc(uint32_t pc) {
     // this method is called before every instruction:
 
     // execute opcodes in the iovm:
-    std::unique_lock<std::mutex> lk(vm_mtx);
+    std::lock_guard lk(vm_mtx);
 
     // capture master cycle count from snes9x global:
     cycles = (uint32_t) CPU.Cycles;

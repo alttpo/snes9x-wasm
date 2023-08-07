@@ -49,7 +49,7 @@ struct ppux {
     static const uint32_t PX_ENABLE = (1UL << 0x1f);  // `E`
 
     // draw commands:
-    std::mutex cmd_m;
+    std::recursive_mutex cmd_m;
     std::vector<uint32_t> cmd;
     std::vector<uint32_t> cmdNext;
 

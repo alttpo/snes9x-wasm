@@ -242,7 +242,7 @@ ppux_error ppux::cmd_upload(uint32_t *data, uint32_t size) {
 
     // atomically copy cmdNext to cmd and clear cmdNext:
     {
-        std::unique_lock<std::mutex> lk(cmd_m);
+        std::lock_guard lk(cmd_m);
         cmd = cmdNext;
         cmdNext.erase(cmdNext.begin(), cmdNext.end());
     }
@@ -271,7 +271,7 @@ ppux_error ppux::cgram_upload(uint32_t addr, const uint8_t *data, uint32_t size)
 }
 
 void ppux::render_cmd() {
-    std::unique_lock<std::mutex> lk(cmd_m);
+    std::lock_guard lk(cmd_m);
 
     if (dirty_bottom >= dirty_top) {
         // clear all dirty lines in each layer:

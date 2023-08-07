@@ -45,7 +45,7 @@ class vm_inst {
     uint32_t p_init{};
     uint32_t len_init{};
 
-    std::mutex vm_mtx;
+    std::recursive_mutex vm_mtx;
     struct iovm1_t vm{};
 
     uint32_t cycles;
