@@ -3,6 +3,8 @@
 
 struct rex rex;
 
+int32_t last_cycles;
+
 void rex_host_init() {
 }
 
@@ -12,6 +14,15 @@ void rex_rom_loaded() {
 
 void rex_rom_unloaded() {
     rex.shutdown();
+}
+
+void rex_set_last_cycles(int32_t last) {
+    last_cycles = last;
+}
+
+void rex_set_curr_cycles(int32_t curr) {
+    rex.inc_cycles(curr - last_cycles);
+    last_cycles = curr;
 }
 
 void rex_on_pc(uint32_t pc) {
@@ -115,6 +126,12 @@ void rex::handle_net() {
             all_socks.push_back(accepted);
             clients.push_back(std::make_shared<rex_client>(accepted));
         }
+    }
+}
+
+void rex::inc_cycles(int32_t delta) {
+    for (auto &cl: clients) {
+        cl->inc_cycles(delta);
     }
 }
 

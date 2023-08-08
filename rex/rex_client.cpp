@@ -17,7 +17,7 @@ rex_client::rex_client(sock_sp s_p) :
         },
         +[](struct frame_incoming *fr, uint8_t *buf, uint8_t len, uint8_t chn, bool fin) {
             auto self = static_cast<rex_client *>(fr->opaque);
-            self->recv_frame(buf, len, chn, fin);
+            return self->recv_frame(buf, len, chn, fin);
         }
     );
 
@@ -39,6 +39,10 @@ rex_client::rex_client(sock_sp s_p) :
     );
 }
 
+void rex_client::inc_cycles(int32_t delta) {
+    vmi.inc_cycles(delta);
+}
+
 void rex_client::on_pc(uint32_t pc) {
     if (!vm_running) {
         return;
@@ -49,6 +53,13 @@ void rex_client::on_pc(uint32_t pc) {
 
 ///////////////////////////////////
 
+void rex_client::send_frame(uint8_t c, bool fin) {
+    if (!frame_outgoing_send(&fo[c], c, fin)) {
+        fprintf(stderr, "failed to send frame (err=%d): %s\n", s->error_num(), s->error_text().c_str());
+        frame_outgoing_reset(&fo[c]);
+    }
+}
+
 void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result, iovm1_state state) {
     if (result == IOVM1_SUCCESS) {
         // auto-restart on success:
@@ -58,21 +69,15 @@ void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result
             vm_running = false;
         }
 
-        // notification behavior:
-        if ((vmi_flags & rex_iovm_flag_notify_end) == 0) {
-            return;
-        }
+        // do not notify on successful termination to avoid notification spam:
+        return;
     } else {
-        // auto-restart on error:
         if ((vmi_flags & rex_iovm_flag_auto_restart_on_error) != 0) {
+            // auto-restart on error:
             vmi.vm_reset();
         } else {
+            // stop running on error:
             vm_running = false;
-        }
-
-        // notification behavior:
-        if ((vmi_flags & rex_iovm_flag_notify_error) == 0) {
-            return;
         }
     }
 
@@ -88,7 +93,7 @@ void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result
     // opcode:
     *fo[1].p++ = o;
 
-    frame_outgoing_send(&fo[1], 1, true);
+    send_frame(1, true);
 }
 
 void rex_client::vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) {
@@ -116,19 +121,19 @@ void rex_client::vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, u
     *fo[1].p++ = ((elen >> 8) & 0xFF);
 
     // send start frame instantly:
-    frame_outgoing_send(&fo[1], 1, false);
+    send_frame(1, false);
 }
 
 void rex_client::vm_notify_read_byte(uint8_t x) {
     *fo[1].p++ = x;
     if (frame_outgoing_len(&fo[1]) >= 63) {
-        frame_outgoing_send(&fo[1], 1, false);
+        send_frame(1, false);
     }
 }
 
 void rex_client::vm_notify_read_end() {
     // send the final frame:
-    frame_outgoing_send(&fo[1], 1, true);
+    send_frame(1, true);
 }
 
 void rex_client::vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) {
@@ -160,7 +165,7 @@ void rex_client::vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, 
     *fo[1].p++ = ((elen >> 8) & 0xFF);
 
     // send start frame instantly:
-    frame_outgoing_send(&fo[1], 1, false);
+    send_frame(1, false);
 }
 
 #ifdef NOTIFY_WRITE_BYTE
@@ -173,7 +178,7 @@ void rex_client::vm_notify_write_end() {
     }
 
     // send the final frame:
-    frame_outgoing_send(&fo[1], 1, true);
+    send_frame(1, true);
 }
 
 void rex_client::vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) {
@@ -197,7 +202,7 @@ void rex_client::vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t td
     *fo[1].p++ = x;
 
     // send final frame:
-    frame_outgoing_send(&fo[1], 1, true);
+    send_frame(1, true);
 }
 
 ///////////////////////////////////
@@ -210,7 +215,7 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
     const ssize_t frame_size = 63;
     while (len > frame_size) {
         frame_outgoing_append_bytes(&fo[c], p, frame_size);
-        frame_outgoing_send(&fo[c], c, false);
+        send_frame(c, false);
 
         len -= frame_size;
         p += frame_size;
@@ -220,7 +225,7 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
         // send final frame:
         assert(len <= frame_size);
         frame_outgoing_append_bytes(&fo[c], p, len);
-        frame_outgoing_send(&fo[c], c, true);
+        send_frame(c, true);
     }
 }
 
@@ -241,7 +246,7 @@ bool rex_client::handle_net() {
     return frame_incoming_read(&fi);
 }
 
-void rex_client::recv_frame(uint8_t buf[63], uint8_t len, uint8_t chn, uint8_t fin) {
+bool rex_client::recv_frame(uint8_t buf[63], uint8_t len, uint8_t chn, uint8_t fin) {
     //printf("recv_frame[c=%d,f=%d]: %d bytes\n", c, f, l);
 
     // append buffer data to message for this channel:
@@ -252,6 +257,8 @@ void rex_client::recv_frame(uint8_t buf[63], uint8_t len, uint8_t chn, uint8_t f
         // clear out message for next:
         msgIn[chn].clear();
     }
+
+    return true;
 }
 
 void rex_client::recv_message(uint8_t c, const v8 &m) {
@@ -280,6 +287,7 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             }
 
             vmi.vm_init();
+
             vmerr = vmi.vm_load(&*p, m.cend() - p);
             if (vmerr != IOVM1_SUCCESS) {
                 result = rex_cmd_error;

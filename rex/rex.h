@@ -18,6 +18,8 @@
 #include "rex_client.h"
 
 struct rex {
+    void inc_cycles(int32_t delta);
+
     void on_pc(uint32_t pc);
 
     void start();
@@ -44,6 +46,10 @@ void rex_host_init();
 void rex_rom_loaded();
 
 void rex_rom_unloaded();
+
+void rex_set_last_cycles(int32_t last);
+
+void rex_set_curr_cycles(int32_t curr);
 
 void rex_on_pc(uint32_t pc);
 

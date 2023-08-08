@@ -56,6 +56,13 @@ auto sock::capture_error(const std::string &fn) {
     errfn = fn;
 }
 
+auto sock::error_func() -> std::string {
+    return errfn;
+}
+auto sock::error_num() -> int {
+    return err;
+}
+
 auto sock::error_text() -> std::string {
     if (err == 0) {
         return "no error";

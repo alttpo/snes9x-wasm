@@ -107,8 +107,10 @@ void S9xMainLoop (void)
 		CHECK_FOR_IRQ_CHANGE();
 
 #ifdef USE_REX
-        // notify rex of current 24-bit PC address:
-        rex_on_pc(Registers.PC.xPBPC);
+		// notify rex of latest cycle counter:
+		rex_set_curr_cycles(CPU.Cycles);
+		// notify rex of current 24-bit PC address:
+		rex_on_pc(Registers.PC.xPBPC);
 #endif
 
 	#ifdef DEBUGGER
@@ -266,7 +268,13 @@ void S9xDoHEventProcessing (void)
 			}
 
 			S9xAPUEndScanline();
+#ifdef USE_REX
+			rex_set_curr_cycles(CPU.Cycles);
+#endif
 			CPU.Cycles -= Timings.H_Max;
+#ifdef USE_REX
+			rex_set_last_cycles(CPU.Cycles);
+#endif
 			if (Timings.NMITriggerPos != 0xffff)
 				Timings.NMITriggerPos -= Timings.H_Max;
 			if (Timings.NextIRQTimer != 0x0fffffff)

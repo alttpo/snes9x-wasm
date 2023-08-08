@@ -210,12 +210,11 @@ void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
             // 1364 master cycles * 262 scanlines = 357368 cycles / frame
             cbs->tim = 357368;
         }
-        // offset the timeout with the current cycle count:
-        cbs->tim += cycles;
+        timeout_cycles = cycles + cbs->tim;
     }
 
     // check timeout:
-    if (cycles >= cbs->tim) {
+    if (cycles >= timeout_cycles) {
         cbs->complete = true;
         cbs->result = IOVM1_ERROR_TIMED_OUT;
         return;
@@ -266,7 +265,12 @@ iovm1_error vm_inst::vm_init() {
 iovm1_error vm_inst::vm_load(const uint8_t *vmprog, uint32_t vmprog_len) {
     std::lock_guard lk(vm_mtx);
 
-    return iovm1_load(&vm, vmprog, vmprog_len);
+    // make a copy of the program data:
+    prog.clear();
+    prog.resize(vmprog_len);
+    std::copy(vmprog, vmprog + vmprog_len, prog.begin());
+
+    return iovm1_load(&vm, prog.data(), prog.size());
 }
 
 iovm1_state vm_inst::vm_getstate() {
@@ -278,17 +282,30 @@ iovm1_state vm_inst::vm_getstate() {
 iovm1_error vm_inst::vm_reset() {
     std::lock_guard lk(vm_mtx);
 
+    // calculate the amount of cycles to delay until the next frame's NMI:
+    uint64_t next_delay = (((cycles / cycles_per_frame) + 1) * cycles_per_frame) + (240 * 1364) - cycles;
+    delay_cycles = (int64_t) next_delay;
+
     return iovm1_exec_reset(&vm);
+}
+
+void vm_inst::inc_cycles(int32_t delta) {
+    cycles += delta;
+    if (delay_cycles > 0) {
+        delay_cycles -= delta;
+    }
 }
 
 void vm_inst::on_pc(uint32_t pc) {
     // this method is called before every instruction:
 
+    // delay:
+    if (delay_cycles > 0) {
+        return;
+    }
+
     // execute opcodes in the iovm:
     std::lock_guard lk(vm_mtx);
-
-    // capture master cycle count from snes9x global:
-    cycles = (uint32_t) CPU.Cycles;
 
     auto last_state = iovm1_get_exec_state(&vm);
     auto result = iovm1_exec(&vm);

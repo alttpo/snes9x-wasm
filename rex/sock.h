@@ -57,6 +57,8 @@ public:
 
     explicit operator bool() const;
     auto error_text() -> std::string;
+    auto error_func() -> std::string;
+    auto error_num() -> int;
 
     inline auto isReadAvailable() const -> bool { return (revents&0x0001) != 0; }
     inline auto isWritable() const -> bool      { return (revents&0x0004) != 0; }

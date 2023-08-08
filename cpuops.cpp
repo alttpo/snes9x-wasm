@@ -2699,16 +2699,12 @@ void S9xOpcode_NMI (void)
 		}
 		else
 		{
-            uint16	addr;
+            uint16	addr = S9xGetWord(0xFFEA);
     #ifdef EMULATE_FXPAKPRO
             // emulate the fx pak pro behavior of overriding NMI if [$2C00] != 0
             if (Memory.Extra2C00[0] != 0) {
                 addr = 0x2C00;
-            } else {
-                addr = S9xGetWord(0xFFEA);
             }
-    #else
-			addr = S9xGetWord(0xFFEA);
     #endif
 			OpenBus = addr >> 8;
 			S9xSetPCBase(addr);

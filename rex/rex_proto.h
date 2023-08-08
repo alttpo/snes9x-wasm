@@ -37,8 +37,8 @@ enum rex_iovm_flags : uint8_t {
     rex_iovm_flag_notify_write_byte = 1 << 1,
     rex_iovm_flag_notify_write_end = 1 << 2,
     rex_iovm_flag_notify_wait_complete = 1 << 3,
-    rex_iovm_flag_notify_error = 1 << 4,
-    rex_iovm_flag_notify_end = 1 << 5,
+    // 4
+    // 5
     rex_iovm_flag_auto_restart_on_error = 1 << 6,
     rex_iovm_flag_auto_restart_on_end = 1 << 7
 };

@@ -14,6 +14,8 @@
 #include "rex_proto.h"
 
 #define IOVM1_USE_USERDATA
+static const int cycles_per_frame = 262 * 1364;
+
 #include "iovm.h"
 
 class vm_notifier {
@@ -48,7 +50,13 @@ class vm_inst {
     std::recursive_mutex vm_mtx;
     struct iovm1_t vm{};
 
-    uint32_t cycles;
+    std::vector<uint8_t> prog{};
+
+    uint64_t cycles{};
+
+    uint64_t timeout_cycles{};
+
+    int64_t delay_cycles{};
 
 public:
     explicit vm_inst(vm_notifier *notifier);
@@ -60,6 +68,8 @@ public:
     iovm1_state vm_getstate();
 
     iovm1_error vm_reset();
+
+    void inc_cycles(int32_t delta);
 
     void on_pc(uint32_t pc);
 
