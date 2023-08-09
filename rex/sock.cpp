@@ -51,26 +51,12 @@ auto sock::get_last_error() -> int {
     return err;
 }
 
-auto sock::capture_error(const std::string &fn) {
-    err = get_last_error();
-    errfn = fn;
-}
-
-auto sock::error_func() -> std::string {
-    return errfn;
-}
-auto sock::error_num() -> int {
-    return err;
-}
-
-auto sock::error_text() -> std::string {
+auto sock::error_text(int err) -> std::string {
     if (err == 0) {
         return "no error";
     }
 
     std::string s;
-    s.append(errfn);
-    s.append(": ");
 #ifdef __WIN32__
     LPVOID lpMsgBuf;
     // TODO: error-handling here
@@ -91,6 +77,32 @@ auto sock::error_text() -> std::string {
 #else
     s.append(strerror(err));
 #endif
+
+    return s;
+}
+
+
+auto sock::capture_error(const std::string &fn) {
+    err = get_last_error();
+    errfn = fn;
+}
+
+auto sock::error_func() -> std::string {
+    return errfn;
+}
+auto sock::error_num() const -> int {
+    return err;
+}
+
+auto sock::error_text() -> std::string {
+    if (err == 0) {
+        return "no error";
+    }
+
+    std::string s;
+    s.append(errfn);
+    s.append(": ");
+    s.append(error_text(err));
 
     return s;
 }

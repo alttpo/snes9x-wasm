@@ -58,13 +58,15 @@ public:
     explicit operator bool() const;
     auto error_text() -> std::string;
     auto error_func() -> std::string;
-    auto error_num() -> int;
+    auto error_num() const -> int;
 
     inline auto isReadAvailable() const -> bool { return (revents&0x0001) != 0; }
     inline auto isWritable() const -> bool      { return (revents&0x0004) != 0; }
     inline auto isErrored() const -> bool       { return (revents&0x0008) != 0; }
     inline auto isClosed() const -> bool        { return (revents&0x0010) != 0; }
     inline auto isEventsInvalid() const -> bool { return (revents&0x0020) != 0; }
+
+    static auto error_text(int err) -> std::string;
 };
 
 using sock_sp = std::shared_ptr<sock>;

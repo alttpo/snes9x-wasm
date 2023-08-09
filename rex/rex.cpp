@@ -91,12 +91,11 @@ void rex::handle_net() {
     // continually poll and handle network events until the queue dries up:
     while (npolled != 0) {
         if (!sock::poll(all_socks, npolled, err)) {
-            // TODO
-            fprintf(stderr, "poll failed: %s\n", strerror(err));
-            return;
+            fprintf(stderr, "poll failed: %s\n", sock::error_text(err).c_str());
+            break;
         }
         if (npolled <= 0) {
-            return;
+            break;
         }
 
         for (auto it = clients.begin(); it != clients.end();) {
