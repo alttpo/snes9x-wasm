@@ -279,11 +279,17 @@ iovm1_state vm_inst::vm_getstate() {
     return iovm1_get_exec_state(&vm);
 }
 
+// a scanline is 1364 master clock cycles
+// a full frame is 262 scanlines; quarter of a frame is 65.5, but we round down to 64 why not
+static const int cycles_per_qtr_frame = 64 * 1364;
+
 iovm1_error vm_inst::vm_reset() {
     std::lock_guard lk(vm_mtx);
 
-    // calculate the amount of cycles to delay until the next frame's NMI:
-    uint64_t next_delay = (((cycles / cycles_per_frame) + 1) * cycles_per_frame) + (240 * 1364) - cycles;
+    // introduce an artificial delay to prevent notification spam if the program completes too quickly
+
+    // calculate the amount of cycles to delay until the next quarter-frame:
+    uint64_t next_delay = (((cycles / cycles_per_qtr_frame) + 1) * cycles_per_qtr_frame) - cycles;
     delay_cycles = (int64_t) next_delay;
 
     return iovm1_exec_reset(&vm);

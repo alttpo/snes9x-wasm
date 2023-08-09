@@ -14,7 +14,6 @@
 #include "rex_proto.h"
 
 #define IOVM1_USE_USERDATA
-static const int cycles_per_frame = 262 * 1364;
 
 #include "iovm.h"
 
