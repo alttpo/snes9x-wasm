@@ -182,6 +182,10 @@ int S9xOpenROM(const char *rom_filename)
 
     loaded = false;
 
+#ifdef USE_REX
+    rex_rom_unloaded();
+#endif
+
     if (Settings.Multi)
         loaded = Memory.LoadMultiCart(Settings.CartAName, Settings.CartBName);
     else if (rom_filename)

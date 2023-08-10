@@ -71,9 +71,8 @@ void rex::start() {
 }
 
 void rex::shutdown() {
-    for (auto &item: clients) {
-        item.reset();
-    }
+    clients.clear();
+    all_socks.clear();
     listener.reset();
 }
 
