@@ -1,7 +1,10 @@
 
+#include <assert.h>
+
 #include "sock.h"
 
 #ifdef __WIN32__
+#  include <ws2tcpip.h>
 #  include <process.h>
 #  define SOCKOPT_VALUE_CAST (const char *)
 #else

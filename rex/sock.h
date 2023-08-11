@@ -4,9 +4,12 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #ifdef __WIN32__
-#include <ws2tcpip.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+typedef UINT_PTR SOCKET;
 typedef SOCKET native_socket_t;
 #else
 typedef int native_socket_t;

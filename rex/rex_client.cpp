@@ -212,7 +212,7 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
     const uint8_t *p = msg.data();
 
     // send non-final frames:
-    const ssize_t frame_size = 63;
+    const size_t frame_size = 63;
     while (len > frame_size) {
         frame_outgoing_append_bytes(&fo[c], p, frame_size);
         send_frame(c, false);
