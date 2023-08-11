@@ -13,6 +13,7 @@ extern "C" {
     typedef SOCKET native_socket_t;
 }
 #else
+#include <poll.h>
 typedef int native_socket_t;
 #endif
 
