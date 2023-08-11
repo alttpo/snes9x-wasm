@@ -1,11 +1,46 @@
 
+#include <algorithm>
+#include <utility>
+
 #include "rex.h"
+
+#include "snes9x.h"
+#include "memmap.h"
+
+#include "rex_ppux.h"
+#include "rex_iovm.h"
+#include "rex_client.h"
+
+struct rex {
+    void inc_cycles(int32_t delta);
+
+    void on_pc(uint32_t pc);
+
+    void start();
+
+    void shutdown();
+
+    void handle_net();
+
+    void frame_start();
+
+    void ppux_render_obj_lines(bool sub, uint8_t zstart);
+
+    void ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl);
+
+private:
+    std::vector<rex_client_sp> clients;
+
+    sock_sp listener;
+    std::vector<sock_wp> all_socks;
+};
 
 struct rex rex;
 
 int32_t last_cycles;
 
 void rex_host_init() {
+    sock::startup();
 }
 
 void rex_rom_loaded() {

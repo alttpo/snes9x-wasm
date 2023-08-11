@@ -2,6 +2,9 @@
 #ifndef SNES9X_REX_CLIENT_H
 #define SNES9X_REX_CLIENT_H
 
+#include "rex_iovm.h"
+#include "rex_ppux.h"
+
 #include "sock.h"
 
 extern "C" {

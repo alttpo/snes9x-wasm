@@ -5,7 +5,7 @@
 #include "gfx.h"
 #include "tileimpl.h"
 
-#include "rex.h"
+#include "rex_ppux.h"
 
 ppux::ppux() {
     // initialize ppux layers:

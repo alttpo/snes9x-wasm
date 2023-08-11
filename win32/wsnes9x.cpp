@@ -3966,6 +3966,10 @@ static bool LoadROM(const TCHAR *filename, const TCHAR *filename2 /*= NULL*/) {
 		S9xSaveCheatFile (S9xGetFilename (".cht", CHEAT_DIR).c_str());
 	}
 
+#ifdef USE_REX
+	rex_rom_unloaded();
+#endif
+
 	if(filename2)
 		Settings.StopEmulation = !LoadROMMulti(filename, filename2);
 	else

@@ -7,7 +7,6 @@
 #include <mutex>
 
 #include "snes9x.h"
-#include "rex_proto.h"
 
 enum ppux_error {
     PPUX_SUCCESS,

@@ -10,6 +10,7 @@
 #include <vector>
 #include <queue>
 #include <string>
+#include <mutex>
 
 #include "rex_proto.h"
 

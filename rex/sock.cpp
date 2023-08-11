@@ -23,6 +23,15 @@
 #  define SOCKOPT_VALUE_CAST (void *)
 #endif
 
+void sock::startup() {
+#ifdef __WIN32__
+    WSADATA data;
+    if (WSAStartup(MAKEWORD(2, 0), &data) != 0) {
+        fprintf(stderr, "WSAStartup failed: %s\n", sock::error_text(sock::get_last_error()).c_str());
+    }
+#endif
+}
+
 sock::sock(native_socket_t fd_p) : fd(fd_p)
 {
     fprintf(stderr, "sock::ctor -> %p\n", this);

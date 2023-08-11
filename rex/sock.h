@@ -7,10 +7,11 @@
 #include <vector>
 
 #ifdef __WIN32__
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-typedef UINT_PTR SOCKET;
-typedef SOCKET native_socket_t;
+extern "C" {
+#include <winsock2.h>
+    typedef UINT_PTR SOCKET;
+    typedef SOCKET native_socket_t;
+}
 #else
 typedef int native_socket_t;
 #endif
@@ -39,6 +40,8 @@ public:
     sock(sock &&o) noexcept;
     ~sock();
 
+    static auto startup() -> void;
+
     static auto make_tcp() -> sock_sp;
 
     static auto make_udp() -> sock_sp;
@@ -63,11 +66,11 @@ public:
     auto error_func() -> std::string;
     auto error_num() const -> int;
 
-    inline auto isReadAvailable() const -> bool { return (revents&0x0001) != 0; }
-    inline auto isWritable() const -> bool      { return (revents&0x0004) != 0; }
-    inline auto isErrored() const -> bool       { return (revents&0x0008) != 0; }
-    inline auto isClosed() const -> bool        { return (revents&0x0010) != 0; }
-    inline auto isEventsInvalid() const -> bool { return (revents&0x0020) != 0; }
+    inline auto isReadAvailable() const -> bool { return (revents&POLLIN) != 0; }
+    inline auto isWritable() const -> bool      { return (revents&POLLOUT) != 0; }
+    inline auto isErrored() const -> bool       { return (revents&POLLERR) != 0; }
+    inline auto isClosed() const -> bool        { return (revents&POLLHUP) != 0; }
+    inline auto isEventsInvalid() const -> bool { return (revents&POLLNVAL) != 0; }
 
     static auto error_text(int err) -> std::string;
 };

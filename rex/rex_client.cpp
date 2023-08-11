@@ -1,7 +1,7 @@
 
 #include <utility>
 
-#include "rex.h"
+#include "rex_client.h"
 #include "rex_proto.h"
 
 rex_client::rex_client(sock_sp s_p) :
