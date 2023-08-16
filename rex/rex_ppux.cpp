@@ -5,6 +5,8 @@
 #include "gfx.h"
 #include "tileimpl.h"
 
+#include "rex.h"
+
 #include "rex_ppux.h"
 
 ppux::ppux() {
@@ -290,8 +292,8 @@ void ppux::render_cmd() {
     dirty_bottom = -1;
 
     // process draw commands:
-    auto opit = cmd.begin();
-    while (opit != cmd.end()) {
+    opit = cmd.cbegin();
+    while (opit != cmd.cend()) {
         // NOTE: the bits of adjacent fields are intentionally not packed to allow
         // for trivial rewriting of values that are aligned at byte boundaries.
 
@@ -329,11 +331,11 @@ void ppux::render_cmd() {
             continue;
         }
 
-        std::invoke(opcode_handlers[o], this, it, opit);
+        std::invoke(opcode_handlers[o], this, it);
     }
 }
 
-void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit) {
+void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
     // draw horizontal runs of 15bpp RGB555 pixels starting at x,y. wrap at width and proceed to next line until
     // `size-2` pixels in total are drawn.
 
@@ -496,39 +498,51 @@ void ppux::draw_vram_tile(
     }
 }
 
-void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit) {
+void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //  ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx    x = x coordinate (0..1023)
-    //  --pp slll     ---- --vf     hhhh hhhh     wwww wwww    y = y coordinate (0..1023)
-    //  ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
-    //  ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
-    //                                                         w = width in pixels
-    //                                                         h = height in pixels
-    //                                                         f = horizontal flip
-    //                                                         v = vertical flip
-    //                                                         l = PPU layer
-    //                                                         s = main or sub screen; main=0, sub=1
-    //                                                         p = priority (0..3 for OBJ, 0..1 for BG)
+    //   bbbb yyyy     yyyy yyyy     bbbb xxxx     xxxx xxxx    x = x coordinate (0..4095)
+    //   vfpp slll     ---- ----     hhhh hhhh     wwww wwww    y = y coordinate (0..4095)
+    //   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
+    //   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
+    //                                                          w = width in pixels
+    //                                                          h = height in pixels
+    //                                                          f = horizontal flip
+    //                                                          v = vertical flip
+    //                                                          l = PPU layer
+    //                                                          s = main or sub screen; main=0, sub=1
+    //                                                          p = priority (0..3 for OBJ, 0..1 for BG)
+    //                                                       bbbb = if 1, subtract reg[n] from x coord
+    //                                                       bbbb = if 1, subtract reg[n] from y coord
 
-    auto x0 = *it & 1023;
-    auto y0 = (*it >> 16) & 1023;
+    auto x0 = (int)(*it & 4095);
+    if (*it & (1 << 0x0c)) x0 -= offsx[0];
+    if (*it & (1 << 0x0d)) x0 -= offsx[1];
+    if (*it & (1 << 0x0e)) x0 -= offsx[2];
+    if (*it & (1 << 0x0f)) x0 -= offsx[3];
+
+    auto y0 = (int)((*it >> 0x10) & 4095);
+    if (*it & (1 << 0x1c)) y0 -= offsy[0];
+    if (*it & (1 << 0x1d)) y0 -= offsy[1];
+    if (*it & (1 << 0x1e)) y0 -= offsy[2];
+    if (*it & (1 << 0x1f)) y0 -= offsy[3];
+
     it++;
     if (it == cmd.end()) return;
 
     auto width = (*it & 255);
     auto height = ((*it >> 8) & 255);
-    auto hflip = ((*it >> 16) & 1) == 1;
-    auto vflip = ((*it >> 17) & 1) == 1;
+    auto hflip = ((*it >> 0x1e) & 1) == 1;
+    auto vflip = ((*it >> 0x1f) & 1) == 1;
 
     // which ppux layer to render to: (BG1..4, OBJ)
-    auto layer = (*it >> 24) & 7;
+    auto layer = (*it >> 0x18) & 7;
 
     // main or sub screen (main=0, sub=1):
-    auto is_sub = ((*it >> 24) >> 3) & 1;
+    auto is_sub = (*it >> 0x1b) & 1;
 
-    auto prio = (((*it >> 24) >> 4) & 3) << 16;
+    auto prio = ((*it >> 0x1c) & 3) << 16;
     it++;
     if (it == cmd.end()) return;
 
@@ -579,4 +593,39 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::iterator it, std::vector<u
 
     dirty_top = std::min((int) y0, dirty_top);
     dirty_bottom = std::max((int) (y0 + height), dirty_bottom);
+}
+
+static auto readi16(uint8_t *p) -> int16_t {
+    return (int16_t)(((int16_t)p[1] << 8) | (int16_t)p[0]);
+}
+
+static auto rex_readi16(uint8_t tgt, uint32_t addr, int16_t &result) {
+    auto mt = rex_memory_target(tgt);
+    if (!mt.readable) return;
+    if (!mt.p) return;
+    if (addr >= mt.size) return;
+    result = readi16(mt.p + addr);
+}
+
+void ppux::cmd_set_offs_ptr(std::vector<uint32_t>::const_iterator it) {
+    //   MSB                                             LSB
+    //   1111 1111     1111 1111     0000 0000     0000 0000
+    // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+    // repeat up to 4x:
+    //   --tt tttt     aaaa aaaa     aaaa aaaa     aaaa aaaa    a = 24-bit address of X
+    //                                                          t = memory target identifier
+    //   --tt tttt     aaaa aaaa     aaaa aaaa     aaaa aaaa    a = 24-bit address of Y
+    //                                                          t = memory target identifier
+    for (int i = 0; i < 4 && it != opit; i++) {
+        uint8_t tgt_x = (*it >> 0x18) & 63;
+        uint32_t addr_x = *it & ((1 << 0x18) - 1);
+        it++;
+
+        uint8_t tgt_y = (*it >> 0x18) & 63;
+        uint32_t addr_y = *it & ((1 << 0x18) - 1);
+        it++;
+
+        rex_readi16(tgt_x, addr_x, offsx[i]);
+        rex_readi16(tgt_y, addr_y, offsy[i]);
+    }
 }

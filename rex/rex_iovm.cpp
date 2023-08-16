@@ -21,36 +21,6 @@ vm_inst::vm_inst(vm_notifier *notifier_p) :
     notifier(notifier_p)
 {}
 
-struct mem_target_desc {
-    uint8_t *p;
-    size_t size;
-    bool readable;
-    bool writable;
-};
-
-static mem_target_desc memory_target(iovm1_target target) {
-    switch (target) {
-        case 0: // WRAM:
-            return {Memory.RAM, sizeof(Memory.RAM), true, false};
-        case 1: // SRAM:
-            return {Memory.SRAM, Memory.SRAMStorage.size(), true, true};
-        case 2: // ROM:
-            return {Memory.ROM, Memory.ROMStorage.size(), true, true};
-#ifdef EMULATE_FXPAKPRO
-        case 3: // 2C00:
-            return {Memory.Extra2C00, sizeof(Memory.Extra2C00), true, true};
-#endif
-        case 4: // VRAM:
-            return {Memory.VRAM, sizeof(Memory.VRAM), true, false};
-        case 5: // CGRAM:
-            return {(uint8_t *) PPU.CGDATA, sizeof(PPU.CGDATA), true, false};
-        case 6: // OAM:
-            return {PPU.OAMData, sizeof(PPU.OAMData), true, false};
-        default: // memory target not defined:
-            return {nullptr, 0, false, false};
-    }
-}
-
 static const int bytes_per_cycle = 4;
 
 extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs) {
@@ -59,7 +29,7 @@ extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_
 }
 
 void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
-    auto mt = memory_target(cbs->t);
+    auto mt = rex_memory_target(cbs->t);
     auto mem = mt.p;
     auto mem_len = mt.size;
     auto readable = mt.readable;

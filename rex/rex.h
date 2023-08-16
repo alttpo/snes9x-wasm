@@ -26,4 +26,13 @@ void rex_host_frame_end();
 
 void rex_host_frame_skip();
 
+struct rex_mem_target_desc {
+    uint8_t *p;
+    size_t size;
+    bool readable;
+    bool writable;
+};
+
+rex_mem_target_desc rex_memory_target(uint8_t target);
+
 #endif //SNES9X_REX_H

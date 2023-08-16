@@ -87,24 +87,32 @@ public:
     void render_line_sub(layer layer);
 
 private:
-    typedef void (ppux::*opcode_handler)(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
+    typedef void (ppux::*opcode_handler)(std::vector<uint32_t>::const_iterator it);
 
     // ppux opcode functions, starting from opcode 1:
-    void cmd_bitmap_15bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
+    void cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it);
 
-    void cmd_vram_tiles_4bpp(std::vector<uint32_t>::iterator it, std::vector<uint32_t>::iterator opit);
+    void cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it);
 
-    static constexpr opcode_handler opcode_handlers[3] = {
+    void cmd_set_offs_ptr(std::vector<uint32_t>::const_iterator it);
+
+    static constexpr opcode_handler opcode_handlers[] = {
         // 0 is the terminate opcode:
         nullptr,
         &ppux::cmd_bitmap_15bpp,
-        &ppux::cmd_vram_tiles_4bpp
+        &ppux::cmd_vram_tiles_4bpp,
+        &ppux::cmd_set_offs_ptr
     };
 
     static const uint32_t vram_max_size = 65536 * 1024;
     static const uint32_t cgram_max_size = 256 * 2 * 1024;
     std::vector<uint8_t> vram;
     std::vector<uint8_t> cgram;
+
+    int16_t offsx[4]{};
+    int16_t offsy[4]{};
+
+    std::vector<uint32_t>::const_iterator opit;
 
     template<unsigned bpp, bool hflip, bool vflip, typename PLOT>
     void draw_vram_tile(unsigned x0, unsigned y0, unsigned w, unsigned h, const uint8_t *vram, const uint8_t *cgram, PLOT plot);
