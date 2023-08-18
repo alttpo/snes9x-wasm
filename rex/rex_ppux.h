@@ -109,8 +109,8 @@ private:
     std::vector<uint8_t> vram;
     std::vector<uint8_t> cgram;
 
-    int16_t offsx[4]{};
-    int16_t offsy[4]{};
+    uint16_t offsx[4]{};
+    uint16_t offsy[4]{};
 
     std::vector<uint32_t>::const_iterator opit;
 

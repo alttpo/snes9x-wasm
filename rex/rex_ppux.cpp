@@ -202,9 +202,9 @@ ppux_error ppux::cmd_upload(uint32_t *data, uint32_t size) {
     cmdNext.insert(cmdNext.end(), data, data + size);
 
     // skip through opcode frames to find end-of-list:
-    auto endit = cmdNext.end();
-    auto opit = cmdNext.begin();
-    while (opit != cmdNext.end()) {
+    auto endit = cmdNext.cend();
+    auto opit = cmdNext.cbegin();
+    while (opit != cmdNext.cend()) {
         auto it = opit;
 
         //   MSB                                             LSB
@@ -216,7 +216,7 @@ ppux_error ppux::cmd_upload(uint32_t *data, uint32_t size) {
             // MSB must be 1 to indicate opcode/size start of frame:
             fprintf(stderr,
                 "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
-                it - cmdNext.begin());
+                it - cmdNext.cbegin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
             return PPUX_INVALID_OPCODE;
         }
@@ -232,13 +232,13 @@ ppux_error ppux::cmd_upload(uint32_t *data, uint32_t size) {
 
         // jump to next opcode:
         opit = it + size;
-        if (opit > cmdNext.end()) {
-            opit = cmdNext.end();
+        if (opit > cmdNext.cend()) {
+            opit = cmdNext.cend();
         }
     }
 
     // did we find the end?
-    if (endit == cmdNext.end()) {
+    if (endit == cmdNext.cend()) {
         return PPUX_MISSING_END;
     }
 
@@ -305,7 +305,7 @@ void ppux::render_cmd() {
         //   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
         //                                                          s = size of command data in uint32_ts
         if ((*it & (1 << 31)) == 0) {
-            fprintf(stderr, "cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.begin());
+            fprintf(stderr, "cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.cbegin());
             cmd.erase(cmd.begin(), cmd.end());
             return;
         }
@@ -322,8 +322,8 @@ void ppux::render_cmd() {
 
         // find start of next opcode:
         opit = it + size;
-        if (opit > cmd.end()) {
-            opit = cmd.end();
+        if (opit > cmd.cend()) {
+            opit = cmd.cend();
         }
 
         // execute opcode handler if in range:
@@ -352,7 +352,7 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
     auto x0 = *it & 0x03ff;
     auto y0 = (*it >> 16) & 0x03ff;
     it++;
-    if (it == cmd.end()) return;
+    if (it == cmd.cend()) return;
 
     // width up to 1024 where 0 represents 1024 and 1..1023 are normal:
     auto width = *it & 0x03ff;
@@ -371,21 +371,23 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
 
     // copy pixels in; see comment in rex_ppux.h for uint32_t bits representation:
     auto x1 = x0 + width;
-    auto offs = (y0 * pitch);
+    auto offs = y0 * pitch;
     std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
     auto y = y0;
     bool dirty = false;
-    for (auto x = x0; it != opit && it != cmd.end(); it++) {
-        auto p = *it;
-        if (is_replace) {
-            // replace all pixels:
-            vec[offs + x] = p;
-            dirty = true;
-        } else {
-            // overlay: only replace pixels where PX_ENABLE is set:
-            if ((p & PX_ENABLE) != 0) {
-                vec[offs + x] = p;
+    for (auto x = x0; it != opit && it != cmd.cend(); it++) {
+        if (x < MAX_SNES_WIDTH && y < MAX_SNES_HEIGHT) {
+            auto p = *it;
+            if (is_replace) {
+                // replace all pixels:
+                vec[offs + (x & 511)] = p;
                 dirty = true;
+            } else {
+                // overlay: only replace pixels where PX_ENABLE is set:
+                if ((p & PX_ENABLE) != 0) {
+                    vec[offs + (x & 511)] = p;
+                    dirty = true;
+                }
             }
         }
         // wrap at width and move down a line:
@@ -502,8 +504,8 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //   bbbb yyyy     yyyy yyyy     bbbb xxxx     xxxx xxxx    x = x coordinate (0..4095)
-    //   vfpp slll     ---- ----     hhhh hhhh     wwww wwww    y = y coordinate (0..4095)
+    //   yyyy yyyy     yyyy yyyy     xxxx xxxx     xxxx xxxx    x = x coordinate (0..65535)
+    //   vfpp slll     jjjj iiii     hhhh hhhh     wwww wwww    y = y coordinate (0..65535)
     //   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
     //   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
     //                                                          w = width in pixels
@@ -513,28 +515,26 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
     //                                                          l = PPU layer
     //                                                          s = main or sub screen; main=0, sub=1
     //                                                          p = priority (0..3 for OBJ, 0..1 for BG)
-    //                                                       bbbb = if 1, subtract reg[n] from x coord
-    //                                                       bbbb = if 1, subtract reg[n] from y coord
+    //                                                       iiii = if bit[n]=1, subtract offsx[n] from x coord
+    //                                                       jjjj = if bit[n]=1, subtract offsy[n] from y coord
 
-    auto x0 = (int)(*it & 4095);
-    if (*it & (1 << 0x0c)) x0 -= offsx[0];
-    if (*it & (1 << 0x0d)) x0 -= offsx[1];
-    if (*it & (1 << 0x0e)) x0 -= offsx[2];
-    if (*it & (1 << 0x0f)) x0 -= offsx[3];
-
-    auto y0 = (int)((*it >> 0x10) & 4095);
-    if (*it & (1 << 0x1c)) y0 -= offsy[0];
-    if (*it & (1 << 0x1d)) y0 -= offsy[1];
-    if (*it & (1 << 0x1e)) y0 -= offsy[2];
-    if (*it & (1 << 0x1f)) y0 -= offsy[3];
-
+    auto x0 = (int)(*it & 65535);
+    auto y0 = (int)((*it >> 0x10) & 65535);
     it++;
-    if (it == cmd.end()) return;
+    if (it == cmd.cend()) return;
 
     auto width = (*it & 255);
     auto height = ((*it >> 8) & 255);
-    auto hflip = ((*it >> 0x1e) & 1) == 1;
-    auto vflip = ((*it >> 0x1f) & 1) == 1;
+
+    if (*it & (1 << 0x10)) x0 -= offsx[0];
+    if (*it & (1 << 0x11)) x0 -= offsx[1];
+    if (*it & (1 << 0x12)) x0 -= offsx[2];
+    if (*it & (1 << 0x13)) x0 -= offsx[3];
+
+    if (*it & (1 << 0x14)) y0 -= offsy[0];
+    if (*it & (1 << 0x15)) y0 -= offsy[1];
+    if (*it & (1 << 0x16)) y0 -= offsy[2];
+    if (*it & (1 << 0x17)) y0 -= offsy[3];
 
     // which ppux layer to render to: (BG1..4, OBJ)
     auto layer = (*it >> 0x18) & 7;
@@ -543,75 +543,89 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
     auto is_sub = (*it >> 0x1b) & 1;
 
     auto prio = ((*it >> 0x1c) & 3) << 16;
+
+    auto hflip = ((*it >> 0x1e) & 1) == 1;
+    auto vflip = ((*it >> 0x1f) & 1) == 1;
+
     it++;
-    if (it == cmd.end()) return;
+    if (it == cmd.cend()) return;
 
     auto bitmap_addr = *it;
     it++;
-    if (it == cmd.end()) return;
+    if (it == cmd.cend()) return;
+
     auto cgram_addr = *it;
     it++;
+
+    // early clipping:
+    if (x0 + (int)width < 0) {
+        return;
+    }
+    if (x0 >= MAX_SNES_WIDTH) {
+        return;
+    }
+    if (y0 + (int)height < 0) {
+        return;
+    }
+    if (y0 >= MAX_SNES_HEIGHT) {
+        return;
+    }
 
     auto bitmap = vram.data() + bitmap_addr;
     auto palette = cgram.data() + cgram_addr;
 
     std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
 
+    auto plot = [&](unsigned sx, unsigned sy, uint16_t color) {
+        dirty_top = std::min((int) sy, dirty_top);
+        dirty_bottom = std::max((int) (sy + height - 1), dirty_bottom);
+        vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
+    };
+
     if (!hflip) {
         if (!vflip) {
             draw_vram_tile<4, false, false>(
                 x0, y0, width, height, bitmap, palette,
-                [&](unsigned sx, unsigned sy, uint16_t color) {
-                    vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
-                }
+                plot
             );
         } else {
             draw_vram_tile<4, false, true>(
                 x0, y0, width, height, bitmap, palette,
-                [&](unsigned sx, unsigned sy, uint16_t color) {
-                    vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
-                }
+                plot
             );
         }
     } else {
         if (!vflip) {
             draw_vram_tile<4, true, false>(
                 x0, y0, width, height, bitmap, palette,
-                [&](unsigned sx, unsigned sy, uint16_t color) {
-                    vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
-                }
+                plot
             );
         } else {
             draw_vram_tile<4, true, true>(
                 x0, y0, width, height, bitmap, palette,
-                [&](unsigned sx, unsigned sy, uint16_t color) {
-                    vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
-                }
+                plot
             );
         }
     }
-
-    dirty_top = std::min((int) y0, dirty_top);
-    dirty_bottom = std::max((int) (y0 + height), dirty_bottom);
 }
 
-static auto readi16(uint8_t *p) -> int16_t {
-    return (int16_t)(((int16_t)p[1] << 8) | (int16_t)p[0]);
+static auto readu16(uint8_t *p) -> uint16_t {
+    return (uint16_t)(((uint16_t)p[1] << 8) | (uint16_t)p[0]);
 }
 
-static auto rex_readi16(uint8_t tgt, uint32_t addr, int16_t &result) {
+static auto rex_readu16(uint8_t tgt, uint32_t addr, uint16_t &result) {
     auto mt = rex_memory_target(tgt);
     if (!mt.readable) return;
     if (!mt.p) return;
     if (addr >= mt.size) return;
-    result = readi16(mt.p + addr);
+    result = readu16(mt.p + addr);
 }
 
 void ppux::cmd_set_offs_ptr(std::vector<uint32_t>::const_iterator it) {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    // repeat up to 4x:
+    //
     //   --tt tttt     aaaa aaaa     aaaa aaaa     aaaa aaaa    a = 24-bit address of X
     //                                                          t = memory target identifier
     //   --tt tttt     aaaa aaaa     aaaa aaaa     aaaa aaaa    a = 24-bit address of Y
@@ -625,7 +639,7 @@ void ppux::cmd_set_offs_ptr(std::vector<uint32_t>::const_iterator it) {
         uint32_t addr_y = *it & ((1 << 0x18) - 1);
         it++;
 
-        rex_readi16(tgt_x, addr_x, offsx[i]);
-        rex_readi16(tgt_y, addr_y, offsy[i]);
+        rex_readu16(tgt_x, addr_x, offsx[i]);
+        rex_readu16(tgt_y, addr_y, offsy[i]);
     }
 }
