@@ -43,7 +43,7 @@ func (f *FrameWriter) Write(p []byte) (total int, err error) {
 	return
 }
 
-func (f *FrameWriter) Close() (err error) {
+func (f *FrameWriter) EndMessage() (err error) {
 	f.b[0] = ((1 & 1) << 7) | ((byte(f.chn) & 1) << 6) | (byte(f.p) & 63)
 	_, err = f.w.Write(f.b[0 : 1+f.p])
 	f.p = 0
