@@ -51,6 +51,40 @@ func TestIOVM(t *testing.T) {
 }
 
 func TestPPUX(t *testing.T) {
+	var sb *strings.Builder
+
+	frames := bytes.Buffer{}
+	fw := rex.NewFrameWriter(&frames, 0)
+
+	// ppux_cgram_upload:
+	palette := [0x20]byte{
+		0x00, 0x00, 0xff, 0x7f, 0x7e, 0x23, 0xb7, 0x11, 0x9e, 0x36, 0xa5, 0x14, 0xff, 0x01, 0x78, 0x10,
+		0x9d, 0x59, 0x47, 0x36, 0x68, 0x3b, 0x4a, 0x0a, 0xef, 0x12, 0x5c, 0x2a, 0x71, 0x15, 0x18, 0x7a,
+	}
+	fw.Write([]byte{0x12, 0, 0, 0, 0})
+	fw.Write(palette[:])
+	fw.EndMessage()
+
+	sb = toHex(&strings.Builder{}, frames.Bytes())
+	fmt.Print("\n" + sb.String())
+
+	// ppux_vram_upload:
+	frames.Reset()
+	fw.Write([]byte{0x11, 0, 0, 0, 0})
+	{
+		var lf []byte
+		var err error
+		lf, err = os.ReadFile("/Users/jim.dunne/Developer/me/alttpo/alttp-jp.sfc")
+		if err != nil {
+			t.Fatal(err)
+		}
+		copy(linkSprites[:], lf[0x08_0000:])
+	}
+	fw.Write(linkSprites[:0x400])
+	fw.EndMessage()
+	sb = toHex(&strings.Builder{}, frames.Bytes())
+	fmt.Print("\n" + sb.String())
+
 	var cmdWords [(0) + (1 + 2 + 8*7) + (1 + 4) + (1 + 2) + 1 + 10]uint32
 
 	// write to bg2 main a rotating test pixel pattern:
@@ -86,9 +120,11 @@ func TestPPUX(t *testing.T) {
 		//                                                          s = size of packet in uint32_ts
 		0b1000_0011_0000_0000_0000_0000_0000_0000+2,
 		// set pointer to offsx[0]:
-		0b0000_0000_0000_0000_0000_0000_0000_0000|0xE2, // BG2H
+		//0b0000_0000_0000_0000_0000_0000_0000_0000|0xE2, // BG2H (lttp)
+		0b0000_0000_0000_0000_0000_0000_0000_0000|0xB1, // BG1H (sm)
 		// set pointer to offsy[0]:
-		0b0000_0000_0000_0000_0000_0000_0000_0000|0xE8, // BG2V
+		//0b0000_0000_0000_0000_0000_0000_0000_0000|0xE8, // BG2V (lttp)
+		0b0000_0000_0000_0000_0000_0000_0000_0000|0xB3, // BG1V (sm)
 
 		//   MSB                                             LSB
 		//   1111 1111     1111 1111     0000 0000     0000 0000
@@ -113,7 +149,9 @@ func TestPPUX(t *testing.T) {
 		//                                                       iiii = if bit[n]=1, subtract offsx[n] from x coord
 		//                                                       jjjj = if bit[n]=1, subtract offsy[n] from y coord
 		// 2625 = BG2V of throne room, 640 = BG2H of throne room
-		((2625+132)<<16)|(640+132),
+		//((2625+132)<<16)|(640+132),
+		// crateria opening:
+		((1024+148)<<16)|(2048+120),
 		0b0110_0100_0001_0001_0001_0000_0001_0000,
 		0x0000,
 		0x0000,
@@ -122,40 +160,6 @@ func TestPPUX(t *testing.T) {
 	cmd = append(cmd, 0b1000_0000_0000_0000_0000_0000_0000_0000)
 
 	cmdBytes := unsafe.Slice((*byte)(unsafe.Pointer(&cmd[0])), len(cmd)*4)
-	t.Logf("%d\n", len(cmdBytes))
-
-	frames := bytes.Buffer{}
-	fw := rex.NewFrameWriter(&frames, 0)
-
-	// ppux_cgram_upload:
-	palette := [0x20]byte{
-		0x00, 0x00, 0xff, 0x7f, 0x7e, 0x23, 0xb7, 0x11, 0x9e, 0x36, 0xa5, 0x14, 0xff, 0x01, 0x78, 0x10,
-		0x9d, 0x59, 0x47, 0x36, 0x68, 0x3b, 0x4a, 0x0a, 0xef, 0x12, 0x5c, 0x2a, 0x71, 0x15, 0x18, 0x7a,
-	}
-	fw.Write([]byte{0x12, 0, 0, 0, 0})
-	fw.Write(palette[:])
-	fw.EndMessage()
-
-	var sb *strings.Builder
-	sb = toHex(&strings.Builder{}, frames.Bytes())
-	fmt.Print("\n" + sb.String())
-
-	// ppux_vram_upload:
-	frames.Reset()
-	fw.Write([]byte{0x11, 0, 0, 0, 0})
-	{
-		var lf []byte
-		var err error
-		lf, err = os.ReadFile("/Users/jim.dunne/Developer/me/alttpo/alttp-jp.sfc")
-		if err != nil {
-			t.Fatal(err)
-		}
-		copy(linkSprites[:], lf[0x08_0000:])
-	}
-	fw.Write(linkSprites[:0x400])
-	fw.EndMessage()
-	sb = toHex(&strings.Builder{}, frames.Bytes())
-	fmt.Print("\n" + sb.String())
 
 	// ppux_exec:
 	frames.Reset()

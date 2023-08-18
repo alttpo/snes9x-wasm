@@ -376,7 +376,7 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
     auto y = y0;
     bool dirty = false;
     for (auto x = x0; it != opit && it != cmd.cend(); it++) {
-        if (x < MAX_SNES_WIDTH && y < MAX_SNES_HEIGHT) {
+        if (x < SNES_WIDTH && y < SNES_HEIGHT) {
             auto p = *it;
             if (is_replace) {
                 // replace all pixels:
@@ -561,13 +561,13 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
     if (x0 + (int)width < 0) {
         return;
     }
-    if (x0 >= MAX_SNES_WIDTH) {
+    if (x0 >= SNES_WIDTH) {
         return;
     }
     if (y0 + (int)height < 0) {
         return;
     }
-    if (y0 >= MAX_SNES_HEIGHT) {
+    if (y0 >= SNES_HEIGHT) {
         return;
     }
 
