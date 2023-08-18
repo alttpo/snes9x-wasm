@@ -214,7 +214,8 @@ ppux_error ppux::cmd_upload(uint32_t *data, uint32_t size) {
         //                                                          s = size of packet in uint32_ts
         if ((*it & (1 << 31)) == 0) {
             // MSB must be 1 to indicate opcode/size start of frame:
-            fprintf(stderr,
+            fprintf(
+                stderr,
                 "enqueued cmd list malformed at index %td; opcode must have MSB set\n",
                 it - cmdNext.cbegin());
             cmdNext.erase(cmdNext.begin(), cmdNext.end());
@@ -518,8 +519,8 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
     //                                                       iiii = if bit[n]=1, subtract offsx[n] from x coord
     //                                                       jjjj = if bit[n]=1, subtract offsy[n] from y coord
 
-    auto x0 = (int)(*it & 65535);
-    auto y0 = (int)((*it >> 0x10) & 65535);
+    auto x0 = (int) (*it & 65535);
+    auto y0 = (int) ((*it >> 0x10) & 65535);
     it++;
     if (it == cmd.cend()) return;
 
@@ -558,13 +559,13 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
     it++;
 
     // early clipping:
-    if (x0 + (int)width < 0) {
+    if (x0 + (int) width < 0) {
         return;
     }
     if (x0 >= SNES_WIDTH) {
         return;
     }
-    if (y0 + (int)height < 0) {
+    if (y0 + (int) height < 0) {
         return;
     }
     if (y0 >= SNES_HEIGHT) {
@@ -610,7 +611,7 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
 }
 
 static auto readu16(uint8_t *p) -> uint16_t {
-    return (uint16_t)(((uint16_t)p[1] << 8) | (uint16_t)p[0]);
+    return (uint16_t) (((uint16_t) p[1] << 8) | (uint16_t) p[0]);
 }
 
 static auto rex_readu16(uint8_t tgt, uint32_t addr, uint16_t &result) {
@@ -625,21 +626,23 @@ void ppux::cmd_set_offs_ptr(std::vector<uint32_t>::const_iterator it) {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //
+    //   ---- ----     ---- ----     ---- ----     ---- --ii    i = index (0..3)
     //   --tt tttt     aaaa aaaa     aaaa aaaa     aaaa aaaa    a = 24-bit address of X
     //                                                          t = memory target identifier
     //   --tt tttt     aaaa aaaa     aaaa aaaa     aaaa aaaa    a = 24-bit address of Y
     //                                                          t = memory target identifier
-    for (int i = 0; i < 4 && it != opit; i++) {
-        uint8_t tgt_x = (*it >> 0x18) & 63;
-        uint32_t addr_x = *it & ((1 << 0x18) - 1);
-        it++;
 
-        uint8_t tgt_y = (*it >> 0x18) & 63;
-        uint32_t addr_y = *it & ((1 << 0x18) - 1);
-        it++;
+    unsigned i = (*it & 3);
+    it++;
 
-        rex_readu16(tgt_x, addr_x, offsx[i]);
-        rex_readu16(tgt_y, addr_y, offsy[i]);
-    }
+    uint8_t tgt_x = (*it >> 0x18) & 63;
+    uint32_t addr_x = *it & ((1 << 0x18) - 1);
+    it++;
+
+    uint8_t tgt_y = (*it >> 0x18) & 63;
+    uint32_t addr_y = *it & ((1 << 0x18) - 1);
+    it++;
+
+    rex_readu16(tgt_x, addr_x, offsx[i]);
+    rex_readu16(tgt_y, addr_y, offsy[i]);
 }

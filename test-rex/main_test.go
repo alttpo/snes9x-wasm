@@ -89,28 +89,30 @@ func TestPPUX(t *testing.T) {
 
 	// write to bg2 main a rotating test pixel pattern:
 	cmd := cmdWords[:0]
-	cmd = append(cmd,
-		//   MSB                                             LSB
-		//   1111 1111     1111 1111     0000 0000     0000 0000
-		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-		//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
-		//                                                          s = size of packet in uint32_ts
-		0b1000_0001_0000_0000_0000_0000_0000_0000+(8*7)+2,
-		//   MSB                                             LSB
-		//   1111 1111     1111 1111     0000 0000     0000 0000
-		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-		//   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx
-		uint32((110<<16)|(118+r)),
-		//   MSB                                             LSB
-		//   1111 1111     1111 1111     0000 0000     0000 0000
-		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-		//   -o-- slll     ---- ----     ---- --ww     wwww wwww
-		// w = 8, l = 1 (BG2), s = 0, o = 0
-		0b0000_0000_0000_0001_0000_0000_0000_0000+8,
-	)
-	for y := int64(0); y < 7; y++ {
-		rotate()
-		cmd = append(cmd, rotatingPixels[:]...)
+	if false {
+		cmd = append(cmd,
+			//   MSB                                             LSB
+			//   1111 1111     1111 1111     0000 0000     0000 0000
+			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+			//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
+			//                                                          s = size of packet in uint32_ts
+			0b1000_0001_0000_0000_0000_0000_0000_0000+(8*7)+2,
+			//   MSB                                             LSB
+			//   1111 1111     1111 1111     0000 0000     0000 0000
+			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+			//   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx
+			uint32((110<<16)|(118+r)),
+			//   MSB                                             LSB
+			//   1111 1111     1111 1111     0000 0000     0000 0000
+			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
+			//   -o-- slll     ---- ----     ---- --ww     wwww wwww
+			// w = 8, l = 1 (BG2), s = 0, o = 0
+			0b0000_0000_0000_0001_0000_0000_0000_0000+8,
+		)
+		for y := int64(0); y < 7; y++ {
+			rotate()
+			cmd = append(cmd, rotatingPixels[:]...)
+		}
 	}
 	cmd = append(cmd,
 		//   MSB                                             LSB
@@ -118,7 +120,9 @@ func TestPPUX(t *testing.T) {
 		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
 		//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
 		//                                                          s = size of packet in uint32_ts
-		0b1000_0011_0000_0000_0000_0000_0000_0000+2,
+		0b1000_0011_0000_0000_0000_0000_0000_0000+3,
+		// index 0
+		0,
 		// set pointer to offsx[0]:
 		//0b0000_0000_0000_0000_0000_0000_0000_0000|0xE2, // BG2H (lttp)
 		0b0000_0000_0000_0000_0000_0000_0000_0000|0xB1, // BG1H (sm)
@@ -151,7 +155,7 @@ func TestPPUX(t *testing.T) {
 		// 2625 = BG2V of throne room, 640 = BG2H of throne room
 		//((2625+132)<<16)|(640+132),
 		// crateria opening:
-		((1024+148)<<16)|(2048+120),
+		((2048+152)<<16)|(2048+120),
 		0b0110_0100_0001_0001_0001_0000_0001_0000,
 		0x0000,
 		0x0000,
