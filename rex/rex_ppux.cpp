@@ -343,21 +343,33 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx    x = x-coordinate (0..1023) of top-left
-    //   -o-- slll     ---- ----     ---- --ww     wwww wwww    y = y-coordinate (0..1023) of top-left
+    //   yyyy yyyy     yyyy yyyy     xxxx xxxx     xxxx xxxx    x = x-coordinate (0..65535) of top-left
+    //   -o-- slll     jjjj iiii     ---- --ww     wwww wwww    y = y-coordinate (0..65535) of top-left
     //                                                          w = width in pixels (1..1024)
     //                                                          l = PPU layer
     //                                                          s = main or sub screen; main=0, sub=1
     //                                                          o = per pixel overlay = 0, replace = 1
+    //                                                       iiii = if bit[n]=1, subtract offsx[n] from x coord
+    //                                                       jjjj = if bit[n]=1, subtract offsy[n] from y coord
 
-    auto x0 = *it & 0x03ff;
-    auto y0 = (*it >> 16) & 0x03ff;
+    auto x0 = (int)(*it & 65535);
+    auto y0 = (int)((*it >> 16) & 65535);
     it++;
     if (it == cmd.cend()) return;
 
     // width up to 1024 where 0 represents 1024 and 1..1023 are normal:
     auto width = *it & 0x03ff;
     if (width == 0) { width = 1024; }
+
+    if (*it & (1 << 0x10)) x0 -= offsx[0];
+    if (*it & (1 << 0x11)) x0 -= offsx[1];
+    if (*it & (1 << 0x12)) x0 -= offsx[2];
+    if (*it & (1 << 0x13)) x0 -= offsx[3];
+
+    if (*it & (1 << 0x14)) y0 -= offsy[0];
+    if (*it & (1 << 0x15)) y0 -= offsy[1];
+    if (*it & (1 << 0x16)) y0 -= offsy[2];
+    if (*it & (1 << 0x17)) y0 -= offsy[3];
 
     // which ppux layer to render to: (BG1..4, OBJ)
     auto layer = (*it >> 24) & 7;
@@ -371,13 +383,13 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
     it++;
 
     // copy pixels in; see comment in rex_ppux.h for uint32_t bits representation:
-    auto x1 = x0 + width;
-    auto offs = y0 * pitch;
+    auto x1 = x0 + (int)width;
+    auto offs = y0 * (int)pitch;
     std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
     auto y = y0;
     bool dirty = false;
     for (auto x = x0; it != opit && it != cmd.cend(); it++) {
-        if (x < SNES_WIDTH && y < SNES_HEIGHT) {
+        if (x >= 0 && x < SNES_WIDTH && y >= 0 && y < SNES_HEIGHT) {
             auto p = *it;
             if (is_replace) {
                 // replace all pixels:
@@ -409,10 +421,11 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
     }
 }
 
-template<unsigned bpp, bool hflip, bool vflip, typename PLOT>
+template<unsigned bpp, typename PLOT>
 void ppux::draw_vram_tile(
     unsigned x0, unsigned y0,
     unsigned w, unsigned h,
+    bool hflip, bool vflip,
 
     const uint8_t *vram,
     const uint8_t *cgram,
@@ -422,13 +435,17 @@ void ppux::draw_vram_tile(
     // draw tile:
     unsigned sy = y0;
     for (int ty = 0; ty < h; ty++, sy++) {
-        sy &= 255;
+        if (sy < 0 || sy >= SNES_HEIGHT) {
+            continue;
+        }
 
         unsigned sx = x0;
         unsigned y = !vflip ? (ty) : (h - 1 - ty);
 
         for (int tx = 0; tx < w; tx++, sx++) {
-            sx &= 511;
+            if (sx < 0 || sx >= SNES_WIDTH) {
+                continue;
+            }
 
             unsigned x = (!hflip ? tx : (w - 1 - tx));
 
@@ -501,16 +518,17 @@ void ppux::draw_vram_tile(
     }
 }
 
-void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
+void ppux::cmd_vram_tiles(std::vector<uint32_t>::const_iterator it) {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
     //   yyyy yyyy     yyyy yyyy     xxxx xxxx     xxxx xxxx    x = x coordinate (0..65535)
-    //   vfpp slll     jjjj iiii     hhhh hhhh     wwww wwww    y = y coordinate (0..65535)
+    //   vfpp slll     jjjj iiii     ---- ----     --bb hhww    y = y coordinate (0..65535)
     //   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
     //   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
-    //                                                          w = width in pixels
-    //                                                          h = height in pixels
+    //                                                          w = width in pixels  = 8 << w  (8, 16, 32, 64)
+    //                                                          h = height in pixels = 8 << h  (8, 16, 32, 64)
+    //                                                          b = bits per pixel   = 2 << b  (2, 4, 8)
     //                                                          f = horizontal flip
     //                                                          v = vertical flip
     //                                                          l = PPU layer
@@ -524,8 +542,9 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
     it++;
     if (it == cmd.cend()) return;
 
-    auto width = (*it & 255);
-    auto height = ((*it >> 8) & 255);
+    auto width = 8 << (*it & 3);
+    auto height = 8 << ((*it >> 2) & 3);
+    auto bpp = 2 << ((*it >> 4) & 3);
 
     if (*it & (1 << 0x10)) x0 -= offsx[0];
     if (*it & (1 << 0x11)) x0 -= offsx[1];
@@ -583,30 +602,25 @@ void ppux::cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it) {
         vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
     };
 
-    if (!hflip) {
-        if (!vflip) {
-            draw_vram_tile<4, false, false>(
-                x0, y0, width, height, bitmap, palette,
+    switch (bpp) {
+        case 2:
+            draw_vram_tile<2>(
+                x0, y0, width, height, hflip, vflip, bitmap, palette,
                 plot
             );
-        } else {
-            draw_vram_tile<4, false, true>(
-                x0, y0, width, height, bitmap, palette,
+            break;
+        case 4:
+            draw_vram_tile<4>(
+                x0, y0, width, height, hflip, vflip, bitmap, palette,
                 plot
             );
-        }
-    } else {
-        if (!vflip) {
-            draw_vram_tile<4, true, false>(
-                x0, y0, width, height, bitmap, palette,
+            break;
+        case 8:
+            draw_vram_tile<8>(
+                x0, y0, width, height, hflip, vflip, bitmap, palette,
                 plot
             );
-        } else {
-            draw_vram_tile<4, true, true>(
-                x0, y0, width, height, bitmap, palette,
-                plot
-            );
-        }
+            break;
     }
 }
 

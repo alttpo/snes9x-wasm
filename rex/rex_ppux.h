@@ -42,7 +42,6 @@ struct ppux {
     std::vector<uint32_t> main[layer::cardinality];
     std::vector<uint32_t> sub[layer::cardinality];
 
-    static const long bpp = 4;
     static const long pitch = MAX_SNES_WIDTH;
 
     static const uint32_t PX_ENABLE = (1UL << 0x1f);  // `E`
@@ -92,7 +91,7 @@ private:
     // ppux opcode functions, starting from opcode 1:
     void cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it);
 
-    void cmd_vram_tiles_4bpp(std::vector<uint32_t>::const_iterator it);
+    void cmd_vram_tiles(std::vector<uint32_t>::const_iterator it);
 
     void cmd_set_offs_ptr(std::vector<uint32_t>::const_iterator it);
 
@@ -100,7 +99,7 @@ private:
         // 0 is the terminate opcode:
         nullptr,
         &ppux::cmd_bitmap_15bpp,
-        &ppux::cmd_vram_tiles_4bpp,
+        &ppux::cmd_vram_tiles,
         &ppux::cmd_set_offs_ptr
     };
 
@@ -114,8 +113,8 @@ private:
 
     std::vector<uint32_t>::const_iterator opit;
 
-    template<unsigned bpp, bool hflip, bool vflip, typename PLOT>
-    void draw_vram_tile(unsigned x0, unsigned y0, unsigned w, unsigned h, const uint8_t *vram, const uint8_t *cgram, PLOT plot);
+    template<unsigned bpp, typename PLOT>
+    void draw_vram_tile(unsigned x0, unsigned y0, unsigned w, unsigned h, bool hflip, bool vflip, const uint8_t *vram, const uint8_t *cgram, PLOT plot);
 };
 
 #endif //SNES9X_REX_PPUX_H

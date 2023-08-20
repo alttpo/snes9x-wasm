@@ -47,7 +47,18 @@ func TestIOVM(t *testing.T) {
 		// now issue WRAM read on channel 0:
 		rex.IOVM1Instruction(rex.IOVM1_OPCODE_READ, 0),
 	}
-	t.Log("\n" + hex.Dump(vmprog[:]))
+	//fmt.Print("\n" + hex.Dump(vmprog[:]))
+
+	var sb *strings.Builder
+
+	frames := bytes.Buffer{}
+	fw := rex.NewFrameWriter(&frames, 0)
+	fw.Write([]byte{0x00})
+	fw.Write(vmprog[:])
+	fw.EndMessage()
+
+	sb = toHex(&strings.Builder{}, frames.Bytes())
+	fmt.Print("\n" + sb.String())
 }
 
 func TestPPUX(t *testing.T) {
@@ -100,12 +111,12 @@ func TestPPUX(t *testing.T) {
 			//   MSB                                             LSB
 			//   1111 1111     1111 1111     0000 0000     0000 0000
 			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-			//   ---- --yy     yyyy yyyy     ---- --xx     xxxx xxxx
+			//   yyyy yyyy     yyyy yyyy     xxxx xxxx     xxxx xxxx
 			uint32((110<<16)|(118+r)),
 			//   MSB                                             LSB
 			//   1111 1111     1111 1111     0000 0000     0000 0000
 			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-			//   -o-- slll     ---- ----     ---- --ww     wwww wwww
+			//   -o-- slll     jjjj iiii     ---- --ww     wwww wwww
 			// w = 8, l = 1 (BG2), s = 0, o = 0
 			0b0000_0000_0000_0001_0000_0000_0000_0000+8,
 		)
@@ -140,11 +151,12 @@ func TestPPUX(t *testing.T) {
 		//   1111 1111     1111 1111     0000 0000     0000 0000
 		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
 		//   yyyy yyyy     yyyy yyyy     xxxx xxxx     xxxx xxxx    x = x coordinate (0..65535)
-		//   vfpp slll     jjjj iiii     hhhh hhhh     wwww wwww    y = y coordinate (0..65535)
+		//   vfpp slll     jjjj iiii     ---- ----     --bb hhww    y = y coordinate (0..65535)
 		//   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
 		//   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
-		//                                                          w = width in pixels
-		//                                                          h = height in pixels
+		//                                                          w = width in pixels  = 8 << w  (8, 16, 32, 64)
+		//                                                          h = height in pixels = 8 << h  (8, 16, 32, 64)
+		//                                                          b = bits per pixel   = 2 << b  (2, 4, 8)
 		//                                                          f = horizontal flip
 		//                                                          v = vertical flip
 		//                                                          l = PPU layer
@@ -156,7 +168,8 @@ func TestPPUX(t *testing.T) {
 		//((2625+132)<<16)|(640+132),
 		// crateria opening:
 		((2048+152)<<16)|(2048+120),
-		0b0110_0100_0001_0001_0001_0000_0001_0000,
+		// w = 16, h = 16, bpp = 4
+		0b0110_0100_0001_0001_0000_0000_0001_0101,
 		0x0000,
 		0x0000,
 	)
