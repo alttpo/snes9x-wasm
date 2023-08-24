@@ -92,40 +92,14 @@ func TestPPUX(t *testing.T) {
 		}
 		copy(linkSprites[:], lf[0x08_0000:])
 	}
-	fw.Write(linkSprites[:0x400])
+	fw.Write(linkSprites[:0x7000])
 	fw.EndMessage()
 	sb = toHex(&strings.Builder{}, frames.Bytes())
 	fmt.Print("\n" + sb.String())
 
 	var cmdWords [(0) + (1 + 2 + 8*7) + (1 + 4) + (1 + 2) + 1 + 10]uint32
 
-	// write to bg2 main a rotating test pixel pattern:
 	cmd := cmdWords[:0]
-	if false {
-		cmd = append(cmd,
-			//   MSB                                             LSB
-			//   1111 1111     1111 1111     0000 0000     0000 0000
-			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-			//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
-			//                                                          s = size of packet in uint32_ts
-			0b1000_0001_0000_0000_0000_0000_0000_0000+(8*7)+2,
-			//   MSB                                             LSB
-			//   1111 1111     1111 1111     0000 0000     0000 0000
-			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-			//   yyyy yyyy     yyyy yyyy     xxxx xxxx     xxxx xxxx
-			uint32((110<<16)|(118+r)),
-			//   MSB                                             LSB
-			//   1111 1111     1111 1111     0000 0000     0000 0000
-			// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-			//   -o-- slll     jjjj iiii     ---- --ww     wwww wwww
-			// w = 8, l = 1 (BG2), s = 0, o = 0
-			0b0000_0000_0000_0001_0000_0000_0000_0000+8,
-		)
-		for y := int64(0); y < 7; y++ {
-			rotate()
-			cmd = append(cmd, rotatingPixels[:]...)
-		}
-	}
 	cmd = append(cmd,
 		//   MSB                                             LSB
 		//   1111 1111     1111 1111     0000 0000     0000 0000
@@ -136,11 +110,11 @@ func TestPPUX(t *testing.T) {
 		// index 0
 		0,
 		// set pointer to offsx[0]:
-		//0b0000_0000_0000_0000_0000_0000_0000_0000|0xE2, // BG2H (lttp)
-		0b0000_0000_0000_0000_0000_0000_0000_0000|0xB1, // BG1H (sm)
+		0b0000_0000_0000_0000_0000_0000_0000_0000|0xE2, // BG2H (lttp)
+		//0b0000_0000_0000_0000_0000_0000_0000_0000|0xB1, // BG1H (sm)
 		// set pointer to offsy[0]:
-		//0b0000_0000_0000_0000_0000_0000_0000_0000|0xE8, // BG2V (lttp)
-		0b0000_0000_0000_0000_0000_0000_0000_0000|0xB3, // BG1V (sm)
+		0b0000_0000_0000_0000_0000_0000_0000_0000|0xE8, // BG2V (lttp)
+		//0b0000_0000_0000_0000_0000_0000_0000_0000|0xB3, // BG1V (sm)
 
 		//   MSB                                             LSB
 		//   1111 1111     1111 1111     0000 0000     0000 0000
@@ -148,31 +122,42 @@ func TestPPUX(t *testing.T) {
 		//   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
 		//                                                          s = size of packet in uint32_ts
 		0b1000_0010_0000_0000_0000_0000_0000_0000+4,
-		//    MSB                                             LSB
+		//   MSB                                             LSB
 		//   1111 1111     1111 1111     0000 0000     0000 0000
 		// [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-		//   yyyy yyyy     yyyy yyyy     xxxx xxxx     xxxx xxxx    x = x coordinate (0..65535)
-		//   vfpp slll     jjjj iiii     ---- ----     --bb hhww    y = y coordinate (0..65535)
-		//   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
-		//   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
-		//                                                          w = width in pixels  = 8 << w  (8, 16, 32, 64)
-		//                                                          h = height in pixels = 8 << h  (8, 16, 32, 64)
-		//                                                          b = bits per pixel   = 2 << b  (2, 4, 8)
-		//                                                          f = horizontal flip
-		//                                                          v = vertical flip
-		//                                                          l = PPU layer
-		//                                                          s = main or sub screen; main=0, sub=1
-		//                                                          p = priority (0..3 for OBJ, 0..1 for BG)
-		//                                                       iiii = if bit[n]=1, subtract offsx[n] from x coord
-		//                                                       jjjj = if bit[n]=1, subtract offsy[n] from y coord
+		//   iiii ----     --ww ---x     xxxx xxxx     xxxx xxxx
+		//   jjjj ----     --hh ---y     yyyy yyyy     yyyy yyyy
+		//   --bb --dd     dddd dddd     dddd dddd     dddd dddd
+		//   vfpp slll     ---- -ccc     cccc cccc     cccc cccc
+		//
+		//    x = x coordinate (-65536..65535)
+		//    w = width in pixels  = 8 << w  (8, 16, 32, 64)
+		// iiii = if bit[n]=1, subtract offsx[n] from x coord
+		//    y = y coordinate (-65536..65535)
+		//    h = height in pixels = 8 << h  (8, 16, 32, 64)
+		// jjjj = if bit[n]=1, subtract offsy[n] from y coord
+		//    d = bitmap data address in extra ram
+		//    b = bits per pixel   = 2 << b  (2, 4, 8)
+		//    c = cgram/palette address in extra ram (points to color 0 of palette)
+		//    l = PPU layer (0: BG1, 1: BG2, 2: BG3, 3: BG4, 4: OBJ)
+		//    s = main or sub screen; main=0, sub=1
+		//    p = priority (0..3 for OBJ, 0..1 for BG)
+		//    f = horizontal flip
+		//    v = vertical flip
 		// 2625 = BG2V of throne room, 640 = BG2H of throne room
-		//((2625+132)<<16)|(640+132),
+		// X = 640+132
+		// Y = 2625+132
 		// crateria opening:
-		((2048+152)<<16)|(2048+120),
-		// w = 16, h = 16, bpp = 4
-		0b0110_0100_0001_0001_0000_0000_0001_0101,
-		0x0000,
-		0x0000,
+		0b0001_0000_0001_0000_0000_0000_0000_0000|(2048+119),   // x, w = 16
+		0b0001_0000_0001_0000_0000_0000_0000_0000|(2048+152+8), // y, h = 16
+		0b0001_0000_0000_0000_0000_0000_0000_0000|0x0440,       // d = 0x0200, b = 1
+		0b0110_0100_0000_0000_0000_0000_0000_0000|0x0000,       // c = 0x0000, f = 1, p = 2, s = 0, l = 4
+
+		0b1000_0010_0000_0000_0000_0000_0000_0000+4,
+		0b0001_0000_0001_0000_0000_0000_0000_0000|(2048+120), // x, w = 16
+		0b0001_0000_0001_0000_0000_0000_0000_0000|(2048+152), // y, h = 16
+		0b0001_0000_0000_0000_0000_0000_0000_0000|0x0000,     // d = 0, b = 1
+		0b0110_0100_0000_0000_0000_0000_0000_0000|0x0000,     // c = 0, f = 1, p = 2, s = 0, l = 4
 	)
 	// end of list:
 	cmd = append(cmd, 0b1000_0000_0000_0000_0000_0000_0000_0000)
