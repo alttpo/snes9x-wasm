@@ -681,3 +681,18 @@ void ppux::cmd_set_offs_ptr(std::vector<uint32_t>::const_iterator it) {
     rex_readu16(tgt_x, addr_x, offsx[i]);
     rex_readu16(tgt_y, addr_y, offsy[i]);
 }
+
+void ppux::frame_end() {
+    // TODO: accommodate space for more than 1 client
+
+    // debug print:
+    char xy[10];
+    for (int i = 0; i < 4; i++) {
+        snprintf(xy, 10, "%04x,%04x", offsx[i], offsy[i]);
+        S9xVariableDisplayString(xy, 22 - i, IPPU.RenderedScreenWidth - 7 * 9, false, S9X_DEBUG_OUTPUT);
+    }
+}
+
+void ppux::frame_skip() {
+
+}

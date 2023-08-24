@@ -23,6 +23,8 @@ struct rex {
     void handle_net();
 
     void frame_start();
+    void frame_end();
+    void frame_skip();
 
     void ppux_render_obj_lines(bool sub, uint8_t zstart);
 
@@ -100,9 +102,11 @@ void rex_ppux_render_bg_lines(int layer, bool sub, uint8_t zh, uint8_t zl) {
 }
 
 void rex_host_frame_end() {
+    rex.frame_end();
 }
 
 void rex_host_frame_skip() {
+    rex.frame_skip();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,6 +142,18 @@ void rex::frame_start() {
     handle_net();
     for (auto &cl: clients) {
         cl->ppux.render_cmd();
+    }
+}
+
+void rex::frame_end() {
+    for (auto &cl: clients) {
+        cl->ppux.frame_end();
+    }
+}
+
+void rex::frame_skip() {
+    for (auto &cl: clients) {
+        cl->ppux.frame_skip();
     }
 }
 

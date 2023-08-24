@@ -85,6 +85,10 @@ public:
 
     void render_line_sub(layer layer);
 
+    void frame_end();
+
+    void frame_skip();
+
 private:
     typedef void (ppux::*opcode_handler)(std::vector<uint32_t>::const_iterator it);
 

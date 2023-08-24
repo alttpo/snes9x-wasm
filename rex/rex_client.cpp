@@ -279,6 +279,7 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
     auto p = m.cbegin() + 1;
     unsigned long size = m.size() - 1;
     switch (cmd) {
+        // TODO: command to fetch ROM details: filename, hash, etc.
         case rex_cmd_iovm_load: { // iovm: load program
             if (size < 1) {
                 send_message(0, {cmd, rex_msg_too_short});
