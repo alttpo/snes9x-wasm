@@ -1,23 +1,23 @@
-package rex
+package frame
 
 import "io"
 
-type FrameWriter struct {
+type Writer struct {
 	b   [64]byte
 	w   io.Writer
 	p   int
 	chn uint8
 }
 
-func NewFrameWriter(w io.Writer, chn uint8) *FrameWriter {
-	return &FrameWriter{
+func NewWriter(w io.Writer, chn uint8) *Writer {
+	return &Writer{
 		w:   w,
 		p:   0,
 		chn: chn,
 	}
 }
 
-func (f *FrameWriter) Write(p []byte) (total int, err error) {
+func (f *Writer) Write(p []byte) (total int, err error) {
 	for len(p) > 0 {
 		n := copy(f.b[1+f.p:], p)
 		f.p += n
@@ -43,7 +43,7 @@ func (f *FrameWriter) Write(p []byte) (total int, err error) {
 	return
 }
 
-func (f *FrameWriter) EndMessage() (err error) {
+func (f *Writer) EndMessage() (err error) {
 	f.b[0] = ((1 & 1) << 7) | ((byte(f.chn) & 1) << 6) | (byte(f.p) & 63)
 	_, err = f.w.Write(f.b[0 : 1+f.p])
 	f.p = 0

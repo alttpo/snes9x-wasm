@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"testrex/rex"
+	"testrex/rex/frame"
 	"unsafe"
 )
 
@@ -52,7 +53,7 @@ func TestIOVM(t *testing.T) {
 	var sb *strings.Builder
 
 	frames := bytes.Buffer{}
-	fw := rex.NewFrameWriter(&frames, 0)
+	fw := frame.NewWriter(&frames, 0)
 	fw.Write([]byte{0x00})
 	fw.Write(vmprog[:])
 	fw.EndMessage()
@@ -65,7 +66,7 @@ func TestPPUX(t *testing.T) {
 	var sb *strings.Builder
 
 	frames := bytes.Buffer{}
-	fw := rex.NewFrameWriter(&frames, 0)
+	fw := frame.NewWriter(&frames, 0)
 
 	// ppux_cgram_upload:
 	palette := [0x20]byte{
