@@ -114,7 +114,7 @@ private:
     std::vector<uint32_t>::const_iterator opit;
 
     template<unsigned bpp, typename PLOT>
-    void draw_vram_tile(unsigned x0, unsigned y0, unsigned w, unsigned h, bool hflip, bool vflip, const uint8_t *vram, const uint8_t *cgram, PLOT plot);
+    void draw_vram_tile(int x0, int y0, unsigned w, unsigned h, bool hflip, bool vflip, const uint8_t *vram, const uint8_t *cgram, PLOT plot);
 };
 
 #endif //SNES9X_REX_PPUX_H

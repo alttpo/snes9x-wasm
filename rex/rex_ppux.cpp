@@ -336,6 +336,14 @@ void ppux::render_cmd() {
     }
 }
 
+template<int b>
+static int sign_extend(int x) {
+    // generate sign bit mask:
+    int m = 1U << (b - 1);
+    // sign-extend b-bit signed integer to 32-bit signed integer:
+    return (x ^ m) - m;
+}
+
 void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
     // draw horizontal runs of 15bpp RGB555 pixels starting at x,y. wrap at width and proceed to next line until
     // `size-2` pixels in total are drawn.
@@ -343,17 +351,36 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //   yyyy yyyy     yyyy yyyy     xxxx xxxx     xxxx xxxx    x = x-coordinate (0..65535) of top-left
-    //   -o-- slll     jjjj iiii     ---- --ww     wwww wwww    y = y-coordinate (0..65535) of top-left
-    //                                                          w = width in pixels (1..1024)
-    //                                                          l = PPU layer
-    //                                                          s = main or sub screen; main=0, sub=1
-    //                                                          o = per pixel overlay = 0, replace = 1
-    //                                                       iiii = if bit[n]=1, subtract offsx[n] from x coord
-    //                                                       jjjj = if bit[n]=1, subtract offsy[n] from y coord
+    //   iiii ----     ---- ---x     xxxx xxxx     xxxx xxxx
+    //   jjjj ----     ---- ---y     yyyy yyyy     yyyy yyyy
+    //   ---o slll     ---- ----     ---- --ww     wwww wwww
+    //
+    //    x = x-coordinate (-65536..+65535) of top-left
+    // iiii = if bit[n]=1, subtract offsx[n] from x coord
+    //    y = y-coordinate (-65536..+65535) of top-left
+    // jjjj = if bit[n]=1, subtract offsy[n] from y coord
+    //    w = width in pixels (1..1024)
+    //    l = PPU layer
+    //    s = main or sub screen; main=0, sub=1
+    //    o = per pixel overlay = 0, replace = 1
 
-    auto x0 = (int)(*it & 65535);
-    auto y0 = (int)((*it >> 16) & 65535);
+    // sign-extend 17-bit signed integer to 32-bit signed integer
+    auto x0 = sign_extend<17>((int)(*it & 0x1FFFFU));
+    // subtract offsx[n]:
+    if (*it & (1 << 0x1c)) x0 -= offsx[0];
+    if (*it & (1 << 0x1d)) x0 -= offsx[1];
+    if (*it & (1 << 0x1e)) x0 -= offsx[2];
+    if (*it & (1 << 0x1f)) x0 -= offsx[3];
+    it++;
+    if (it == cmd.cend()) return;
+
+    // sign-extend 17-bit signed integer to 32-bit signed integer
+    auto y0 = sign_extend<17>((int)(*it & 0x1FFFFU));
+    // subtract offsy[n]:
+    if (*it & (1 << 0x1c)) y0 -= offsy[0];
+    if (*it & (1 << 0x1d)) y0 -= offsy[1];
+    if (*it & (1 << 0x1e)) y0 -= offsy[2];
+    if (*it & (1 << 0x1f)) y0 -= offsy[3];
     it++;
     if (it == cmd.cend()) return;
 
@@ -361,69 +388,62 @@ void ppux::cmd_bitmap_15bpp(std::vector<uint32_t>::const_iterator it) {
     auto width = *it & 0x03ff;
     if (width == 0) { width = 1024; }
 
-    if (*it & (1 << 0x10)) x0 -= offsx[0];
-    if (*it & (1 << 0x11)) x0 -= offsx[1];
-    if (*it & (1 << 0x12)) x0 -= offsx[2];
-    if (*it & (1 << 0x13)) x0 -= offsx[3];
-
-    if (*it & (1 << 0x14)) y0 -= offsy[0];
-    if (*it & (1 << 0x15)) y0 -= offsy[1];
-    if (*it & (1 << 0x16)) y0 -= offsy[2];
-    if (*it & (1 << 0x17)) y0 -= offsy[3];
-
     // which ppux layer to render to: (BG1..4, OBJ)
     auto layer = (*it >> 24) & 7;
+    if (layer >= layer::cardinality) return;
 
     // main or sub screen (main=0, sub=1):
-    auto is_sub = ((*it >> 24) >> 4) & 1;
+    auto is_sub = (*it >> 0x18) & 1;
 
     // overlay pixels (0) or overwrite pixels (1) based on PX_ENABLE flag (1<<31) per pixel:
-    auto is_replace = (((*it >> 24) >> 7) & 1);
+    auto is_replace = (*it >> 0x1c) & 1;
 
     it++;
 
     // copy pixels in; see comment in rex_ppux.h for uint32_t bits representation:
     auto x1 = x0 + (int)width;
-    auto offs = y0 * (int)pitch;
-    std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
     auto y = y0;
-    bool dirty = false;
+    std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
+
+    // choose the plot function:
+    std::function<void (int, int, uint32_t)> plot;
+    if (is_replace) {
+        plot = [&](int sx, int sy, uint32_t p) {
+            // replace:
+            dirty_top = std::min(sy, dirty_top);
+            dirty_bottom = std::max(sy, dirty_bottom);
+            vec[sy * ppux::pitch + sx] = p;
+        };
+    } else {
+        plot = [&](int sx, int sy, uint32_t p) {
+            // overlay: only replace pixels where PX_ENABLE is set:
+            if ((p & PX_ENABLE) == 0) {
+                return;
+            }
+
+            dirty_top = std::min(sy, dirty_top);
+            dirty_bottom = std::max(sy, dirty_bottom);
+            vec[sy * ppux::pitch + sx] = p;
+        };
+    }
+
+    // blit bitmap:
     for (auto x = x0; it != opit && it != cmd.cend(); it++) {
         if (x >= 0 && x < SNES_WIDTH && y >= 0 && y < SNES_HEIGHT) {
-            auto p = *it;
-            if (is_replace) {
-                // replace all pixels:
-                vec[offs + (x & 511)] = p;
-                dirty = true;
-            } else {
-                // overlay: only replace pixels where PX_ENABLE is set:
-                if ((p & PX_ENABLE) != 0) {
-                    vec[offs + (x & 511)] = p;
-                    dirty = true;
-                }
-            }
+            plot(x, y, *it);
         }
+
         // wrap at width and move down a line:
         if (++x >= x1) {
             x = x0;
-            offs += pitch;
             y++;
-        }
-    }
-
-    if (dirty) {
-        if (dirty_top > (int) y0) {
-            dirty_top = (int) y0;
-        }
-        if (dirty_bottom < (int) y) {
-            dirty_bottom = (int) y;
         }
     }
 }
 
 template<unsigned bpp, typename PLOT>
 void ppux::draw_vram_tile(
-    unsigned x0, unsigned y0,
+    int x0, int y0,
     unsigned w, unsigned h,
     bool hflip, bool vflip,
 
@@ -433,21 +453,21 @@ void ppux::draw_vram_tile(
     PLOT plot
 ) {
     // draw tile:
-    unsigned sy = y0;
-    for (int ty = 0; ty < h; ty++, sy++) {
+    int sy = y0;
+    for (unsigned ty = 0; ty < h; ty++, sy++) {
         if (sy < 0 || sy >= SNES_HEIGHT) {
             continue;
         }
 
-        unsigned sx = x0;
+        int sx = x0;
         unsigned y = !vflip ? (ty) : (h - 1 - ty);
 
-        for (int tx = 0; tx < w; tx++, sx++) {
+        for (unsigned tx = 0; tx < w; tx++, sx++) {
             if (sx < 0 || sx >= SNES_WIDTH) {
                 continue;
             }
 
-            unsigned x = (!hflip ? tx : (w - 1 - tx));
+            unsigned x = !hflip ? (tx) : (w - 1 - tx);
 
             uint8_t col, d0, d1, d2, d3, d4, d5, d6, d7;
             uint8_t mask = 1 << (7 - (x & 7));
@@ -522,42 +542,58 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::const_iterator it) {
     //   MSB                                             LSB
     //   1111 1111     1111 1111     0000 0000     0000 0000
     // [ fedc ba98 ] [ 7654 3210 ] [ fedc ba98 ] [ 7654 3210 ]
-    //   yyyy yyyy     yyyy yyyy     xxxx xxxx     xxxx xxxx    x = x coordinate (0..65535)
-    //   vfpp slll     jjjj iiii     ---- ----     --bb hhww    y = y coordinate (0..65535)
-    //   ---- ----     dddd dddd     dddd dddd     dddd dddd    d = bitmap data address in extra ram
-    //   ---- ----     cccc cccc     cccc cccc     cccc cccc    c = cgram/palette address in extra ram (points to color 0 of palette)
-    //                                                          w = width in pixels  = 8 << w  (8, 16, 32, 64)
-    //                                                          h = height in pixels = 8 << h  (8, 16, 32, 64)
-    //                                                          b = bits per pixel   = 2 << b  (2, 4, 8)
-    //                                                          f = horizontal flip
-    //                                                          v = vertical flip
-    //                                                          l = PPU layer
-    //                                                          s = main or sub screen; main=0, sub=1
-    //                                                          p = priority (0..3 for OBJ, 0..1 for BG)
-    //                                                       iiii = if bit[n]=1, subtract offsx[n] from x coord
-    //                                                       jjjj = if bit[n]=1, subtract offsy[n] from y coord
+    //   iiii ----     --ww ---x     xxxx xxxx     xxxx xxxx
+    //   jjjj ----     --hh ---y     yyyy yyyy     yyyy yyyy
+    //   --bb --dd     dddd dddd     dddd dddd     dddd dddd
+    //   vfpp slll     ---- -ccc     cccc cccc     cccc cccc
+    //
+    //    x = x coordinate (-65536..65535)
+    //    w = width in pixels  = 8 << w  (8, 16, 32, 64)
+    // iiii = if bit[n]=1, subtract offsx[n] from x coord
+    //    y = y coordinate (-65536..65535)
+    //    h = height in pixels = 8 << h  (8, 16, 32, 64)
+    // jjjj = if bit[n]=1, subtract offsy[n] from y coord
+    //    d = bitmap data address in extra ram
+    //    b = bits per pixel   = 2 << b  (2, 4, 8)
+    //    c = cgram/palette address in extra ram (points to color 0 of palette)
+    //    l = PPU layer (0: BG1, 1: BG2, 2: BG3, 3: BG4, 4: OBJ)
+    //    s = main or sub screen; main=0, sub=1
+    //    p = priority (0..3 for OBJ, 0..1 for BG)
+    //    f = horizontal flip
+    //    v = vertical flip
 
-    auto x0 = (int) (*it & 65535);
-    auto y0 = (int) ((*it >> 0x10) & 65535);
+    // sign-extend 17-bit signed integer to 32-bit signed integer
+    auto x0 = sign_extend<17>((int)(*it & ((1U << 0x11)-1U)));
+    // subtract offsx[n]:
+    if (*it & (1 << 0x1c)) x0 -= offsx[0];
+    if (*it & (1 << 0x1d)) x0 -= offsx[1];
+    if (*it & (1 << 0x1e)) x0 -= offsx[2];
+    if (*it & (1 << 0x1f)) x0 -= offsx[3];
+    auto width = 8 << ((*it >> 0x14) & 3);
     it++;
     if (it == cmd.cend()) return;
 
-    auto width = 8 << (*it & 3);
-    auto height = 8 << ((*it >> 2) & 3);
-    auto bpp = 2 << ((*it >> 4) & 3);
+    // sign-extend 17-bit signed integer to 32-bit signed integer
+    auto y0 = sign_extend<17>((int)(*it & ((1U << 0x11)-1U)));
+    // subtract offsy[n]:
+    if (*it & (1 << 0x1c)) y0 -= offsy[0];
+    if (*it & (1 << 0x1d)) y0 -= offsy[1];
+    if (*it & (1 << 0x1e)) y0 -= offsy[2];
+    if (*it & (1 << 0x1f)) y0 -= offsy[3];
+    auto height = 8 << ((*it >> 0x14) & 3);
+    it++;
+    if (it == cmd.cend()) return;
 
-    if (*it & (1 << 0x10)) x0 -= offsx[0];
-    if (*it & (1 << 0x11)) x0 -= offsx[1];
-    if (*it & (1 << 0x12)) x0 -= offsx[2];
-    if (*it & (1 << 0x13)) x0 -= offsx[3];
+    auto bitmap_addr = (*it & ((1U << 0x1a)-1U));
+    auto bpp = 2 << ((*it >> 0x1c) & 3);
+    it++;
+    if (it == cmd.cend()) return;
 
-    if (*it & (1 << 0x14)) y0 -= offsy[0];
-    if (*it & (1 << 0x15)) y0 -= offsy[1];
-    if (*it & (1 << 0x16)) y0 -= offsy[2];
-    if (*it & (1 << 0x17)) y0 -= offsy[3];
+    auto cgram_addr = (*it & ((1U << 0x13)-1U));
 
     // which ppux layer to render to: (BG1..4, OBJ)
     auto layer = (*it >> 0x18) & 7;
+    if (layer >= layer::cardinality) return;
 
     // main or sub screen (main=0, sub=1):
     auto is_sub = (*it >> 0x1b) & 1;
@@ -566,25 +602,16 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::const_iterator it) {
 
     auto hflip = ((*it >> 0x1e) & 1) == 1;
     auto vflip = ((*it >> 0x1f) & 1) == 1;
-
-    it++;
-    if (it == cmd.cend()) return;
-
-    auto bitmap_addr = *it;
-    it++;
-    if (it == cmd.cend()) return;
-
-    auto cgram_addr = *it;
     it++;
 
     // early clipping:
-    if (x0 + (int) width < 0) {
+    if (x0 + width < 0) {
         return;
     }
     if (x0 >= SNES_WIDTH) {
         return;
     }
-    if (y0 + (int) height < 0) {
+    if (y0 + height < 0) {
         return;
     }
     if (y0 >= SNES_HEIGHT) {
@@ -596,7 +623,7 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::const_iterator it) {
 
     std::vector<uint32_t> &vec = is_sub ? sub[layer] : main[layer];
 
-    auto plot = [&](unsigned sx, unsigned sy, uint16_t color) {
+    auto plot = [&](int sx, int sy, uint16_t color) {
         dirty_top = std::min((int) sy, dirty_top);
         dirty_bottom = std::max((int) (sy + height - 1), dirty_bottom);
         vec[sy * ppux::pitch + sx] = (uint32_t) color | PX_ENABLE | prio;
@@ -604,22 +631,15 @@ void ppux::cmd_vram_tiles(std::vector<uint32_t>::const_iterator it) {
 
     switch (bpp) {
         case 2:
-            draw_vram_tile<2>(
-                x0, y0, width, height, hflip, vflip, bitmap, palette,
-                plot
-            );
+            draw_vram_tile<2>(x0, y0, width, height, hflip, vflip, bitmap, palette, plot);
             break;
         case 4:
-            draw_vram_tile<4>(
-                x0, y0, width, height, hflip, vflip, bitmap, palette,
-                plot
-            );
+            draw_vram_tile<4>(x0, y0, width, height, hflip, vflip, bitmap, palette, plot);
             break;
         case 8:
-            draw_vram_tile<8>(
-                x0, y0, width, height, hflip, vflip, bitmap, palette,
-                plot
-            );
+            draw_vram_tile<8>(x0, y0, width, height, hflip, vflip, bitmap, palette, plot);
+            break;
+        default:
             break;
     }
 }
@@ -650,13 +670,14 @@ void ppux::cmd_set_offs_ptr(std::vector<uint32_t>::const_iterator it) {
     it++;
 
     uint8_t tgt_x = (*it >> 0x18) & 63;
-    uint32_t addr_x = *it & ((1 << 0x18) - 1);
+    uint32_t addr_x = *it & ((1U << 0x18) - 1U);
     it++;
 
     uint8_t tgt_y = (*it >> 0x18) & 63;
-    uint32_t addr_y = *it & ((1 << 0x18) - 1);
+    uint32_t addr_y = *it & ((1U << 0x18) - 1U);
     it++;
 
+    // read x,y from SNES memory:
     rex_readu16(tgt_x, addr_x, offsx[i]);
     rex_readu16(tgt_y, addr_y, offsy[i]);
 }
