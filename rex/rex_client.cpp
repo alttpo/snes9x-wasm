@@ -324,7 +324,7 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
         case rex_cmd_iovm_getstate: // iovm: getstate
             send_message(0, {cmd, rex_success, static_cast<uint8_t>(vmi.vm_getstate())});
             break;
-        case rex_cmd_ppux_exec: // ppux: load & execute program
+        case rex_cmd_ppux_cmd_upload: // ppux: load & execute program
             if (size <= 4) {
                 send_message(0, {cmd, rex_msg_too_short});
                 fprintf(stderr, "message too short\n");

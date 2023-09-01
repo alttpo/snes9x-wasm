@@ -12,7 +12,7 @@ enum rex_cmd : uint8_t {
     rex_cmd_iovm_reset,
     rex_cmd_iovm_flags,
     rex_cmd_iovm_getstate,
-    rex_cmd_ppux_exec = 16,
+    rex_cmd_ppux_cmd_upload = 16,
     rex_cmd_ppux_vram_upload,
     rex_cmd_ppux_cgram_upload
 };
