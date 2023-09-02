@@ -8,34 +8,34 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"testrex/rex"
 	"testrex/rex/frame"
+	"testrex/rex/iovm1"
 	"unsafe"
 )
 
 func TestIOVM(t *testing.T) {
 	vmprog := [...]byte{
 		// setup channel 0 for WRAM read:
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETTDU, 0),
-		rex.IOVM1_TARGET_WRAM,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETA8, 0),
+		iovm1.Instruction(iovm1.OPCODE_SETTDU, 0),
+		iovm1.TARGET_WRAM,
+		iovm1.Instruction(iovm1.OPCODE_SETA8, 0),
 		0x10,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETLEN, 0),
+		iovm1.Instruction(iovm1.OPCODE_SETLEN, 0),
 		0xF0,
 		0x00,
 
 		// setup channel 3 for NMI $2C00 write in reverse direction so $2C00 byte is written last:
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETCMPMSK, 3),
+		iovm1.Instruction(iovm1.OPCODE_SETCMPMSK, 3),
 		0x00,
 		0xFF,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETTDU, 3),
-		rex.IOVM1_TARGET_2C00 | rex.IOVM1_TARGETFLAG_REVERSE,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETA8, 3),
+		iovm1.Instruction(iovm1.OPCODE_SETTDU, 3),
+		iovm1.TARGET_2C00 | iovm1.TARGETFLAG_REVERSE,
+		iovm1.Instruction(iovm1.OPCODE_SETA8, 3),
 		0x00, // $2C00
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETLEN, 3),
+		iovm1.Instruction(iovm1.OPCODE_SETLEN, 3),
 		6, // write 6 bytes
 		0,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_WRITE, 3),
+		iovm1.Instruction(iovm1.OPCODE_WRITE, 3),
 		0x9C, // 2C00: STZ $2C00
 		0x00,
 		0x2C,
@@ -43,10 +43,10 @@ func TestIOVM(t *testing.T) {
 		0xEA,
 		0xFF,
 		// wait while [$2C00] != $00
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_WAIT_WHILE_NEQ, 3),
+		iovm1.Instruction(iovm1.OPCODE_WAIT_WHILE_NEQ, 3),
 
 		// now issue WRAM read on channel 0:
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_READ, 0),
+		iovm1.Instruction(iovm1.OPCODE_READ, 0),
 	}
 	//fmt.Print("\n" + hex.Dump(vmprog[:]))
 
@@ -148,13 +148,13 @@ func TestPPUX(t *testing.T) {
 		// X = 640+132
 		// Y = 2625+132
 		// crateria opening:
-		0b0001_0000_0001_0000_0000_0000_0000_0000|(2048+119),   // x, w = 16
+		0b0001_0000_0011_0000_0000_0000_0000_0000|(2048+119),   // x, w = 16
 		0b0001_0000_0001_0000_0000_0000_0000_0000|(2048+152+8), // y, h = 16
-		0b0001_0000_0000_0000_0000_0000_0000_0000|0x0440,       // d = 0x0200, b = 1
+		0b0001_0000_0000_0000_0000_0000_0000_0000|0x0400,       // d = 0x0200, b = 1
 		0b0110_0100_0000_0000_0000_0000_0000_0000|0x0000,       // c = 0x0000, f = 1, p = 2, s = 0, l = 4
 
 		0b1000_0010_0000_0000_0000_0000_0000_0000+4,
-		0b0001_0000_0001_0000_0000_0000_0000_0000|(2048+120), // x, w = 16
+		0b0001_0000_0011_0000_0000_0000_0000_0000|(2048+120), // x, w = 16
 		0b0001_0000_0001_0000_0000_0000_0000_0000|(2048+152), // y, h = 16
 		0b0001_0000_0000_0000_0000_0000_0000_0000|0x0000,     // d = 0, b = 1
 		0b0110_0100_0000_0000_0000_0000_0000_0000|0x0000,     // c = 0, f = 1, p = 2, s = 0, l = 4
