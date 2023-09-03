@@ -15,7 +15,7 @@ const (
 	FlagAutoRestartOnEnd
 )
 
-type Result = int32
+type Result = byte
 
 const (
 	Success Result = iota
@@ -30,7 +30,7 @@ const (
 	MemoryTargetAddressOutOfRange
 )
 
-var iovm1Errors = map[Result]error{
+var Errors = map[Result]error{
 	Success:                       nil,
 	OutOfRange:                    errors.New("out of range"),
 	InvalidOperationForState:      errors.New("invalid operation for current state"),

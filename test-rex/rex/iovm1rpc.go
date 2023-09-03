@@ -71,17 +71,31 @@ func (r *RPC) IOVM1Upload(vmprog []byte, cb IOVM1UploadComplete) {
 		return
 	}
 
-	r.iovm1UploadComplete = cb
+	r.iovm1UploadComplete = append(r.iovm1UploadComplete, cb)
 	return
 }
 
 func (r *RPC) parseIOVM1UploadComplete(br *bytes.Reader) (err error) {
-	var b byte
-	if b, err = br.ReadByte(); err != nil {
+	var result rexResult
+	var vmerr iovm1.Result
+	if result, err = br.ReadByte(); err != nil {
 		return
 	}
-	_ = b
-	panic("TODO")
+	if vmerr, err = br.ReadByte(); err != nil {
+		return
+	}
+
+	if cb := pop(&r.iovm1UploadComplete); cb != nil {
+		var cberr error
+		if result == rex_success {
+			cberr = nil
+		} else if result == rex_cmd_error {
+			cberr = iovm1.Errors[vmerr]
+		} else {
+			cberr = Errors[result]
+		}
+		cb(cberr)
+	}
 	return
 }
 
@@ -98,7 +112,7 @@ func (r *RPC) IOVM1Start(cb IOVM1StartComplete) {
 		return
 	}
 
-	r.iovm1StartComplete = cb
+	r.iovm1StartComplete = append(r.iovm1StartComplete, cb)
 	return
 }
 
@@ -119,7 +133,7 @@ func (r *RPC) IOVM1Stop(cb IOVM1StopComplete) {
 		return
 	}
 
-	r.iovm1StopComplete = cb
+	r.iovm1StopComplete = append(r.iovm1StopComplete, cb)
 	return
 }
 
@@ -140,7 +154,7 @@ func (r *RPC) IOVM1Reset(cb IOVM1ResetComplete) {
 		return
 	}
 
-	r.iovm1ResetComplete = cb
+	r.iovm1ResetComplete = append(r.iovm1ResetComplete, cb)
 	return
 }
 
@@ -162,7 +176,7 @@ func (r *RPC) IOVM1SetFlags(flags iovm1.Flags, cb IOVM1SetFlagsComplete) {
 		return
 	}
 
-	r.iovm1SetFlagsComplete = cb
+	r.iovm1SetFlagsComplete = append(r.iovm1SetFlagsComplete, cb)
 	return
 }
 
@@ -171,8 +185,21 @@ func (r *RPC) parseIOVM1FlagsComplete(br *bytes.Reader) error {
 }
 
 func (r *RPC) IOVM1GetState(cb IOVM1GetStateComplete) {
-	//TODO implement me
-	panic("implement me")
+	var err error
+	_, err = r.fw.Write([]byte{rex_cmd_iovm_getstate})
+	if err != nil {
+		cb(0, err)
+		return
+	}
+
+	err = r.fw.EndMessage()
+	if err != nil {
+		cb(0, err)
+		return
+	}
+
+	r.iovm1GetStateComplete = append(r.iovm1GetStateComplete, cb)
+	return
 }
 
 func (r *RPC) parseIOVM1GetstateComplete(br *bytes.Reader) error {

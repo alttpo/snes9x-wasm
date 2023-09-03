@@ -2,6 +2,7 @@ package rex
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"testrex/rex/frame"
 	"time"
@@ -18,6 +19,19 @@ const (
 	rex_cmd_error
 )
 
+var Errors = map[rexResult]error{
+	rex_success:       nil,
+	rex_msg_too_short: errors.New("rex message too short"),
+	rex_cmd_unknown:   errors.New("rex command unknown"),
+	rex_cmd_error:     errors.New("rex command error"),
+}
+
+func pop[T any](queue *[]T) (item T) {
+	item = (*queue)[0]
+	*queue = (*queue)[1:]
+	return item
+}
+
 type RPC struct {
 	c  *net.TCPConn
 	fw *frame.Writer
@@ -27,16 +41,16 @@ type RPC struct {
 
 	// RPC complete callbacks:
 
-	iovm1UploadComplete   IOVM1UploadComplete
-	iovm1StartComplete    IOVM1StartComplete
-	iovm1StopComplete     IOVM1StopComplete
-	iovm1SetFlagsComplete IOVM1SetFlagsComplete
-	iovm1ResetComplete    IOVM1ResetComplete
-	iovm1GetStateComplete IOVM1GetStateComplete
+	iovm1UploadComplete   []IOVM1UploadComplete
+	iovm1StartComplete    []IOVM1StartComplete
+	iovm1StopComplete     []IOVM1StopComplete
+	iovm1SetFlagsComplete []IOVM1SetFlagsComplete
+	iovm1ResetComplete    []IOVM1ResetComplete
+	iovm1GetStateComplete []IOVM1GetStateComplete
 
-	ppuxCmdUploadComplete   PPUXCmdUploadComplete
-	ppuxVRAMUploadComplete  PPUXVRAMUploadComplete
-	ppuxCGRAMUploadComplete PPUXCGRAMUploadComplete
+	ppuxCmdUploadComplete   []PPUXCmdUploadComplete
+	ppuxVRAMUploadComplete  []PPUXVRAMUploadComplete
+	ppuxCGRAMUploadComplete []PPUXCGRAMUploadComplete
 
 	// notification callbacks:
 

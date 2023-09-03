@@ -1,9 +1,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
+	"net"
+	"net/netip"
 	"testrex/rex"
+	"time"
 	"unsafe"
 )
 
@@ -56,43 +58,27 @@ func rotate() {
 
 var wram [0x20000]byte
 
-var errReadUnexpectedAddress = errors.New("read unexpected address")
-var errReadUnexpectedTarget = errors.New("read unexpected target")
-
-func blockingRead(m *rex.MemoryTarget, p []byte, addr uint32) (err error) {
-	if err = m.BeginRead(p, addr); err != nil {
-		return
-	}
-
-	// NOTE: this loop consumes events and discards them
-	for {
-		// TODO: wait until iovm notifies us of completion
-
-		if false {
-			// event == rex.Ev_iovm1_read_complete
-
-			//var chkAddr uint32
-			//var chkTarget uint8
-			//if _, chkAddr, chkTarget, err = rex.IOVM1[1].Read(p); err != nil {
-			//	return
-			//}
-			//if chkAddr != addr {
-			//	return errReadUnexpectedAddress
-			//}
-			//if chkTarget != m.Target() {
-			//	return errReadUnexpectedTarget
-			//}
-		}
-
-		if true {
-			// event == rex.Ev_iovm1_end
-			return
-		}
-	}
-}
-
 func main() {
 	var err error
+	var rpcConn *net.TCPConn
+	rpcConn, err = net.DialTCP(
+		"",
+		nil,
+		net.TCPAddrFromAddrPort(
+			netip.AddrPortFrom(
+				netip.AddrFrom4([4]byte{127, 0, 0, 1}),
+				11264,
+			),
+		),
+	)
+	if err != nil {
+		panic(err)
+	}
+	defer func(rpcConn net.Conn) {
+		_ = rpcConn.Close()
+	}(rpcConn)
+
+	rpc := rex.NewRPC(rpcConn)
 
 	// read rom header:
 	if err = blockingRead(&rex.ROM, romTitle[:], 0x7FC0); err != nil {
@@ -114,6 +100,15 @@ func main() {
 	} else {
 		// upload to ppux vram from rom sprite data:
 		_ = rex.PPUX.VRAM.Upload(0, linkSprites[:])
+	}
+
+	for {
+		// receive any RPC responses and notifications:
+		err = rpc.Receive(time.Now().Add(time.Microsecond * 100))
+		if err != nil {
+			panic(err)
+		}
+
 	}
 
 	// upload palette to ppux cgram:
