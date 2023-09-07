@@ -26,10 +26,31 @@ var Errors = map[rexResult]error{
 	rex_cmd_error:     errors.New("rex command error"),
 }
 
-func pop[T any](queue *[]T) (item T) {
+func pop[T any](queue *[]T) (item T, ok bool) {
+	if queue == nil {
+		ok = false
+		return
+	}
+	if len(*queue) == 0 {
+		ok = false
+		return
+	}
+
 	item = (*queue)[0]
 	*queue = (*queue)[1:]
-	return item
+
+	return item, true
+}
+
+type channelState struct {
+	hasType bool
+	msgType uint8
+	buf     bytes.Buffer
+	isFinal bool
+	state   int
+
+	frameHandler   map[uint8]func(ch *channelState) error
+	messageHandler map[uint8]func(ch *channelState) error
 }
 
 type RPC struct {
@@ -37,7 +58,7 @@ type RPC struct {
 	fw *frame.Writer
 	fr *frame.Reader
 
-	msg [2][]byte
+	ch [2]channelState
 
 	// RPC complete callbacks:
 
@@ -61,8 +82,6 @@ type RPC struct {
 	iovm1OnWriteStart   IOVM1OnWriteStart
 	iovm1OnWriteEnd     IOVM1OnWriteEnd
 	iovm1OnWaitComplete IOVM1OnWaitComplete
-
-	responseHandler [2]map[uint8]func(br *bytes.Reader) error
 }
 
 func NewRPC(c *net.TCPConn) *RPC {
@@ -71,28 +90,29 @@ func NewRPC(c *net.TCPConn) *RPC {
 		fw: frame.NewWriter(c, 0),
 		fr: frame.NewReader(c),
 	}
-	r.responseHandler = [2]map[uint8]func(br *bytes.Reader) error{
+	r.ch[0].messageHandler = map[uint8]func(*channelState) error{
 		// channel 0: completion responses:
-		{
-			rex_cmd_iovm_upload:   r.parseIOVM1UploadComplete,
-			rex_cmd_iovm_start:    r.parseIOVM1StartComplete,
-			rex_cmd_iovm_stop:     r.parseIOVM1StopComplete,
-			rex_cmd_iovm_reset:    r.parseIOVM1ResetComplete,
-			rex_cmd_iovm_flags:    r.parseIOVM1FlagsComplete,
-			rex_cmd_iovm_getstate: r.parseIOVM1GetstateComplete,
+		rex_cmd_iovm_upload:   r.parseIOVM1UploadComplete,
+		rex_cmd_iovm_start:    r.parseIOVM1StartComplete,
+		rex_cmd_iovm_stop:     r.parseIOVM1StopComplete,
+		rex_cmd_iovm_reset:    r.parseIOVM1ResetComplete,
+		rex_cmd_iovm_flags:    r.parseIOVM1FlagsComplete,
+		rex_cmd_iovm_getstate: r.parseIOVM1GetstateComplete,
 
-			rex_cmd_ppux_cmd_upload:   r.parsePPUXCmdUploadComplete,
-			rex_cmd_ppux_vram_upload:  r.parsePPUXVRAMUploadComplete,
-			rex_cmd_ppux_cgram_upload: r.parsePPUXCGRAMUploadComplete,
-		},
-		// channel 1: notifications:
-		{
-			rex_notify_iovm_end:   r.parseIOVM1OnEnd,
-			rex_notify_iovm_read:  r.parseIOVM1OnRead,
-			rex_notify_iovm_write: r.parseIOVM1OnWrite,
-			rex_notify_iovm_wait:  r.parseIOVM1OnWait,
-		},
+		rex_cmd_ppux_cmd_upload:   r.parsePPUXCmdUploadComplete,
+		rex_cmd_ppux_vram_upload:  r.parsePPUXVRAMUploadComplete,
+		rex_cmd_ppux_cgram_upload: r.parsePPUXCGRAMUploadComplete,
 	}
+	r.ch[1].messageHandler = map[uint8]func(*channelState) error{
+		// channel 1: notifications:
+		rex_notify_iovm_end:   r.parseIOVM1OnEnd,
+		rex_notify_iovm_write: r.parseIOVM1OnWrite,
+		rex_notify_iovm_wait:  r.parseIOVM1OnWait,
+	}
+	r.ch[1].frameHandler = map[uint8]func(*channelState) error{
+		rex_notify_iovm_read: r.frameIOVM1OnRead,
+	}
+
 	return r
 }
 
@@ -113,15 +133,40 @@ func (r *RPC) Receive(deadline time.Time) (err error) {
 		return
 	}
 
-	channel := f.Channel()
+	ch := f.Channel()
+	r.ch[ch].isFinal = f.IsFinal()
 	data := f.Data()
 
-	r.msg[channel] = append(r.msg[channel], data...)
+	// extract the first byte as the message type:
+	if !r.ch[ch].hasType {
+		if len(data) >= 1 {
+			r.ch[ch].msgType = data[0]
+			r.ch[ch].hasType = true
+			data = data[1:]
+		}
+	}
+
+	// append to the message buffer:
+	r.ch[ch].buf.Write(data)
+	if mt, ok := r.ch[ch].msgType, r.ch[ch].hasType; ok {
+		// check if there's a frame handler:
+		if fh, ok := r.ch[ch].frameHandler[mt]; ok {
+			if err = fh(&r.ch[ch]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// handle the complete message:
 	if f.IsFinal() {
-		err = r.handleResponse(channel)
+		err = r.ch[ch].handleResponse()
 
 		// reset for next message:
-		r.msg[channel] = nil
+		r.ch[ch].buf.Reset()
+		r.ch[ch].state = 0
+		r.ch[ch].msgType = 0
+		r.ch[ch].hasType = false
+		r.ch[ch].isFinal = false
 
 		if err != nil {
 			return
@@ -131,21 +176,15 @@ func (r *RPC) Receive(deadline time.Time) (err error) {
 	return
 }
 
-func (r *RPC) handleResponse(channel uint8) (err error) {
-	if channel > 1 {
-		panic("channel must be 0 or 1")
-	}
-
-	br := bytes.NewReader(r.msg[channel])
-
-	var b byte
-	b, err = br.ReadByte()
-	if err != nil {
+func (ch *channelState) handleResponse() (err error) {
+	if !ch.hasType {
+		// completely empty messages are ignored:
 		return
 	}
 
-	if fn, ok := r.responseHandler[channel][b]; ok {
-		err = fn(br)
+	// check for a message handler:
+	if fn, ok := ch.messageHandler[ch.msgType]; ok {
+		err = fn(ch)
 		return
 	}
 

@@ -79,6 +79,7 @@ func main() {
 	}(rpcConn)
 
 	rpc := rex.NewRPC(rpcConn)
+	//rpc.IOVM1Upload()
 
 	// read rom header:
 	if err = blockingRead(&rex.ROM, romTitle[:], 0x7FC0); err != nil {

@@ -1,7 +1,7 @@
 package rex
 
 import (
-	"bytes"
+	"fmt"
 	"testrex/rex/iovm1"
 )
 
@@ -71,21 +71,29 @@ func (r *RPC) IOVM1Upload(vmprog []byte, cb IOVM1UploadComplete) {
 		return
 	}
 
+	// push the callback to the tail of the queue:
 	r.iovm1UploadComplete = append(r.iovm1UploadComplete, cb)
 	return
 }
 
-func (r *RPC) parseIOVM1UploadComplete(br *bytes.Reader) (err error) {
-	var result rexResult
-	var vmerr iovm1.Result
-	if result, err = br.ReadByte(); err != nil {
-		return
-	}
-	if vmerr, err = br.ReadByte(); err != nil {
+func (r *RPC) parseIOVM1UploadComplete(ch *channelState) (err error) {
+	if ch.buf.Len() < 2 {
+		err = fmt.Errorf("parseIOVM1UploadComplete: expected at least 2 bytes")
 		return
 	}
 
-	if cb := pop(&r.iovm1UploadComplete); cb != nil {
+	// parse the message:
+	var result rexResult
+	var vmerr iovm1.Result
+	if result, err = ch.buf.ReadByte(); err != nil {
+		return
+	}
+	if vmerr, err = ch.buf.ReadByte(); err != nil {
+		return
+	}
+
+	// pop a callback off the head of the queue:
+	if cb, ok := pop(&r.iovm1UploadComplete); ok && cb != nil {
 		var cberr error
 		if result == rex_success {
 			cberr = nil
@@ -96,6 +104,7 @@ func (r *RPC) parseIOVM1UploadComplete(br *bytes.Reader) (err error) {
 		}
 		cb(cberr)
 	}
+
 	return
 }
 
@@ -116,7 +125,7 @@ func (r *RPC) IOVM1Start(cb IOVM1StartComplete) {
 	return
 }
 
-func (r *RPC) parseIOVM1StartComplete(br *bytes.Reader) error {
+func (r *RPC) parseIOVM1StartComplete(ch *channelState) error {
 	panic("TODO")
 }
 
@@ -137,7 +146,7 @@ func (r *RPC) IOVM1Stop(cb IOVM1StopComplete) {
 	return
 }
 
-func (r *RPC) parseIOVM1StopComplete(br *bytes.Reader) error {
+func (r *RPC) parseIOVM1StopComplete(ch *channelState) error {
 	panic("TODO")
 }
 
@@ -158,7 +167,7 @@ func (r *RPC) IOVM1Reset(cb IOVM1ResetComplete) {
 	return
 }
 
-func (r *RPC) parseIOVM1ResetComplete(br *bytes.Reader) error {
+func (r *RPC) parseIOVM1ResetComplete(ch *channelState) error {
 	panic("TODO")
 }
 
@@ -180,7 +189,7 @@ func (r *RPC) IOVM1SetFlags(flags iovm1.Flags, cb IOVM1SetFlagsComplete) {
 	return
 }
 
-func (r *RPC) parseIOVM1FlagsComplete(br *bytes.Reader) error {
+func (r *RPC) parseIOVM1FlagsComplete(ch *channelState) error {
 	panic("TODO")
 }
 
@@ -202,7 +211,7 @@ func (r *RPC) IOVM1GetState(cb IOVM1GetStateComplete) {
 	return
 }
 
-func (r *RPC) parseIOVM1GetstateComplete(br *bytes.Reader) error {
+func (r *RPC) parseIOVM1GetstateComplete(ch *channelState) error {
 	panic("TODO")
 }
 
@@ -214,18 +223,51 @@ func (r *RPC) IOVM1OnWriteStart(cb IOVM1OnWriteStart)     { r.iovm1OnWriteStart 
 func (r *RPC) IOVM1OnWriteEnd(cb IOVM1OnWriteEnd)         { r.iovm1OnWriteEnd = cb }
 func (r *RPC) IOVM1OnWaitComplete(cb IOVM1OnWaitComplete) { r.iovm1OnWaitComplete = cb }
 
-func (r *RPC) parseIOVM1OnEnd(br *bytes.Reader) error {
+func (r *RPC) parseIOVM1OnEnd(ch *channelState) error {
 	panic("TODO")
 }
 
-func (r *RPC) parseIOVM1OnRead(br *bytes.Reader) error {
+func (r *RPC) frameIOVM1OnRead(ch *channelState) (err error) {
+	switch ch.state {
+	case 0:
+		// wait until we have enough header data to consume:
+		if ch.buf.Len() < 10 {
+			return
+		}
+		ch.state++
+		fallthrough
+	case 1:
+		pc := LittleEndian.Uint32(ch.buf.Next(4))
+		tdu := LittleEndian.Uint8(ch.buf.Next(1))
+		addr := LittleEndian.Uint24(ch.buf.Next(3))
+		dlen := uint32(LittleEndian.Uint16(ch.buf.Next(2)))
+		if dlen == 0 {
+			dlen = 65536
+		}
+		// read started:
+		r.iovm1OnReadStart(pc, tdu, addr, dlen)
+		ch.state++
+		fallthrough
+	case 2:
+		if ch.buf.Len() > 0 {
+			r.iovm1OnReadFrame(ch.buf.Next(ch.buf.Len()))
+		}
+		if ch.isFinal {
+			r.iovm1OnReadEnd()
+			ch.state++
+		}
+		break
+	default:
+		break
+	}
+
+	return
+}
+
+func (r *RPC) parseIOVM1OnWrite(ch *channelState) error {
 	panic("TODO")
 }
 
-func (r *RPC) parseIOVM1OnWrite(br *bytes.Reader) error {
-	panic("TODO")
-}
-
-func (r *RPC) parseIOVM1OnWait(br *bytes.Reader) error {
+func (r *RPC) parseIOVM1OnWait(ch *channelState) error {
 	panic("TODO")
 }

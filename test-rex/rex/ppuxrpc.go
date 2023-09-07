@@ -1,7 +1,5 @@
 package rex
 
-import "bytes"
-
 const (
 	rex_cmd_ppux_cmd_upload rexCommand = 16 + iota
 	rex_cmd_ppux_vram_upload
@@ -23,7 +21,7 @@ func (r *RPC) PPUXCmdUpload(p []uint32, cb PPUXCmdUploadComplete) {
 	panic("implement me")
 }
 
-func (r *RPC) parsePPUXCmdUploadComplete(br *bytes.Reader) error {
+func (r *RPC) parsePPUXCmdUploadComplete(ch *channelState) error {
 	panic("TODO")
 }
 
@@ -32,7 +30,7 @@ func (r *RPC) PPUXVRAMUpload(addr uint32, data []byte, cb PPUXVRAMUploadComplete
 	panic("implement me")
 }
 
-func (r *RPC) parsePPUXVRAMUploadComplete(br *bytes.Reader) error {
+func (r *RPC) parsePPUXVRAMUploadComplete(ch *channelState) error {
 	panic("TODO")
 }
 
@@ -41,6 +39,6 @@ func (r *RPC) PPUXCGRAMUpload(addr uint32, data []byte, cb PPUXCGRAMUploadComple
 	panic("implement me")
 }
 
-func (r *RPC) parsePPUXCGRAMUploadComplete(br *bytes.Reader) error {
+func (r *RPC) parsePPUXCGRAMUploadComplete(ch *channelState) error {
 	panic("TODO")
 }
