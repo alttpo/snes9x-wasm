@@ -2,7 +2,7 @@ package rex
 
 import (
 	"fmt"
-	"testrex/rex/iovm1"
+	"rex/iovm1"
 )
 
 const (
@@ -21,10 +21,13 @@ const (
 	rex_notify_iovm_wait
 )
 
+type IOVM1OnRead interface {
+	IOVM1OnReadStart(pc uint32, tdu uint8, addr uint32, dlen uint32)
+	IOVM1OnReadChunk(chunk []byte)
+	IOVM1OnReadEnd()
+}
+
 type IOVM1OnPrgEnd func(pc uint32, o iovm1.Opcode, result iovm1.Result, state iovm1.State)
-type IOVM1OnReadStart func(pc uint32, tdu uint8, addr uint32, len uint32)
-type IOVM1OnReadFrame func(chunk []byte)
-type IOVM1OnReadEnd func()
 type IOVM1OnWriteStart func(pc uint32, tdu uint8, addr uint32, len uint32)
 type IOVM1OnWriteEnd func()
 type IOVM1OnWaitComplete func(pc uint32, o iovm1.Opcode, result iovm1.Result, state iovm1.State)
@@ -45,9 +48,7 @@ type IOVM1RPC interface {
 	IOVM1GetState(cb IOVM1GetStateComplete)
 
 	IOVM1OnPrgEnd(cb IOVM1OnPrgEnd)
-	IOVM1OnReadStart(cb IOVM1OnReadStart)
-	IOVM1OnReadFrame(cb IOVM1OnReadFrame)
-	IOVM1OnReadEnd(cb IOVM1OnReadEnd)
+	IOVM1OnRead(cb IOVM1OnRead)
 	IOVM1OnWriteStart(cb IOVM1OnWriteStart)
 	IOVM1OnWriteEnd(cb IOVM1OnWriteEnd)
 	IOVM1OnWaitComplete(cb IOVM1OnWaitComplete)
@@ -216,9 +217,7 @@ func (r *RPC) parseIOVM1GetstateComplete(ch *channelState) error {
 }
 
 func (r *RPC) IOVM1OnPrgEnd(cb IOVM1OnPrgEnd)             { r.iovm1OnPrgEnd = cb }
-func (r *RPC) IOVM1OnReadStart(cb IOVM1OnReadStart)       { r.iovm1OnReadStart = cb }
-func (r *RPC) IOVM1OnReadFrame(cb IOVM1OnReadFrame)       { r.iovm1OnReadFrame = cb }
-func (r *RPC) IOVM1OnReadEnd(cb IOVM1OnReadEnd)           { r.iovm1OnReadEnd = cb }
+func (r *RPC) IOVM1OnRead(cb IOVM1OnRead)                 { r.iovm1OnRead = cb }
 func (r *RPC) IOVM1OnWriteStart(cb IOVM1OnWriteStart)     { r.iovm1OnWriteStart = cb }
 func (r *RPC) IOVM1OnWriteEnd(cb IOVM1OnWriteEnd)         { r.iovm1OnWriteEnd = cb }
 func (r *RPC) IOVM1OnWaitComplete(cb IOVM1OnWaitComplete) { r.iovm1OnWaitComplete = cb }
@@ -245,15 +244,22 @@ func (r *RPC) frameIOVM1OnRead(ch *channelState) (err error) {
 			dlen = 65536
 		}
 		// read started:
-		r.iovm1OnReadStart(pc, tdu, addr, dlen)
+		if cb := r.iovm1OnRead; cb != nil {
+			cb.IOVM1OnReadStart(pc, tdu, addr, dlen)
+		}
 		ch.state++
 		fallthrough
 	case 2:
+		// read raw data:
 		if ch.buf.Len() > 0 {
-			r.iovm1OnReadFrame(ch.buf.Next(ch.buf.Len()))
+			if cb := r.iovm1OnRead; cb != nil {
+				cb.IOVM1OnReadChunk(ch.buf.Next(ch.buf.Len()))
+			}
 		}
 		if ch.isFinal {
-			r.iovm1OnReadEnd()
+			if cb := r.iovm1OnRead; cb != nil {
+				cb.IOVM1OnReadEnd()
+			}
 			ch.state++
 		}
 		break

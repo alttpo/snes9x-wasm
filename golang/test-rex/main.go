@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"testrex/rex"
+	"rex"
 	"time"
 	"unsafe"
 )
@@ -58,6 +58,29 @@ func rotate() {
 
 var wram [0x20000]byte
 
+type readOp struct {
+	pc   uint32
+	tdu  uint8
+	addr uint32
+	data []byte
+}
+
+func (r *readOp) IOVM1OnReadStart(pc uint32, tdu uint8, addr uint32, dlen uint32) {
+	r.pc = pc
+	r.tdu = tdu
+	r.addr = addr
+	r.data = make([]byte, 0, dlen)
+}
+
+func (r *readOp) IOVM1OnReadChunk(chunk []byte) {
+	r.data = append(r.data, chunk...)
+}
+
+func (r *readOp) IOVM1OnReadEnd() {
+	//TODO implement me
+	panic("implement me")
+}
+
 func main() {
 	var err error
 	var rpcConn *net.TCPConn
@@ -79,6 +102,7 @@ func main() {
 	}(rpcConn)
 
 	rpc := rex.NewRPC(rpcConn)
+	rpc.IOVM1OnRead()
 	//rpc.IOVM1Upload()
 
 	// read rom header:

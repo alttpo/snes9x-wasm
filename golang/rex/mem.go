@@ -2,7 +2,7 @@ package rex
 
 import (
 	"errors"
-	"testrex/rex/iovm1"
+	"github.com/alttpo/snes9x/golang/rex/iovm1"
 )
 
 type MemoryTarget struct {

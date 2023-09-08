@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"net"
-	"testrex/rex/frame"
+	"rex/frame"
 	"time"
 )
 
@@ -76,9 +76,7 @@ type RPC struct {
 	// notification callbacks:
 
 	iovm1OnPrgEnd       IOVM1OnPrgEnd
-	iovm1OnReadStart    IOVM1OnReadStart
-	iovm1OnReadFrame    IOVM1OnReadFrame
-	iovm1OnReadEnd      IOVM1OnReadEnd
+	iovm1OnRead         IOVM1OnRead
 	iovm1OnWriteStart   IOVM1OnWriteStart
 	iovm1OnWriteEnd     IOVM1OnWriteEnd
 	iovm1OnWaitComplete IOVM1OnWaitComplete
