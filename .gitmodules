@@ -16,6 +16,6 @@
 [submodule "external/iovm"]
 	path = external/iovm
 	url = git@github.com:alttpo/iovm.git
-[submodule "external/msg"]
-	path = external/msg
-	url = git@github.com:alttpo/msg.git
+[submodule "external/frame64"]
+	path = external/frame64
+	url = git@github.com:alttpo/frame64.git
