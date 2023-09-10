@@ -17,8 +17,8 @@ using v8 = std::vector<uint8_t>;
 class rex_client : public vm_notifier {
     sock_sp s;
 
-    struct frame_incoming fi{};
-    struct frame_outgoing fo[2]{};
+    struct frame64rd fi{};
+    struct frame64wr fo[2]{};
 
     // received messages per channel:
     v8    msgIn[2]{};

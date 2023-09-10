@@ -8,31 +8,27 @@ rex_client::rex_client(sock_sp s_p) :
     s(std::move(s_p)),
     vmi(static_cast<vm_notifier *>(this))
 {
-    frame_incoming_init(
+    frame64rd_init(
         &fi,
         (void *)this,
-        +[](struct frame_incoming *fr, uint8_t *buf, long size, long *n) {
-            auto self = static_cast<rex_client *>(fr->opaque);
-            return self->s->recv(buf, size, *n);
-        },
-        +[](struct frame_incoming *fr, uint8_t *buf, uint8_t len, uint8_t chn, bool fin) {
+        +[](struct frame64rd *fr, uint8_t *buf, uint8_t len, uint8_t chn, bool fin) {
             auto self = static_cast<rex_client *>(fr->opaque);
             return self->recv_frame(buf, len, chn, fin);
         }
     );
 
-    frame_outgoing_init(
+    frame64wr_init(
         &fo[0],
-        (void *)this,
-        +[](struct frame_outgoing *fr, uint8_t *buf, size_t size, long *n) {
+        (void *) this,
+        +[](struct frame64wr *fr, uint8_t *buf, size_t size, long *n) {
             auto self = static_cast<rex_client *>(fr->opaque);
             return self->s->send(buf, size, *n);
         }
     );
-    frame_outgoing_init(
+    frame64wr_init(
         &fo[1],
-        (void *)this,
-        +[](struct frame_outgoing *fr, uint8_t *buf, size_t size, long *n) {
+        (void *) this,
+        +[](struct frame64wr *fr, uint8_t *buf, size_t size, long *n) {
             auto self = static_cast<rex_client *>(fr->opaque);
             return self->s->send(buf, size, *n);
         }
@@ -54,9 +50,9 @@ void rex_client::on_pc(uint32_t pc) {
 ///////////////////////////////////
 
 void rex_client::send_frame(uint8_t c, bool fin) {
-    if (!frame_outgoing_send(&fo[c], c, fin)) {
+    if (!frame64wr_send(&fo[c], c, fin)) {
         fprintf(stderr, "failed to send frame (err=%d): %s\n", s->error_num(), s->error_text().c_str());
-        frame_outgoing_reset(&fo[c]);
+        frame64wr_reset(&fo[c]);
     }
 }
 
@@ -126,7 +122,7 @@ void rex_client::vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, u
 
 void rex_client::vm_notify_read_byte(uint8_t x) {
     *fo[1].p++ = x;
-    if (frame_outgoing_len(&fo[1]) >= 63) {
+    if (frame64wr_len(&fo[1]) >= 63) {
         send_frame(1, false);
     }
 }
@@ -214,7 +210,7 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
     // send non-final frames:
     const size_t frame_size = 63;
     while (len > frame_size) {
-        frame_outgoing_append_bytes(&fo[c], p, frame_size);
+        frame64wr_append_bytes(&fo[c], p, frame_size);
         send_frame(c, false);
 
         len -= frame_size;
@@ -224,7 +220,7 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
     {
         // send final frame:
         assert(len <= frame_size);
-        frame_outgoing_append_bytes(&fo[c], p, len);
+        frame64wr_append_bytes(&fo[c], p, len);
         send_frame(c, true);
     }
 }
@@ -243,7 +239,18 @@ bool rex_client::handle_net() {
         return true;
     }
 
-    return frame_incoming_read(&fi);
+    // read more data into the frame's buffer:
+    long n;
+    if (!s->recv(frame64rd_read_dest(&fi), frame64rd_read_size(&fi), n)) {
+        return false;
+    }
+    if (n <= 0) {
+        return false;
+    }
+    frame64rd_read_complete(&fi, n);
+
+    // parse what was just read in:
+    return frame64rd_parse(&fi);
 }
 
 bool rex_client::recv_frame(uint8_t buf[63], uint8_t len, uint8_t chn, uint8_t fin) {
