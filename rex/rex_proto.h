@@ -33,14 +33,8 @@ enum rex_cmd_result : uint8_t {
 };
 
 enum rex_iovm_flags : uint8_t {
-    rex_iovm_flag_notify_write_start = 1 << 0,
-    rex_iovm_flag_notify_write_byte = 1 << 1,
-    rex_iovm_flag_notify_write_end = 1 << 2,
-    rex_iovm_flag_notify_wait_complete = 1 << 3,
-    // 4
-    // 5
-    rex_iovm_flag_auto_restart_on_error = 1 << 6,
-    rex_iovm_flag_auto_restart_on_end = 1 << 7
+    rex_iovm_flag_notify_write = 1 << 0,
+    rex_iovm_flag_notify_wait = 1 << 1,
 };
 
 #endif //SNES9X_REX_PROTO_H

@@ -57,25 +57,7 @@ void rex_client::send_frame(uint8_t c, bool fin) {
 }
 
 void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result, iovm1_state state) {
-    if (result == IOVM1_SUCCESS) {
-        // auto-restart on success:
-        if ((vmi_flags & rex_iovm_flag_auto_restart_on_end) != 0) {
-            vmi.vm_reset();
-        } else {
-            vm_running = false;
-        }
-
-        // do not notify on successful termination to avoid notification spam:
-        return;
-    } else {
-        if ((vmi_flags & rex_iovm_flag_auto_restart_on_error) != 0) {
-            // auto-restart on error:
-            vmi.vm_reset();
-        } else {
-            // stop running on error:
-            vm_running = false;
-        }
-    }
+    vm_running = false;
 
     // vm_ended message type:
     *fo[1].p++ = rex_notify_iovm_end;
@@ -133,7 +115,7 @@ void rex_client::vm_notify_read_end() {
 }
 
 void rex_client::vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) {
-    if ((vmi_flags & rex_iovm_flag_notify_write_start) == 0) {
+    if ((vmi_flags & rex_iovm_flag_notify_write) == 0) {
         return;
     }
 
@@ -165,11 +147,20 @@ void rex_client::vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, 
 }
 
 #ifdef NOTIFY_WRITE_BYTE
-void rex_client::vm_notify_write_byte(uint8_t x) {}
+void rex_client::vm_notify_write_byte(uint8_t x) {
+    if ((vmi_flags & rex_iovm_flag_notify_write) == 0) {
+        return;
+    }
+
+    *fo[1].p++ = x;
+    if (frame64wr_len(&fo[1]) >= 63) {
+        send_frame(1, false);
+    }
+}
 #endif
 
 void rex_client::vm_notify_write_end() {
-    if ((vmi_flags & rex_iovm_flag_notify_write_end) == 0) {
+    if ((vmi_flags & rex_iovm_flag_notify_write) == 0) {
         return;
     }
 
@@ -178,7 +169,7 @@ void rex_client::vm_notify_write_end() {
 }
 
 void rex_client::vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) {
-    if ((vmi_flags & rex_iovm_flag_notify_wait_complete) == 0) {
+    if ((vmi_flags & rex_iovm_flag_notify_wait) == 0) {
         return;
     }
 
@@ -311,6 +302,14 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             vm_running = false;
             send_message(0, {cmd, rex_success});
             break;
+        case rex_cmd_iovm_reset: // iovm: reset and restart
+            vmerr = vmi.vm_reset();
+            vm_running = true;
+            if (vmerr != IOVM1_SUCCESS) {
+                result = rex_cmd_error;
+            }
+            send_message(0, {cmd, result, static_cast<uint8_t>(vmerr)});
+            break;
         case rex_cmd_iovm_flags: // iovm: set flags
             if (size < 1) {
                 send_message(0, {cmd, rex_msg_too_short});
@@ -320,13 +319,6 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
 
             vmi_flags = (rex_iovm_flags) *p++;
             send_message(0, {cmd, rex_success});
-            break;
-        case rex_cmd_iovm_reset: // iovm: reset
-            vmerr = vmi.vm_reset();
-            if (vmerr != IOVM1_SUCCESS) {
-                result = rex_cmd_error;
-            }
-            send_message(0, {cmd, result, static_cast<uint8_t>(vmerr)});
             break;
         case rex_cmd_iovm_getstate: // iovm: getstate
             send_message(0, {cmd, rex_success, static_cast<uint8_t>(vmi.vm_getstate())});
