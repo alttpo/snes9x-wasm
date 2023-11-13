@@ -1,4 +1,4 @@
-package rex
+package rexrpc
 
 var LittleEndian littleEndian
 

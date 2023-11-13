@@ -2,7 +2,8 @@ package rex
 
 import (
 	"errors"
-	"github.com/alttpo/snes9x/golang/rex/iovm1"
+	"io"
+	"rex/iovm1"
 )
 
 type MemoryTarget struct {
@@ -32,7 +33,42 @@ var OAM = MemoryTarget{iovm1.TARGET_OAM}
 
 var errBufferTooLarge = errors.New("buffer too large")
 
-func (m *MemoryTarget) BeginRead(p []byte, addr uint32) (err error) {
+func (m *MemoryTarget) GenerateReadProgram(buf io.Writer, addr uint32, n int, ch uint8) (err error) {
+	if n == 0 {
+		return
+	}
+	if n > 65536 {
+		err = errBufferTooLarge
+		return
+	}
+
+	if n == 65536 {
+		// encode 65536 bytes as 0:
+		n = 0
+	}
+
+	_, err = buf.Write([]byte{
+		// set target:
+		iovm1.Instruction(iovm1.OPCODE_SETTDU, ch),
+		m.t,
+		// set address:
+		iovm1.Instruction(iovm1.OPCODE_SETA24, ch), // TODO: select A8, A16, A24 based on addr value
+		byte(addr & 0xFF),
+		byte((addr >> 8) & 0xFF),
+		byte((addr >> 16) & 0xFF),
+		// set transfer length:
+		iovm1.Instruction(iovm1.OPCODE_SETLEN, ch),
+		byte(n & 0xFF),
+		byte((n >> 8) & 0xFF),
+		// read chunk:
+		iovm1.Instruction(iovm1.OPCODE_READ, ch),
+		//iovm1.Instruction(iovm1.OPCODE_END, 0),
+	})
+
+	return
+}
+
+func (m *MemoryTarget) GenerateWriteProgram(buf io.Writer, addr uint32, p []byte) (err error) {
 	n := len(p)
 	if n == 0 {
 		return nil
@@ -40,17 +76,18 @@ func (m *MemoryTarget) BeginRead(p []byte, addr uint32) (err error) {
 	if n > 65536 {
 		return errBufferTooLarge
 	}
+
 	if n == 65536 {
 		// encode 65536 bytes as 0:
 		n = 0
 	}
 
-	prog := [...]byte{
+	if _, err = buf.Write([]byte{
 		// set target:
 		iovm1.Instruction(iovm1.OPCODE_SETTDU, 0),
 		m.t,
 		// set address:
-		iovm1.Instruction(iovm1.OPCODE_SETA24, 0),
+		iovm1.Instruction(iovm1.OPCODE_SETA24, 0), // TODO: select A8, A16, A24 based on addr value
 		byte(addr & 0xFF),
 		byte((addr >> 8) & 0xFF),
 		byte((addr >> 16) & 0xFF),
@@ -58,57 +95,24 @@ func (m *MemoryTarget) BeginRead(p []byte, addr uint32) (err error) {
 		iovm1.Instruction(iovm1.OPCODE_SETLEN, 0),
 		byte(n & 0xFF),
 		byte((n >> 8) & 0xFF),
-		// read chunk:
-		iovm1.Instruction(iovm1.OPCODE_READ, 0),
-		iovm1.Instruction(iovm1.OPCODE_END, 0),
-	}
-
-	_ = prog
-	panic("TODO")
-
-	return nil
-}
-
-func (m *MemoryTarget) BeginWrite(p []byte, addr uint32) (err error) {
-	n := len(p)
-	if n == 0 {
-		return nil
-	}
-	if n > 65536 {
-		return errBufferTooLarge
-	}
-	if n == 65536 {
-		// encode 65536 bytes as 0:
-		n = 0
-	}
-
-	prog := make([]byte, 0, 11+n)
-	prog = append(
-		prog,
-		// set target:
-		iovm1.Instruction(iovm1.OPCODE_SETTDU, 0),
-		m.t,
-		// set address:
-		iovm1.Instruction(iovm1.OPCODE_SETA24, 0),
-		byte(addr&0xFF),
-		byte((addr>>8)&0xFF),
-		byte((addr>>16)&0xFF),
-		// set transfer length:
-		iovm1.Instruction(iovm1.OPCODE_SETLEN, 0),
-		byte(n&0xFF),
-		byte((n>>8)&0xFF),
-		// read chunk:
+		// write chunk:
 		iovm1.Instruction(iovm1.OPCODE_WRITE, 0),
-	)
-	prog = append(prog, p...)
-	prog = append(prog,
-		iovm1.Instruction(iovm1.OPCODE_END, 0),
-	)
+	}); err != nil {
+		return
+	}
 
-	_ = prog
-	panic("TODO")
+	// write the data:
+	if _, err = buf.Write(p); err != nil {
+		return
+	}
 
-	return nil
+	//if _, err = buf.Write([]byte{
+	//	iovm1.Instruction(iovm1.OPCODE_END, 0),
+	//}); err != nil {
+	//	return
+	//}
+
+	return
 }
 
 func (m *MemoryTarget) Target() iovm1.Target {

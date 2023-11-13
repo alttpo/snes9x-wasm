@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"net/netip"
 	"rex"
+	"rex/iovm1"
+	"rex/rexrpc"
 	"time"
 	"unsafe"
 )
@@ -58,29 +62,6 @@ func rotate() {
 
 var wram [0x20000]byte
 
-type readOp struct {
-	pc   uint32
-	tdu  uint8
-	addr uint32
-	data []byte
-}
-
-func (r *readOp) IOVM1OnReadStart(pc uint32, tdu uint8, addr uint32, dlen uint32) {
-	r.pc = pc
-	r.tdu = tdu
-	r.addr = addr
-	r.data = make([]byte, 0, dlen)
-}
-
-func (r *readOp) IOVM1OnReadChunk(chunk []byte) {
-	r.data = append(r.data, chunk...)
-}
-
-func (r *readOp) IOVM1OnReadEnd() {
-	//TODO implement me
-	panic("implement me")
-}
-
 func main() {
 	var err error
 	var rpcConn *net.TCPConn
@@ -101,9 +82,21 @@ func main() {
 		_ = rpcConn.Close()
 	}(rpcConn)
 
-	rpc := rex.NewRPC(rpcConn)
-	rpc.IOVM1OnRead()
-	//rpc.IOVM1Upload()
+	rpc := rexrpc.NewRPC(rpcConn)
+	vmrpc := iovm1.NewRPC(rpc)
+
+	{
+		buf := bytes.Buffer{}
+		if err = rex.ROM.GenerateReadProgram(&buf, 0x7FC0, len(romTitle), 0); err != nil {
+			panic(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		if err = vmrpc.Upload(ctx, buf.Bytes()); err != nil {
+			panic(err)
+		}
+		// TODO: wait for read notifications
+		cancel()
+	}
 
 	// read rom header:
 	if err = blockingRead(&rex.ROM, romTitle[:], 0x7FC0); err != nil {
@@ -127,15 +120,6 @@ func main() {
 		_ = rex.PPUX.VRAM.Upload(0, linkSprites[:])
 	}
 
-	for {
-		// receive any RPC responses and notifications:
-		err = rpc.Receive(time.Now().Add(time.Microsecond * 100))
-		if err != nil {
-			panic(err)
-		}
-
-	}
-
 	// upload palette to ppux cgram:
 	palette := [0x20]byte{
 		0x00, 0x00, 0xff, 0x7f, 0x7e, 0x23, 0xb7, 0x11, 0x9e, 0x36, 0xa5, 0x14, 0xff, 0x01, 0x78, 0x10,
@@ -149,26 +133,26 @@ func main() {
 	// load a IOVM1 program into vm0 and execute it each frame:
 	vmprog := [...]byte{
 		// setup channel 0 for WRAM read:
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETTDU, 0),
-		rex.IOVM1_TARGET_WRAM,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETA8, 0),
+		iovm1.Instruction(iovm1.OPCODE_SETTDU, 0),
+		iovm1.TARGET_WRAM,
+		iovm1.Instruction(iovm1.OPCODE_SETA8, 0),
 		0x10,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETLEN, 0),
+		iovm1.Instruction(iovm1.OPCODE_SETLEN, 0),
 		0xF0,
 		0x00,
 
 		// setup channel 3 for NMI $2C00 write in reverse direction so $2C00 byte is written last:
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETCMPMSK, 3),
+		iovm1.Instruction(iovm1.OPCODE_SETCMPMSK, 3),
 		0x00,
 		0xFF,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETTDU, 3),
-		rex.IOVM1_TARGET_2C00 | rex.IOVM1_TARGETFLAG_REVERSE,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETA8, 3),
+		iovm1.Instruction(iovm1.OPCODE_SETTDU, 3),
+		iovm1.TARGET_2C00 | iovm1.TARGETFLAG_REVERSE,
+		iovm1.Instruction(iovm1.OPCODE_SETA8, 3),
 		0x00, // $2C00
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_SETLEN, 3),
+		iovm1.Instruction(iovm1.OPCODE_SETLEN, 3),
 		6, // write 6 bytes
 		0,
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_WRITE, 3),
+		iovm1.Instruction(iovm1.OPCODE_WRITE, 3),
 		0x9C, // 2C00: STZ $2C00
 		0x00,
 		0x2C,
@@ -176,12 +160,12 @@ func main() {
 		0xEA,
 		0xFF,
 		// wait while [$2C00] != $00
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_WAIT_WHILE_NEQ, 3),
+		iovm1.Instruction(iovm1.OPCODE_WAIT_WHILE_NEQ, 3),
 
 		// now issue WRAM read on channel 0:
-		rex.IOVM1Instruction(rex.IOVM1_OPCODE_READ, 0),
+		iovm1.Instruction(iovm1.OPCODE_READ, 0),
 	}
-	if err = rex.IOVM1[0].Execute(vmprog[:]); err != nil {
+	if err = rpc.IOVM1Upload(context.Background(), vmprog[:]); err != nil {
 		fmt.Printf("%v\n", err)
 		return
 	}

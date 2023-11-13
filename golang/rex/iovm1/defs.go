@@ -94,5 +94,8 @@ const (
 type Register byte
 
 func Instruction(opcode Opcode, ch uint8) uint8 {
+	if ch > 3 {
+		panic("ch must be between 0 and 3")
+	}
 	return (uint8(opcode) & 15) | ((ch & 3) << 4)
 }
