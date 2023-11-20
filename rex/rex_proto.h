@@ -34,8 +34,6 @@ enum rex_rsp : uint8_t {
     // response notification type on channel 1 (outgoing):
     rex_notify_iovm_end = 0x80,
     rex_notify_iovm_read,
-    rex_notify_iovm_write,
-    rex_notify_iovm_wait,
 };
 
 enum rex_cmd_result : uint8_t {

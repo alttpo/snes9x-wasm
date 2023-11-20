@@ -21,206 +21,139 @@ vm_inst::vm_inst(vm_notifier *notifier_p) :
     notifier(notifier_p)
 {}
 
-static const int bytes_per_cycle = 4;
-
-extern "C" void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs) {
-    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
-    inst->opcode_cb(cbs);
+void vm_inst::inc_cycles(int32_t delta) {
+    if (timeout_cycles > 0) {
+        timeout_cycles -= delta;
+    }
 }
 
-void vm_inst::opcode_cb(struct iovm1_callback_state_t *cbs) {
-    auto mt = rex_memory_target(cbs->t);
-    auto mem = mt.p;
+void vm_inst::on_pc(uint32_t pc) {
+    // this method is called before every instruction:
+
+    (void)pc;
+
+    // execute opcodes in the iovm:
+    std::lock_guard lk(vm_mtx);
+
+    iovm1_exec(&vm);
+}
+
+static const int bytes_per_cycle = 4;
+
+extern "C" void host_send_abort(struct iovm1_t *vm) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
+
+    inst->notifier->vm_notify_ended(vm->p, vm->e);
+}
+
+extern "C" void host_send_read(struct iovm1_t *vm, uint8_t l_raw, uint8_t *d) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
+
+    inst->notifier->vm_notify_read(vm->p, inst->c, inst->a, l_raw, d);
+}
+
+extern "C" void host_send_end(struct iovm1_t *vm) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
+
+    inst->notifier->vm_notify_ended(vm->p, vm->e);
+}
+
+extern "C" void host_timer_reset(struct iovm1_t *vm) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
+    // 1364 master cycles * 262 scanlines = 357368 cycles / frame
+    inst->timeout_cycles = 357368;
+}
+
+extern "C" bool host_timer_elapsed(struct iovm1_t *vm) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
+    return inst->timeout_cycles <= 0;
+}
+
+extern "C" enum iovm1_error host_memory_init(struct iovm1_t *vm, iovm1_memory_chip_t c, uint24_t a) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
+
+    inst->c = c;
+    inst->a = a;
+    inst->a_init = a;
+
+    auto mt = rex_memory_target(c);
+    if (!mt.p) {
+        // memory target not defined:
+        return IOVM1_ERROR_MEMORY_CHIP_UNDEFINED;
+    }
+
     auto mem_len = mt.size;
-    auto readable = mt.readable;
-    auto writable = mt.writable;
-
-    if (cbs->o == IOVM1_OPCODE_READ) {
-        // initialize transfer:
-        if (cbs->initial) {
-            // validate:
-            if (!mem) {
-                // memory target not defined:
-                cbs->complete = true;
-                cbs->result = IOVM1_ERROR_MEMORY_TARGET_UNDEFINED;
-                return;
-            }
-            if (!readable) {
-                // memory target not readable:
-                cbs->complete = true;
-                cbs->result = IOVM1_ERROR_MEMORY_TARGET_NOT_READABLE;
-                return;
-            }
-            if (cbs->a + cbs->len > mem_len) {
-                // memory target address out of range:
-                cbs->complete = true;
-                cbs->result = IOVM1_ERROR_MEMORY_TARGET_ADDRESS_OUT_OF_RANGE;
-                return;
-            }
-
-            // notify host the read operation started:
-            notifier->vm_notify_read_start(cbs->p, cbs->tdu, cbs->a, cbs->len);
-            addr_init = cbs->a;
-            len_init = cbs->len;
-            if (cbs->d) {
-                // reverse direction:
-                cbs->a += cbs->len - 1;
-            }
-        }
-
-        for (int i = 0; (cbs->len > 0) && (i < bytes_per_cycle); i++) {
-            // read a byte:
-            uint8_t x = *(mem + cbs->a);
-            notifier->vm_notify_read_byte(x);
-            if (cbs->d) {
-                cbs->a--;
-            } else {
-                cbs->a++;
-            }
-            cbs->len--;
-        }
-
-        // finished with transfer?
-        if (cbs->len == 0) {
-            // push out the current read buffer:
-            cbs->complete = true;
-            notifier->vm_notify_read_end();
-        }
-
-        return;
+    if (a > mem_len) {
+        // memory target address out of range:
+        return IOVM1_ERROR_MEMORY_CHIP_ADDRESS_OUT_OF_RANGE;
     }
 
-    if (cbs->o == IOVM1_OPCODE_WRITE) {
-        if (cbs->initial) {
-            // validate:
-            if (!mem) {
-                // memory target not defined:
-                cbs->complete = true;
-                cbs->result = IOVM1_ERROR_MEMORY_TARGET_UNDEFINED;
-                return;
-            }
-            if (!writable) {
-                // memory target not writable:
-                cbs->complete = true;
-                cbs->result = IOVM1_ERROR_MEMORY_TARGET_NOT_WRITABLE;
-                return;
-            }
-            if (cbs->a + cbs->len > mem_len) {
-                // memory target address out of range:
-                cbs->complete = true;
-                cbs->result = IOVM1_ERROR_MEMORY_TARGET_ADDRESS_OUT_OF_RANGE;
-                return;
-            }
+    return IOVM1_SUCCESS;
+}
 
-            notifier->vm_notify_write_start(cbs->p, cbs->tdu, cbs->a, cbs->len);
-            addr_init = cbs->a;
-            p_init = cbs->p;
-            len_init = cbs->len;
-            if (cbs->d) {
-                // reverse direction:
-                cbs->a += cbs->len - 1;
-                cbs->p += cbs->len - 1;
-            }
-        }
+extern "C" enum iovm1_error host_memory_read_validate(struct iovm1_t *vm, int l) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
 
-        for (int i = 0; (cbs->len > 0) && (i < bytes_per_cycle); i++) {
-            // write a byte:
-            uint8_t x = cbs->m[cbs->p];
-            *(mem + cbs->a) = x;
-#ifdef NOTIFY_WRITE_BYTE
-            notifier->vm_notify_write_byte(x);
-#endif
+    auto mt = rex_memory_target(inst->c);
 
-            if (cbs->d) {
-                cbs->a--;
-                cbs->p--;
-            } else {
-                cbs->a++;
-                cbs->p++;
-            }
-            cbs->len--;
-        }
-
-        // finished with transfer?
-        if (cbs->len == 0) {
-            cbs->a = addr_init + len_init;
-            cbs->p = p_init + len_init;
-            cbs->complete = true;
-            notifier->vm_notify_write_end();
-        }
-
-        return;
+    // validate:
+    if (!mt.p) {
+        // memory chip not defined:
+        return IOVM1_ERROR_MEMORY_CHIP_UNDEFINED;
+    }
+    if (!mt.readable) {
+        // memory chip not readable:
+        return IOVM1_ERROR_MEMORY_CHIP_NOT_READABLE;
+    }
+    if (inst->a + l > mt.size) {
+        // memory chip address out of range:
+        return IOVM1_ERROR_MEMORY_CHIP_ADDRESS_OUT_OF_RANGE;
     }
 
-    // remaining opcodes are wait-while:
+    return IOVM1_SUCCESS;
+}
 
-    if (cbs->initial) {
-        // validate:
-        if (!mem) {
-            // memory target not defined:
-            cbs->complete = true;
-            cbs->result = IOVM1_ERROR_MEMORY_TARGET_UNDEFINED;
-            return;
-        }
-        if (!readable) {
-            // memory target not readable:
-            cbs->complete = true;
-            cbs->result = IOVM1_ERROR_MEMORY_TARGET_NOT_READABLE;
-            return;
-        }
-        if (cbs->a >= mem_len) {
-            // out of range:
-            cbs->complete = true;
-            cbs->result = IOVM1_ERROR_MEMORY_TARGET_ADDRESS_OUT_OF_RANGE;
-            return;
-        }
+extern "C" enum iovm1_error host_memory_write_validate(struct iovm1_t *vm, int l) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
 
-        // default the timeout to 1 frame if not set:
-        if (cbs->tim == 0) {
-            // 1364 master cycles * 262 scanlines = 357368 cycles / frame
-            cbs->tim = 357368;
-        }
-        timeout_cycles = cycles + cbs->tim;
+    auto mt = rex_memory_target(inst->c);
+
+    // validate:
+    if (!mt.p) {
+        // memory chip not defined:
+        return IOVM1_ERROR_MEMORY_CHIP_UNDEFINED;
+    }
+    if (!mt.writable) {
+        // memory chip not writable:
+        return IOVM1_ERROR_MEMORY_CHIP_NOT_WRITABLE;
+    }
+    if (inst->a + l > mt.size) {
+        // memory chip address out of range:
+        return IOVM1_ERROR_MEMORY_CHIP_ADDRESS_OUT_OF_RANGE;
     }
 
-    // check timeout:
-    if (cycles >= timeout_cycles) {
-        cbs->complete = true;
-        cbs->result = IOVM1_ERROR_TIMED_OUT;
-        return;
-    }
+    return IOVM1_SUCCESS;
+}
 
-    // read byte and apply mask:
-    uint8_t b = *(mem + cbs->a) & cbs->msk;
-    bool cond;
-    switch (cbs->o) {
-        case IOVM1_OPCODE_WAIT_WHILE_NEQ:
-            cond = (b != cbs->cmp);
-            break;
-        case IOVM1_OPCODE_WAIT_WHILE_EQ:
-            cond = (b == cbs->cmp);
-            break;
-        case IOVM1_OPCODE_WAIT_WHILE_LT:
-            cond = (b < cbs->cmp);
-            break;
-        case IOVM1_OPCODE_WAIT_WHILE_GT:
-            cond = (b > cbs->cmp);
-            break;
-        case IOVM1_OPCODE_WAIT_WHILE_LTE:
-            cond = (b <= cbs->cmp);
-            break;
-        case IOVM1_OPCODE_WAIT_WHILE_GTE:
-            cond = (b >= cbs->cmp);
-            break;
-        default:
-            cond = false;
-            break;
-    }
-    cbs->complete = !cond;
+extern "C" uint8_t host_memory_read_auto_advance(struct iovm1_t *vm) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
 
-    if (cbs->complete) {
-        notifier->vm_notify_wait_complete(cbs->p, cbs->o, cbs->tdu, cbs->a, b);
-    }
+    auto mt = rex_memory_target(inst->c);
+    return mt.p[inst->a++];
+}
+
+extern "C" uint8_t host_memory_read_no_advance(struct iovm1_t *vm) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
+
+    auto mt = rex_memory_target(inst->c);
+    return mt.p[inst->a];
+}
+
+extern "C" void host_memory_write_auto_advance(struct iovm1_t *vm, uint8_t b) {
+    auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
+
+    auto mt = rex_memory_target(inst->c);
+    mt.p[inst->a++] = b;
 }
 
 iovm1_error vm_inst::vm_init() {
@@ -249,45 +182,8 @@ iovm1_state vm_inst::vm_getstate() {
     return iovm1_get_exec_state(&vm);
 }
 
-// a scanline is 1364 master clock cycles
-// a full frame is 262 scanlines; quarter of a frame is 65.5, but we round down to 64 why not
-static const int cycles_per_qtr_frame = 64 * 1364;
-
 iovm1_error vm_inst::vm_reset() {
     std::lock_guard lk(vm_mtx);
 
-    // introduce an artificial delay to prevent notification spam if the program completes too quickly
-
-    // calculate the amount of cycles to delay until the next quarter-frame:
-    uint64_t next_delay = (((cycles / cycles_per_qtr_frame) + 1) * cycles_per_qtr_frame) - cycles;
-    delay_cycles = (int64_t) next_delay;
-
     return iovm1_exec_reset(&vm);
-}
-
-void vm_inst::inc_cycles(int32_t delta) {
-    cycles += delta;
-    if (delay_cycles > 0) {
-        delay_cycles -= delta;
-    }
-}
-
-void vm_inst::on_pc(uint32_t pc) {
-    // this method is called before every instruction:
-
-    // delay:
-    if (delay_cycles > 0) {
-        return;
-    }
-
-    // execute opcodes in the iovm:
-    std::lock_guard lk(vm_mtx);
-
-    auto last_state = iovm1_get_exec_state(&vm);
-    auto result = iovm1_exec(&vm);
-    auto curr_state = iovm1_get_exec_state(&vm);
-
-    if ((curr_state != last_state) && (curr_state >= IOVM1_STATE_ENDED)) {
-        notifier->vm_notify_ended(vm.m.off, vm.cbs.o, result, curr_state);
-    }
 }

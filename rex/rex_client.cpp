@@ -56,7 +56,7 @@ void rex_client::send_frame(uint8_t c, bool fin) {
     }
 }
 
-void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result, iovm1_state state) {
+void rex_client::vm_notify_ended(uint32_t pc, iovm1_error result) {
     vm_running = false;
 
     // vm_ended message type:
@@ -68,13 +68,11 @@ void rex_client::vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result
     *fo[1].p++ = (pc >> 8) & 0xFF;
     *fo[1].p++ = (pc >> 16) & 0xFF;
     *fo[1].p++ = (pc >> 24) & 0xFF;
-    // opcode:
-    *fo[1].p++ = o;
 
     send_frame(1, true);
 }
 
-void rex_client::vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) {
+void rex_client::vm_notify_read(uint32_t pc, uint8_t c, uint24_t a, uint8_t l_raw, uint8_t *d) {
     // vm_read_complete message type:
     *fo[1].p++ = rex_notify_iovm_read;
     // pc:
@@ -82,113 +80,24 @@ void rex_client::vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, u
     *fo[1].p++ = (pc >> 8) & 0xFF;
     *fo[1].p++ = (pc >> 16) & 0xFF;
     *fo[1].p++ = (pc >> 24) & 0xFF;
-    // memory target:
-    *fo[1].p++ = tdu;
+    // memory chip:
+    *fo[1].p++ = c;
     // 24-bit address:
-    *fo[1].p++ = (addr & 0xFF);
-    *fo[1].p++ = ((addr >> 8) & 0xFF);
-    *fo[1].p++ = ((addr >> 16) & 0xFF);
-    // 16-bit length (0 -> 65536, else 1..65535):
-    uint16_t elen;
-    if (len == 65536) {
-        elen = 0;
-    } else {
-        elen = len;
-    }
-    *fo[1].p++ = (elen & 0xFF);
-    *fo[1].p++ = ((elen >> 8) & 0xFF);
+    *fo[1].p++ = (a & 0xFF);
+    *fo[1].p++ = ((a >> 8) & 0xFF);
+    *fo[1].p++ = ((a >> 16) & 0xFF);
+    // length:
+    *fo[1].p++ = l_raw;
 
-    // send start frame instantly:
-    send_frame(1, false);
-}
-
-void rex_client::vm_notify_read_byte(uint8_t x) {
-    *fo[1].p++ = x;
-    if (frame64wr_len(&fo[1]) >= 63) {
-        send_frame(1, false);
-    }
-}
-
-void rex_client::vm_notify_read_end() {
-    // send the final frame:
-    send_frame(1, true);
-}
-
-void rex_client::vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) {
-    if ((vmi_flags & rex_iovm_flag_notify_write) == 0) {
-        return;
+    int l = l_raw;
+    if (l == 0) { l = 256; }
+    while (l-- > 0) {
+        if (frame64wr_len(&fo[1]) >= 63) {
+            send_frame(1, false);
+        }
+        *fo[1].p++ = *d++;
     }
 
-    // vm_read_complete message type:
-    *fo[1].p++ = rex_notify_iovm_write;
-    // pc:
-    *fo[1].p++ = pc & 0xFF;
-    *fo[1].p++ = (pc >> 8) & 0xFF;
-    *fo[1].p++ = (pc >> 16) & 0xFF;
-    *fo[1].p++ = (pc >> 24) & 0xFF;
-    // memory target:
-    *fo[1].p++ = tdu;
-    // 24-bit address:
-    *fo[1].p++ = (addr & 0xFF);
-    *fo[1].p++ = ((addr >> 8) & 0xFF);
-    *fo[1].p++ = ((addr >> 16) & 0xFF);
-    // 16-bit length (0 -> 65536, else 1..65535):
-    uint16_t elen;
-    if (len == 65536) {
-        elen = 0;
-    } else {
-        elen = len;
-    }
-    *fo[1].p++ = (elen & 0xFF);
-    *fo[1].p++ = ((elen >> 8) & 0xFF);
-
-    // send start frame instantly:
-    send_frame(1, false);
-}
-
-#ifdef NOTIFY_WRITE_BYTE
-void rex_client::vm_notify_write_byte(uint8_t x) {
-    if ((vmi_flags & rex_iovm_flag_notify_write) == 0) {
-        return;
-    }
-
-    *fo[1].p++ = x;
-    if (frame64wr_len(&fo[1]) >= 63) {
-        send_frame(1, false);
-    }
-}
-#endif
-
-void rex_client::vm_notify_write_end() {
-    if ((vmi_flags & rex_iovm_flag_notify_write) == 0) {
-        return;
-    }
-
-    // send the final frame:
-    send_frame(1, true);
-}
-
-void rex_client::vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) {
-    if ((vmi_flags & rex_iovm_flag_notify_wait) == 0) {
-        return;
-    }
-
-    *fo[1].p++ = rex_notify_iovm_wait;
-    // pc:
-    *fo[1].p++ = pc & 0xFF;
-    *fo[1].p++ = (pc >> 8) & 0xFF;
-    *fo[1].p++ = (pc >> 16) & 0xFF;
-    *fo[1].p++ = (pc >> 24) & 0xFF;
-    // memory target:
-    *fo[1].p++ = tdu;
-    // 24-bit address:
-    *fo[1].p++ = (addr & 0xFF);
-    *fo[1].p++ = ((addr >> 8) & 0xFF);
-    *fo[1].p++ = ((addr >> 16) & 0xFF);
-    // last value read:
-    *fo[1].p++ = x;
-
-    // send final frame:
     send_frame(1, true);
 }
 

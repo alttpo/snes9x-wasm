@@ -20,43 +20,25 @@
 
 class vm_notifier {
 public:
-    virtual void vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result, iovm1_state state) = 0;
+    virtual void vm_notify_ended(uint32_t pc, iovm1_error result) = 0;
 
-    virtual void vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) = 0;
-
-    virtual void vm_notify_read_byte(uint8_t x) = 0;
-
-    virtual void vm_notify_read_end() = 0;
-
-    virtual void vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) = 0;
-
-#ifdef NOTIFY_WRITE_BYTE
-    virtual void vm_notify_write_byte(uint8_t x) = 0;
-#endif
-
-    virtual void vm_notify_write_end() = 0;
-
-    virtual void vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) = 0;
+    virtual void vm_notify_read(uint32_t pc, uint8_t c, uint24_t a, uint8_t l, uint8_t *d) = 0;
 };
 
 class vm_inst {
     vm_notifier *notifier;
-
-    uint32_t addr_init{};
-
-    uint32_t p_init{};
-    uint32_t len_init{};
 
     std::recursive_mutex vm_mtx;
     struct iovm1_t vm{};
 
     std::vector<uint8_t> prog{};
 
-    uint64_t cycles{};
+    // memory controller:
+    uint8_t  c{};
+    uint24_t a{};
+    uint24_t a_init{};
 
     uint64_t timeout_cycles{};
-
-    int64_t delay_cycles{};
 
 public:
     explicit vm_inst(vm_notifier *notifier);
@@ -74,9 +56,21 @@ public:
     void on_pc(uint32_t pc);
 
 private:
-    friend void iovm1_opcode_cb(struct iovm1_t *vm, struct iovm1_callback_state_t *cbs);
 
-    void opcode_cb(struct iovm1_callback_state_t *cbs);
+    friend void host_send_abort(struct iovm1_t *vm);
+    friend void host_send_read(struct iovm1_t *vm, uint8_t l, uint8_t *d);
+    friend void host_send_end(struct iovm1_t *vm);
+
+    friend void host_timer_reset(struct iovm1_t *vm);
+    friend bool host_timer_elapsed(struct iovm1_t *vm);
+
+    friend enum iovm1_error host_memory_init(struct iovm1_t *vm, iovm1_memory_chip_t c, uint24_t a);
+    friend enum iovm1_error host_memory_read_validate(struct iovm1_t *vm, int l);
+    friend enum iovm1_error host_memory_write_validate(struct iovm1_t *vm, int l);
+
+    friend uint8_t host_memory_read_auto_advance(struct iovm1_t *vm);
+    friend uint8_t host_memory_read_no_advance(struct iovm1_t *vm);
+    friend void host_memory_write_auto_advance(struct iovm1_t *vm, uint8_t b);
 };
 
 #endif //SNES9X_REX_IOVM_H

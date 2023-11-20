@@ -42,19 +42,9 @@ public:
     bool handle_net();
 
 public: // vm_notifier
-    void vm_notify_ended(uint32_t pc, iovm1_opcode o, iovm1_error result, iovm1_state state) override;
+    void vm_notify_ended(uint32_t pc, iovm1_error result) override;
 
-    void vm_notify_read_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) override;
-    void vm_notify_read_byte(uint8_t x) override;
-    void vm_notify_read_end() override;
-
-    void vm_notify_write_start(uint32_t pc, uint8_t tdu, uint32_t addr, uint32_t len) override;
-#ifdef NOTIFY_WRITE_BYTE
-    void vm_notify_write_byte(uint8_t x) override;
-#endif
-    void vm_notify_write_end() override;
-
-    void vm_notify_wait_complete(uint32_t pc, iovm1_opcode o, uint8_t tdu, uint32_t addr, uint8_t x) override;
+    void vm_notify_read(uint32_t pc, uint8_t c, uint24_t a, uint8_t l, uint8_t *d) override;
 
 public:
     bool recv_frame(uint8_t buf[63], uint8_t len, uint8_t chn, uint8_t fin);
