@@ -6,12 +6,8 @@
 
 enum rex_cmd : uint8_t {
     // command request type on channel 0 (incoming):
-    rex_cmd_iovm_load,
-    rex_cmd_iovm_start,
+    rex_cmd_iovm_exec,
     rex_cmd_iovm_stop,
-    rex_cmd_iovm_reset,
-    rex_cmd_iovm_flags,
-    rex_cmd_iovm_getstate,
 
     rex_cmd_ppux_cmd_upload = 16,
     rex_cmd_ppux_vram_upload,
@@ -20,12 +16,8 @@ enum rex_cmd : uint8_t {
 
 enum rex_rsp : uint8_t {
     // command response type on channel 0 (outgoing):
-    rex_rsp_iovm_load,
-    rex_rsp_iovm_start,
+    rex_rsp_iovm_exec,
     rex_rsp_iovm_stop,
-    rex_rsp_iovm_reset,
-    rex_rsp_iovm_flags,
-    rex_rsp_iovm_getstate,
 
     rex_rsp_ppux_cmd_upload = 16,
     rex_rsp_ppux_vram_upload,
@@ -41,11 +33,6 @@ enum rex_cmd_result : uint8_t {
     rex_msg_too_short,
     rex_cmd_unknown,
     rex_cmd_error,
-};
-
-enum rex_iovm_flags : uint8_t {
-    rex_iovm_flag_notify_write = 1 << 0,
-    rex_iovm_flag_notify_wait = 1 << 1,
 };
 
 #endif //SNES9X_REX_PROTO_H

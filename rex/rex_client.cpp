@@ -187,10 +187,11 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
     unsigned long size = m.size() - 1;
     switch (cmd) {
         // TODO: command to fetch ROM details: filename, hash, etc.
-        case rex_cmd_iovm_load: { // iovm: load program
+
+        case rex_cmd_iovm_exec: { // iovm: load and execute program
             if (size < 1) {
                 send_message(0, {cmd, rex_msg_too_short});
-                fprintf(stderr, "message too short\n");
+                fprintf(stderr, "rex: incoming message too short\n");
                 return;
             }
 
@@ -200,38 +201,16 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             if (vmerr != IOVM1_SUCCESS) {
                 result = rex_cmd_error;
             }
-            send_message(0, {cmd, result, static_cast<uint8_t>(vmerr)});
-            break;
-        }
-        case rex_cmd_iovm_start: // iovm: start
-            vm_running = true;
-            send_message(0, {cmd, rex_success});
-            break;
-        case rex_cmd_iovm_stop: // iovm: stop
-            vm_running = false;
-            send_message(0, {cmd, rex_success});
-            break;
-        case rex_cmd_iovm_reset: // iovm: reset and restart
             vmerr = vmi.vm_reset();
-            vm_running = true;
             if (vmerr != IOVM1_SUCCESS) {
                 result = rex_cmd_error;
             }
+
+            vm_running = (vmerr == IOVM1_SUCCESS);
             send_message(0, {cmd, result, static_cast<uint8_t>(vmerr)});
             break;
-        case rex_cmd_iovm_flags: // iovm: set flags
-            if (size < 1) {
-                send_message(0, {cmd, rex_msg_too_short});
-                fprintf(stderr, "message too short\n");
-                return;
-            }
+        }
 
-            vmi_flags = (rex_iovm_flags) *p++;
-            send_message(0, {cmd, rex_success});
-            break;
-        case rex_cmd_iovm_getstate: // iovm: getstate
-            send_message(0, {cmd, rex_success, static_cast<uint8_t>(vmi.vm_getstate())});
-            break;
         case rex_cmd_ppux_cmd_upload: // ppux: load & execute program
             if (size <= 4) {
                 send_message(0, {cmd, rex_msg_too_short});

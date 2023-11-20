@@ -49,7 +49,7 @@ extern "C" void host_send_abort(struct iovm1_t *vm) {
 extern "C" void host_send_read(struct iovm1_t *vm, uint8_t l_raw, uint8_t *d) {
     auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
 
-    inst->notifier->vm_notify_read(vm->p, inst->c, inst->a, l_raw, d);
+    inst->notifier->vm_notify_read(vm->p, inst->c, inst->a_init, l_raw, d);
 }
 
 extern "C" void host_send_end(struct iovm1_t *vm) {

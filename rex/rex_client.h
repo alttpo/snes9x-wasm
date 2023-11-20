@@ -29,7 +29,6 @@ public:
     struct ppux ppux{};
 
     vm_inst vmi;
-    rex_iovm_flags vmi_flags{};
     bool vm_running{};
 
 public:
