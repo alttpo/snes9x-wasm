@@ -56,23 +56,29 @@ void rex_client::send_frame(uint8_t c, bool fin) {
     }
 }
 
+void rex_client::reply_byte(uint8_t c, bool fin, uint8_t b) {
+    *fo[c].p++ = b;
+    if (fin || (frame64wr_len(&fo[c]) >= 63)) {
+        send_frame(c, fin);
+    }
+}
+
 void rex_client::vm_notify_ended(uint32_t pc, iovm1_error result) {
     vm_running = false;
 
-    // vm_ended message type:
-    *fo[0].p++ = rex_notify_iovm_end;
-    // result:
-    *fo[0].p++ = result;
-    (void)pc;
+    // end message:
+    reply_byte(0, false, 0xFF);
+    // error code: (finalizes message)
+    reply_byte(0, true, result);
 
-    send_frame(0, true);
+    (void)pc;
 }
 
 void rex_client::vm_notify_read(uint32_t pc, uint8_t c, uint24_t a, uint8_t l_raw, uint8_t *d) {
-    // vm_read_complete message type:
-    *fo[0].p++ = rex_notify_iovm_read;
+    // read data message:
+    reply_byte(0, false, 0xFE);
     // length:
-    *fo[0].p++ = l_raw;
+    reply_byte(0, false, l_raw);
 
     (void)pc;
     (void)c;
@@ -81,13 +87,11 @@ void rex_client::vm_notify_read(uint32_t pc, uint8_t c, uint24_t a, uint8_t l_ra
     int l = l_raw;
     if (l == 0) { l = 256; }
     while (l-- > 0) {
-        if (frame64wr_len(&fo[0]) >= 63) {
-            send_frame(0, false);
-        }
-        *fo[0].p++ = *d++;
+        reply_byte(0, false, *d++);
     }
 
-    send_frame(0, true);
+    // always send the frame at the end of read-data:
+    send_frame(0, false);
 }
 
 ///////////////////////////////////
@@ -189,14 +193,24 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             vmerr = vmi.vm_load(&*p, m.cend() - p);
             if (vmerr != IOVM1_SUCCESS) {
                 result = rex_cmd_error;
-            }
-            vmerr = vmi.vm_reset();
-            if (vmerr != IOVM1_SUCCESS) {
-                result = rex_cmd_error;
+            } else {
+                vmerr = vmi.vm_reset();
+                if (vmerr != IOVM1_SUCCESS) {
+                    result = rex_cmd_error;
+                }
             }
 
+            // start the reply:
+            reply_byte(0, false, cmd);
+            reply_byte(0, false, result);
+
             vm_running = (vmerr == IOVM1_SUCCESS);
-            send_message(0, {cmd, result, static_cast<uint8_t>(vmerr)});
+            if (!vm_running) {
+                vm_notify_ended(0, vmerr);
+            } else {
+                // send the first frame of response then wait for read or end:
+                send_frame(0, false);
+            }
             break;
         }
 
@@ -258,6 +272,13 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             send_message(0, {cmd, result, static_cast<uint8_t>(ppuxerr)});
             break;
         }
+
+        case rex_cmd_rom_info: // get rom info
+            // TODO
+            //Memory.ROMName;
+            send_message(0, {cmd, result, });
+            break;
+
         default:
             // discard unknown messages
             send_message(0, {cmd, rex_cmd_unknown});

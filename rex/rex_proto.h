@@ -8,22 +8,22 @@ enum rex_cmd : uint8_t {
     // command request type on channel 0 (incoming):
     rex_cmd_iovm_exec,
 
-    rex_cmd_ppux_cmd_upload = 16,
+    rex_cmd_ppux_cmd_upload,
     rex_cmd_ppux_vram_upload,
-    rex_cmd_ppux_cgram_upload
+    rex_cmd_ppux_cgram_upload,
+
+    rex_cmd_rom_info,
 };
 
 enum rex_rsp : uint8_t {
     // command response type on channel 0 (outgoing):
     rex_rsp_iovm_exec,
 
-    rex_rsp_ppux_cmd_upload = 16,
+    rex_rsp_ppux_cmd_upload,
     rex_rsp_ppux_vram_upload,
     rex_rsp_ppux_cgram_upload,
 
-    // response notification type on channel 1 (outgoing):
-    rex_notify_iovm_end = 0x80,
-    rex_notify_iovm_read,
+    rex_rsp_rom_info,
 };
 
 enum rex_cmd_result : uint8_t {

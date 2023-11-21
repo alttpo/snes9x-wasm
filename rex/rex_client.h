@@ -24,6 +24,7 @@ class rex_client : public vm_notifier {
     v8    msgIn[2]{};
 
     void send_frame(uint8_t c, bool fin);
+    void reply_byte(uint8_t c, bool fin, uint8_t b);
 
 public:
     struct ppux ppux{};
