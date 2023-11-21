@@ -76,7 +76,7 @@ extern "C" enum iovm1_error host_memory_init(struct iovm1_t *vm, iovm1_memory_ch
     inst->a = a;
     inst->a_init = a;
 
-    auto mt = rex_memory_target(c);
+    auto mt = rex_memory_chip(c);
     if (!mt.p) {
         // memory target not defined:
         return IOVM1_ERROR_MEMORY_CHIP_UNDEFINED;
@@ -94,7 +94,7 @@ extern "C" enum iovm1_error host_memory_init(struct iovm1_t *vm, iovm1_memory_ch
 extern "C" enum iovm1_error host_memory_read_validate(struct iovm1_t *vm, int l) {
     auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
 
-    auto mt = rex_memory_target(inst->c);
+    auto mt = rex_memory_chip(inst->c);
 
     // validate:
     if (!mt.p) {
@@ -116,7 +116,7 @@ extern "C" enum iovm1_error host_memory_read_validate(struct iovm1_t *vm, int l)
 extern "C" enum iovm1_error host_memory_write_validate(struct iovm1_t *vm, int l) {
     auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
 
-    auto mt = rex_memory_target(inst->c);
+    auto mt = rex_memory_chip(inst->c);
 
     // validate:
     if (!mt.p) {
@@ -138,21 +138,21 @@ extern "C" enum iovm1_error host_memory_write_validate(struct iovm1_t *vm, int l
 extern "C" uint8_t host_memory_read_auto_advance(struct iovm1_t *vm) {
     auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
 
-    auto mt = rex_memory_target(inst->c);
+    auto mt = rex_memory_chip(inst->c);
     return mt.p[inst->a++];
 }
 
 extern "C" uint8_t host_memory_read_no_advance(struct iovm1_t *vm) {
     auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
 
-    auto mt = rex_memory_target(inst->c);
+    auto mt = rex_memory_chip(inst->c);
     return mt.p[inst->a];
 }
 
 extern "C" void host_memory_write_auto_advance(struct iovm1_t *vm, uint8_t b) {
     auto inst = reinterpret_cast<vm_inst *>(iovm1_get_userdata(vm));
 
-    auto mt = rex_memory_target(inst->c);
+    auto mt = rex_memory_chip(inst->c);
     mt.p[inst->a++] = b;
 }
 

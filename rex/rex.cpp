@@ -37,8 +37,8 @@ private:
     std::vector<sock_wp> all_socks;
 };
 
-rex_mem_target_desc rex_memory_target(uint8_t target) {
-    switch (target) {
+rex_memory_chip_desc rex_memory_chip(uint8_t c) {
+    switch (c) {
         case 0: // WRAM:
             return {Memory.RAM, sizeof(Memory.RAM), true, false};
         case 1: // SRAM:

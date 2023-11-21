@@ -649,7 +649,7 @@ static auto readu16(uint8_t *p) -> uint16_t {
 }
 
 static auto rex_readu16(uint8_t tgt, uint32_t addr, uint16_t &result) {
-    auto mt = rex_memory_target(tgt);
+    auto mt = rex_memory_chip(tgt);
     if (!mt.readable) return;
     if (!mt.p) return;
     if (addr >= mt.size) return;

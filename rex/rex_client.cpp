@@ -60,45 +60,34 @@ void rex_client::vm_notify_ended(uint32_t pc, iovm1_error result) {
     vm_running = false;
 
     // vm_ended message type:
-    *fo[1].p++ = rex_notify_iovm_end;
+    *fo[0].p++ = rex_notify_iovm_end;
     // result:
-    *fo[1].p++ = result;
-    // pc:
-    *fo[1].p++ = pc & 0xFF;
-    *fo[1].p++ = (pc >> 8) & 0xFF;
-    *fo[1].p++ = (pc >> 16) & 0xFF;
-    *fo[1].p++ = (pc >> 24) & 0xFF;
+    *fo[0].p++ = result;
+    (void)pc;
 
-    send_frame(1, true);
+    send_frame(0, true);
 }
 
 void rex_client::vm_notify_read(uint32_t pc, uint8_t c, uint24_t a, uint8_t l_raw, uint8_t *d) {
     // vm_read_complete message type:
-    *fo[1].p++ = rex_notify_iovm_read;
-    // pc:
-    *fo[1].p++ = pc & 0xFF;
-    *fo[1].p++ = (pc >> 8) & 0xFF;
-    *fo[1].p++ = (pc >> 16) & 0xFF;
-    *fo[1].p++ = (pc >> 24) & 0xFF;
-    // memory chip:
-    *fo[1].p++ = c;
-    // 24-bit address:
-    *fo[1].p++ = (a & 0xFF);
-    *fo[1].p++ = ((a >> 8) & 0xFF);
-    *fo[1].p++ = ((a >> 16) & 0xFF);
+    *fo[0].p++ = rex_notify_iovm_read;
     // length:
-    *fo[1].p++ = l_raw;
+    *fo[0].p++ = l_raw;
+
+    (void)pc;
+    (void)c;
+    (void)a;
 
     int l = l_raw;
     if (l == 0) { l = 256; }
     while (l-- > 0) {
-        if (frame64wr_len(&fo[1]) >= 63) {
-            send_frame(1, false);
+        if (frame64wr_len(&fo[0]) >= 63) {
+            send_frame(0, false);
         }
-        *fo[1].p++ = *d++;
+        *fo[0].p++ = *d++;
     }
 
-    send_frame(1, true);
+    send_frame(0, true);
 }
 
 ///////////////////////////////////

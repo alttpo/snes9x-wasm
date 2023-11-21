@@ -7,7 +7,6 @@
 enum rex_cmd : uint8_t {
     // command request type on channel 0 (incoming):
     rex_cmd_iovm_exec,
-    rex_cmd_iovm_stop,
 
     rex_cmd_ppux_cmd_upload = 16,
     rex_cmd_ppux_vram_upload,
@@ -17,7 +16,6 @@ enum rex_cmd : uint8_t {
 enum rex_rsp : uint8_t {
     // command response type on channel 0 (outgoing):
     rex_rsp_iovm_exec,
-    rex_rsp_iovm_stop,
 
     rex_rsp_ppux_cmd_upload = 16,
     rex_rsp_ppux_vram_upload,
