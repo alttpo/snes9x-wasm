@@ -306,7 +306,7 @@ void ppux::render_cmd() {
         //   1ooo oooo     ---- ----     ssss ssss     ssss ssss    o = opcode
         //                                                          s = size of command data in uint32_ts
         if ((*it & (1 << 31)) == 0) {
-            fprintf(stderr, "cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.cbegin());
+            fprintf(stderr, "rex: ppux: cmd list malformed at index %td; opcode must have MSB set\n", it - cmd.cbegin());
             cmd.erase(cmd.begin(), cmd.end());
             return;
         }

@@ -127,18 +127,18 @@ void rex_append_rom_filename(std::vector<uint8_t> &o) {
 void rex::start() {
     listener = sock::make_tcp();
     if (!(bool) *listener) {
-        fprintf(stderr, "failed to allocate socket: %s\n", listener->error_text().c_str());
+        fprintf(stderr, "rex: failed to allocate socket: %s\n", listener->error_text().c_str());
         return;
     }
 
     listener->bind(0x7F000001UL, 0x2C00); // 11264
     if (!(bool) *listener) {
-        fprintf(stderr, "failed to bind socket: %s\n", listener->error_text().c_str());
+        fprintf(stderr, "rex: failed to bind socket: %s\n", listener->error_text().c_str());
         return;
     }
     listener->listen();
     if (!(bool) *listener) {
-        fprintf(stderr, "failed to listen on socket: %s\n", listener->error_text().c_str());
+        fprintf(stderr, "rex: failed to listen on socket: %s\n", listener->error_text().c_str());
         return;
     }
 
@@ -177,7 +177,7 @@ void rex::handle_net() {
     // continually poll and handle network events until the queue dries up:
     while (npolled != 0) {
         if (!sock::poll(all_socks, npolled, err)) {
-            fprintf(stderr, "poll failed: %s\n", sock::error_text(err).c_str());
+            fprintf(stderr, "rex: poll failed: %s\n", sock::error_text(err).c_str());
             break;
         }
         if (npolled <= 0) {
@@ -203,11 +203,11 @@ void rex::handle_net() {
 
             auto accepted = listener->accept(ip, port);
             if (!(bool) *accepted) {
-                fprintf(stderr, "failed to accept socket: %s\n", listener->error_text().c_str());
+                fprintf(stderr, "rex: failed to accept socket: %s\n", listener->error_text().c_str());
                 return;
             }
 
-            fprintf(stderr, "accepted connection from %08x:%04x\n", ip, port);
+            fprintf(stderr, "rex: accepted connection from %08x:%04x\n", ip, port);
             all_socks.push_back(accepted);
             clients.push_back(std::make_shared<rex_client>(accepted));
         }

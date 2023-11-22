@@ -34,7 +34,7 @@ void sock::startup() {
 
 sock::sock(native_socket_t fd_p) : fd(fd_p)
 {
-    fprintf(stderr, "sock::ctor -> %p\n", this);
+    //fprintf(stderr, "sock::ctor -> %p\n", this);
 }
 
 sock::sock(sock &&o) noexcept :
@@ -45,11 +45,11 @@ sock::sock(sock &&o) noexcept :
     o.errfn.clear();
     o.events = 0;
     o.revents = 0;
-    fprintf(stderr, "sock::move %p -> %p\n", &o, this);
+    //fprintf(stderr, "sock::move %p -> %p\n", &o, this);
 }
 
 sock::~sock() {
-    fprintf(stderr, "sock::dtor -> %p\n", this);
+    //fprintf(stderr, "sock::dtor -> %p\n", this);
     socket_close();
 }
 

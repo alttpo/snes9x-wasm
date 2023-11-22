@@ -52,7 +52,7 @@ void rex_client::on_pc(uint32_t pc) {
 
 void rex_client::send_frame(uint8_t c, bool fin) {
     if (!frame64wr_send(&fo[c], c, fin)) {
-        fprintf(stderr, "failed to send frame (err=%d): %s\n", s->error_num(), s->error_text().c_str());
+        fprintf(stderr, "rex: failed to send frame (err=%d): %s\n", s->error_num(), s->error_text().c_str());
         frame64wr_reset(&fo[c]);
     }
 }
@@ -122,11 +122,11 @@ void rex_client::send_message(uint8_t c, const v8 &msg) {
 bool rex_client::handle_net() {
     // close errored-out clients and remove them:
     if (s->isErrored()) {
-        fprintf(stderr, "client errored: %s\n", s->error_text().c_str());
+        fprintf(stderr, "rex: client errored: %s\n", s->error_text().c_str());
         return false;
     }
     if (s->isClosed()) {
-        fprintf(stderr, "client closed\n");
+        fprintf(stderr, "rex: client closed\n");
         return false;
     }
     if (!s->isReadAvailable()) {
