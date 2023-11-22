@@ -109,6 +109,19 @@ void rex_host_frame_skip() {
     rex.frame_skip();
 }
 
+void rex_append_rom_filename(std::vector<uint8_t> &o) {
+    // extract only filename from full path:
+    std::string basename = S9xBasename(Memory.ROMFilename);
+    // clip filename to 255 chars:
+    if (basename.size() > 255) {
+        basename.erase(255, std::string::npos);
+    }
+
+    // length-prefixed string as single byte:
+    o.push_back((uint8_t)basename.size());
+    o.insert(o.end(), basename.cbegin(), basename.cend());
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void rex::start() {

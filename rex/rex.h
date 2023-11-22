@@ -35,4 +35,6 @@ struct rex_memory_chip_desc {
 
 rex_memory_chip_desc rex_memory_chip(uint8_t c);
 
+void rex_append_rom_filename(std::vector<uint8_t> &o);
+
 #endif //SNES9X_REX_H

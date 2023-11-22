@@ -3,6 +3,7 @@
 
 #include "rex_client.h"
 #include "rex_proto.h"
+#include "rex.h"
 
 rex_client::rex_client(sock_sp s_p) :
     s(std::move(s_p)),
@@ -217,12 +218,12 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
         case rex_cmd_ppux_cmd_upload: // ppux: load & execute program
             if (size <= 4) {
                 send_message(0, {cmd, rex_msg_too_short});
-                fprintf(stderr, "message too short\n");
+                fprintf(stderr, "rex: incoming message too short\n");
                 return;
             }
             if ((size & 3) != 0) {
                 send_message(0, {cmd, rex_msg_too_short});
-                fprintf(stderr, "message data size must be multiple of 4 bytes\n");
+                fprintf(stderr, "rex: incoming message data size must be multiple of 4 bytes\n");
                 return;
             }
             ppuxerr = ppux.cmd_upload(
@@ -238,7 +239,7 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             // TODO: possibly stream in each frame instead of waiting for the complete message
             if (size <= 4) {
                 send_message(0, {cmd, rex_msg_too_short});
-                fprintf(stderr, "message too short\n");
+                fprintf(stderr, "rex: incoming message too short\n");
                 return;
             }
             uint32_t addr = *p++;
@@ -257,7 +258,7 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             // TODO: possibly stream in each frame instead of waiting for the complete message
             if (size <= 4) {
                 send_message(0, {cmd, rex_msg_too_short});
-                fprintf(stderr, "message too short\n");
+                fprintf(stderr, "rex: incoming message too short\n");
                 return;
             }
             uint32_t addr = *p++;
@@ -273,11 +274,14 @@ void rex_client::recv_message(uint8_t c, const v8 &m) {
             break;
         }
 
-        case rex_cmd_rom_info: // get rom info
-            // TODO
-            //Memory.ROMName;
-            send_message(0, {cmd, result, });
+        case rex_cmd_rom_info: { // get rom info
+            std::vector<uint8_t> o;
+            o.push_back(cmd);
+            o.push_back(result);
+            rex_append_rom_filename(o);
+            send_message(0, o);
             break;
+        }
 
         default:
             // discard unknown messages
