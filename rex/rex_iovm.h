@@ -13,6 +13,7 @@
 #include <mutex>
 
 #include "rex_proto.h"
+#include "rex.h"
 
 #define IOVM1_USE_USERDATA
 
@@ -37,6 +38,10 @@ class vm_inst {
     uint8_t  c{};
     uint24_t a{};
     uint24_t a_init{};
+    rex_memory_chip_desc mc{};
+    uint8_t *r{};
+    uint8_t rdbuf[6 + 256];
+    const uint8_t *w{};
 
     uint64_t timeout_cycles{};
 
@@ -57,20 +62,17 @@ public:
 
 private:
 
-    friend void host_send_abort(struct iovm1_t *vm);
-    friend void host_send_read(struct iovm1_t *vm, uint8_t l, uint8_t *d);
+    // advance memory-read state machine, use `vm->rd` for tracking state
+    friend enum iovm1_error host_memory_read_state_machine(struct iovm1_t *vm);
+    // advance memory-write state machine, use `vm->wr` for tracking state
+    friend enum iovm1_error host_memory_write_state_machine(struct iovm1_t *vm);
+    // advance memory-wait state machine, use `vm->wa` for tracking state, use `iovm1_memory_wait_test_byte` for comparison func
+    friend enum iovm1_error host_memory_wait_state_machine(struct iovm1_t *vm);
+
+    // try to read a byte from a memory chip, return byte in `*b` if successful
+    friend enum iovm1_error host_memory_try_read_byte(struct iovm1_t *vm, enum iovm1_memory_chip c, uint24_t a, uint8_t *b);
+
     friend void host_send_end(struct iovm1_t *vm);
-
-    friend void host_timer_reset(struct iovm1_t *vm);
-    friend bool host_timer_elapsed(struct iovm1_t *vm);
-
-    friend enum iovm1_error host_memory_init(struct iovm1_t *vm, iovm1_memory_chip_t c, uint24_t a);
-    friend enum iovm1_error host_memory_read_validate(struct iovm1_t *vm, int l);
-    friend enum iovm1_error host_memory_write_validate(struct iovm1_t *vm, int l);
-
-    friend uint8_t host_memory_read_auto_advance(struct iovm1_t *vm);
-    friend uint8_t host_memory_read_no_advance(struct iovm1_t *vm);
-    friend void host_memory_write_auto_advance(struct iovm1_t *vm, uint8_t b);
 };
 
 #endif //SNES9X_REX_IOVM_H

@@ -69,8 +69,11 @@ void rex_client::vm_notify_ended(uint32_t pc, iovm1_error result) {
 
     // end message:
     reply_byte(0, false, 0xFF);
-    // error code: (finalizes message)
-    reply_byte(0, true, result);
+    // error code:
+    reply_byte(0, false, result);
+    // offset within program of where we ended: (finalizes message)
+    reply_byte(0, false, pc & 0xFF);
+    reply_byte(0, true, (pc >> 8) & 0xFF);
 
     (void)pc;
 }
@@ -78,6 +81,10 @@ void rex_client::vm_notify_ended(uint32_t pc, iovm1_error result) {
 void rex_client::vm_notify_read(uint32_t pc, uint8_t c, uint24_t a, uint8_t l_raw, uint8_t *d) {
     // read data message:
     reply_byte(0, false, 0xFE);
+    reply_byte(0, false, c);
+    reply_byte(0, false, a & 0xFF);
+    reply_byte(0, false, (a >> 8) & 0xFF);
+    reply_byte(0, false, (a >> 16) & 0xFF);
     // length:
     reply_byte(0, false, l_raw);
 
