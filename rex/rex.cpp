@@ -6,6 +6,7 @@
 
 #include "snes9x.h"
 #include "memmap.h"
+#include "apu/bapu/snes/snes.hpp"
 
 #include "rex_ppux.h"
 #include "rex_iovm.h"
@@ -39,22 +40,24 @@ private:
 
 rex_memory_chip_desc rex_memory_chip(uint8_t c) {
     switch (c) {
-        case 0: // WRAM:
+        case MEM_SNES_WRAM: // WRAM:
             return {Memory.RAM, sizeof(Memory.RAM), true, false};
-        case 1: // SRAM:
-            return {Memory.SRAM, Memory.SRAMStorage.size(), true, true};
-        case 2: // ROM:
-            return {Memory.ROM, Memory.ROMStorage.size(), true, true};
+        case MEM_SNES_VRAM: // VRAM:
+            return {Memory.VRAM, sizeof(Memory.VRAM), true, false};
+        case MEM_SNES_CGRAM: // CGRAM:
+            return {(uint8_t *) PPU.CGDATA, sizeof(PPU.CGDATA), true, false};
+        case MEM_SNES_OAM: // OAM:
+            return {PPU.OAMData, sizeof(PPU.OAMData), true, false};
+        case MEM_SNES_ARAM: // APURAM:
+            return {SNES::smp.apuram, 64 * 1024, true, false};
 #ifdef EMULATE_FXPAKPRO
-        case 3: // 2C00:
+        case MEM_SNES_2C00: // 2C00:
             return {Memory.Extra2C00, sizeof(Memory.Extra2C00), true, true};
 #endif
-        case 4: // VRAM:
-            return {Memory.VRAM, sizeof(Memory.VRAM), true, false};
-        case 5: // CGRAM:
-            return {(uint8_t *) PPU.CGDATA, sizeof(PPU.CGDATA), true, false};
-        case 6: // OAM:
-            return {PPU.OAMData, sizeof(PPU.OAMData), true, false};
+        case MEM_SNES_ROM: // ROM:
+            return {Memory.ROM, Memory.ROMStorage.size(), true, true};
+        case MEM_SNES_SRAM: // SRAM:
+            return {Memory.SRAM, Memory.SRAMStorage.size(), true, true};
         default: // memory target not defined:
             return {nullptr, 0, false, false};
     }
