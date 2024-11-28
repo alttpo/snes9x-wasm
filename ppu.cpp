@@ -209,6 +209,12 @@ void S9xFixColourBrightness (void)
 void S9xSetPPU (uint8 Byte, uint16 Address)
 {
 	// MAP_PPU: $2000-$3FFF
+#ifdef USE_REX
+	if (Address >= 0x2C00 && Address < 0x2E00)
+	{
+		Memory.REX_2C00[Address - 0x2C00] = Byte;
+	}
+#endif
 
 	if (CPU.InDMAorHDMA)
 	{
@@ -990,6 +996,12 @@ void S9xSetPPU (uint8 Byte, uint16 Address)
 uint8 S9xGetPPU (uint16 Address)
 {
 	// MAP_PPU: $2000-$3FFF
+#ifdef USE_REX
+	if (Address >= 0x2C00 && Address < 0x2E00)
+	{
+		return Memory.REX_2C00[Address - 0x2C00];
+	}
+#endif
 	if (Settings.MSU1 && (Address & 0xfff8) == 0x2000)
 		return (S9xMSU1ReadPort(Address & 7));
 	else

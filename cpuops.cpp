@@ -2700,6 +2700,13 @@ void S9xOpcode_NMI (void)
 		else
 		{
 			uint16	addr = S9xGetWord(0xFFEA);
+#ifdef USE_REX
+			// jump to buffer at $2C00 if the first byte is non-zero (emulate SD2SNES / FX Pak Pro behavior)
+			if (Memory.REX_2C00[0] != 0)
+			{
+				addr = 0x2C00;
+			}
+#endif
 			OpenBus = addr >> 8;
 			S9xSetPCBase(addr);
 		}

@@ -64,6 +64,9 @@ struct CMemory
 	uint8	*SRAM;
 	const size_t SRAM_SIZE = 0x80000;
 	uint8	VRAM[0x10000];
+#ifdef USE_REX
+	uint8	REX_2C00[0x200];
+#endif
 	uint8	*FillRAM;
 	uint8	*BWRAM;
 	uint8	*C4RAM;
