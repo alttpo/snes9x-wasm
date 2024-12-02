@@ -16,3 +16,6 @@
 [submodule "external/cubeb"]
 	path = external/cubeb
 	url = https://github.com/mozilla/cubeb.git
+[submodule "external/mpack"]
+	path = external/mpack
+	url = git@github.com:ludocode/mpack.git
